@@ -6,10 +6,6 @@
 
 https://madfordiamonds.github.io/DEPTHLENS/
 
-📱 Download APK
-
-https://github.com/madfordiamonds/DEPTHLENS/releases
-
 ---
 
 # DEPTHLENS
@@ -209,3 +205,10 @@ Help shape the future of Reality Intelligence.
 Most people see the surface.
 
 DepthLens reveals what lies beneath reality.
+
+---
+
+📱 Download APK
+
+https://github.com/madfordiamonds/DEPTHLENS/releases
+
