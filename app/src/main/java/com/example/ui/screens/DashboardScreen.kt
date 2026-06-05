@@ -2826,19 +2826,13 @@ fun DepthLensDiagnosticCard(
                         clipboardManager.setPrimaryClip(clipData)
                         Toast.makeText(context, "Copied to Clipboard", Toast.LENGTH_SHORT).show()
                     }
-                    .padding(vertical = 4.dp, horizontal = 6.dp),
+                    .padding(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                horizontalArrangement = Arrangement.Center
             ) {
                 Text(
                     text = "📋",
-                    fontSize = 12.sp
-                )
-                Text(
-                    text = "Copy",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = PremiumCyan,
-                    fontWeight = FontWeight.Bold
+                    fontSize = 15.sp
                 )
             }
             
@@ -2854,19 +2848,13 @@ fun DepthLensDiagnosticCard(
                         }
                         context.startActivity(android.content.Intent.createChooser(shareIntent, "Share DepthLens Report"))
                     }
-                    .padding(vertical = 4.dp, horizontal = 6.dp),
+                    .padding(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                horizontalArrangement = Arrangement.Center
             ) {
                 Text(
                     text = "↗",
-                    fontSize = 12.sp,
-                    color = PremiumCyan,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    text = "Share",
-                    style = MaterialTheme.typography.labelMedium,
+                    fontSize = 15.sp,
                     color = PremiumCyan,
                     fontWeight = FontWeight.Bold
                 )
@@ -2879,19 +2867,13 @@ fun DepthLensDiagnosticCard(
                     .clickable {
                         onRegenerate()
                     }
-                    .padding(vertical = 4.dp, horizontal = 6.dp),
+                    .padding(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                horizontalArrangement = Arrangement.Center
             ) {
                 Text(
                     text = "🔄",
-                    fontSize = 12.sp
-                )
-                Text(
-                    text = "Regenerate",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = PremiumCyan,
-                    fontWeight = FontWeight.Bold
+                    fontSize = 15.sp
                 )
             }
         }
