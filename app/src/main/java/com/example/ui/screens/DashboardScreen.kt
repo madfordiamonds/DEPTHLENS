@@ -43,6 +43,9 @@ import com.example.ui.theme.*
 import com.example.ui.viewmodel.IntelligenceViewModel
 import kotlinx.coroutines.launch
 import java.util.Calendar
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 @OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
@@ -62,6 +65,9 @@ fun DashboardScreen(
     val isMemoryEnabled by viewModel.isMemoryEnabled.collectAsState()
     val isCollectiveOptIn by viewModel.isCollectiveIntelligenceOptIn.collectAsState()
 
+    val continuityBrief by viewModel.continuityBrief.collectAsState()
+    val continuityBriefStatus by viewModel.continuityBriefStatus.collectAsState()
+
     val context = LocalContext.current
     val listState = rememberLazyListState()
 
@@ -71,6 +77,152 @@ fun DashboardScreen(
     ) { uri: Uri? ->
         if (uri != null) {
             viewModel.setAttachment(uri.toString())
+        }
+    }
+
+    var showFeedbackDialog by remember { mutableStateOf(false) }
+    var showReportBugDialog by remember { mutableStateOf(false) }
+    
+    var reportBugMessage by remember { mutableStateOf("") }
+    var reportBugSubmitted by remember { mutableStateOf(false) }
+    var reportBugUserConsented by remember { mutableStateOf(false) }
+    
+    var feedbackCategory by remember { mutableStateOf("Suggestion") }
+    var feedbackMessage by remember { mutableStateOf("") }
+    var feedbackEmail by remember { mutableStateOf("") }
+    var feedbackSubmitted by remember { mutableStateOf(false) }
+
+    // Media permission states & helper functions
+    var permissionToRequest by remember { mutableStateOf<String?>(null) }
+    var pendingPickerToLaunch by remember { mutableStateOf<(() -> Unit)?>(null) }
+    var showPermissionExplanationDialog by remember { mutableStateOf<String?>(null) }
+
+    val mediaPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted: Boolean ->
+        if (isGranted) {
+            pendingPickerToLaunch?.invoke()
+            pendingPickerToLaunch = null
+        } else {
+            showPermissionExplanationDialog = "Without permission, DepthLens cannot access files to perform intelligence analysis."
+            pendingPickerToLaunch = null
+        }
+    }
+
+    val requestMediaPermissionAndLaunch = { permission: String, onGranted: () -> Unit ->
+        val hasPermission = androidx.core.content.ContextCompat.checkSelfPermission(
+            context,
+            permission
+        ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        
+        if (hasPermission) {
+            onGranted()
+        } else {
+            pendingPickerToLaunch = onGranted
+            permissionToRequest = permission
+            mediaPermissionLauncher.launch(permission)
+        }
+    }
+
+    fun getStoragePermissionForType(mimeGroup: String): String {
+        return if (android.os.Build.VERSION.SDK_INT >= 33) {
+            when (mimeGroup) {
+                "image" -> android.Manifest.permission.READ_MEDIA_IMAGES
+                "video" -> android.Manifest.permission.READ_MEDIA_VIDEO
+                "audio" -> android.Manifest.permission.READ_MEDIA_AUDIO
+                else -> android.Manifest.permission.READ_MEDIA_IMAGES
+            }
+        } else {
+            android.Manifest.permission.READ_EXTERNAL_STORAGE
+        }
+    }
+
+    var showAttachmentSelector by remember { mutableStateOf(false) }
+    var isRecordingAudio by remember { mutableStateOf(false) }
+    var recordingDuration by remember { mutableStateOf(0) }
+    val voiceRecorder = remember { VoiceRecorder(context) }
+
+    LaunchedEffect(isRecordingAudio) {
+        if (isRecordingAudio) {
+            recordingDuration = 0
+            while (isRecordingAudio) {
+                kotlinx.coroutines.delay(1000)
+                recordingDuration++
+            }
+        }
+    }
+
+    val requestPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted: Boolean ->
+        if (isGranted) {
+            isRecordingAudio = true
+            voiceRecorder.startRecording()
+        } else {
+            Toast.makeText(context, "Microphone permission denied. Live audio simulation active.", Toast.LENGTH_SHORT).show()
+            isRecordingAudio = true
+        }
+    }
+
+    val pickDocumentLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            viewModel.setAttachment(uri.toString())
+        }
+    }
+
+    val toggleRecording = {
+        if (!isRecordingAudio) {
+            val hasPermission = androidx.core.content.ContextCompat.checkSelfPermission(
+                context,
+                android.Manifest.permission.RECORD_AUDIO
+            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+            
+            if (hasPermission) {
+                isRecordingAudio = true
+                voiceRecorder.startRecording()
+            } else {
+                requestPermissionLauncher.launch(android.Manifest.permission.RECORD_AUDIO)
+            }
+        } else {
+            isRecordingAudio = false
+            val path = voiceRecorder.stopRecording()
+            if (path != null) {
+                viewModel.setAttachment(Uri.fromFile(java.io.File(path)).toString())
+            } else {
+                viewModel.setAttachment("content://simulated_voice_input.m4a")
+            }
+        }
+    }
+
+    // DEPTHLENS GITHUB UPDATE SYSTEM STATES & FLOW COLLECTORS
+    val latestRelease by GithubUpdateManager.latestRelease.collectAsState()
+    val isCheckingForUpdates by GithubUpdateManager.isChecking.collectAsState()
+    val isDownloadingUpdate by GithubUpdateManager.isDownloading.collectAsState()
+    val updateDownloadProgress by GithubUpdateManager.downloadProgress.collectAsState()
+    val updateDownloadedBytes by GithubUpdateManager.downloadedBytes.collectAsState()
+    val updateServerTotalBytes by GithubUpdateManager.totalBytes.collectAsState()
+    val updateLastCheckedTimestamp by GithubUpdateManager.lastChecked.collectAsState()
+    val updateAutoCheckEnabled by GithubUpdateManager.autoCheckEnabled.collectAsState()
+    val updateHistoryList by GithubUpdateManager.updateHistory.collectAsState()
+    val updateErrorMessage by GithubUpdateManager.updateError.collectAsState()
+
+    var showUpdatesDialog by remember { mutableStateOf(false) }
+    var showUpdateAvailableDialog by remember { mutableStateOf(false) }
+
+    // Silently prompt dialog if update found and not dismissed
+    LaunchedEffect(latestRelease) {
+        val rel = latestRelease
+        if (rel != null) {
+            val pInfo = context.packageManager.getPackageInfo(context.packageName, 0)
+            val curVer = pInfo.versionName ?: "1.0"
+            if (GithubUpdateManager.isNewerVersion(rel.tagName, curVer)) {
+                val dismissed = GithubUpdateManager.getDismissedVersion(context)
+                if (dismissed != rel.tagName) {
+                    showUpdateAvailableDialog = true
+                }
+            }
         }
     }
 
@@ -89,6 +241,12 @@ fun DashboardScreen(
                 coroutineScope.launch { drawerState.close() }
             }
             // Priority 2: Dialogs/Modals Open -> Close Modal
+            showUpdatesDialog -> {
+                showUpdatesDialog = false
+            }
+            showUpdateAvailableDialog -> {
+                showUpdateAvailableDialog = false
+            }
             showMemoryDialog -> {
                 showMemoryDialog = false
             }
@@ -97,6 +255,12 @@ fun DashboardScreen(
             }
             showResetConfirm -> {
                 showResetConfirm = false
+            }
+            showFeedbackDialog -> {
+                showFeedbackDialog = false
+            }
+            showReportBugDialog -> {
+                showReportBugDialog = false
             }
             showExitConfirm -> {
                 showExitConfirm = false
@@ -295,6 +459,50 @@ fun DashboardScreen(
         )
     }
 
+    if (showUpdateAvailableDialog && latestRelease != null) {
+        DepthLensUpdateAvailableDialog(
+            release = latestRelease!!,
+            onDismiss = {
+                showUpdateAvailableDialog = false
+                latestRelease?.let {
+                    GithubUpdateManager.dismissVersion(context, it.tagName)
+                }
+            },
+            onUpdateNow = {
+                showUpdateAvailableDialog = false
+                latestRelease?.let {
+                    GithubUpdateManager.downloadAndUpdate(context, it)
+                }
+            }
+        )
+    }
+
+    if (showUpdatesDialog) {
+        val packageInfo = context.packageManager.getPackageInfo(context.packageName, 0)
+        val curVerStr = packageInfo.versionName ?: "1.0"
+        SoftwareUpdatesDialog(
+            onDismissRequest = { showUpdatesDialog = false },
+            onManualCheck = {
+                GithubUpdateManager.checkForUpdates(context, force = true) { isNew, rel ->
+                    if (isNew && rel != null) {
+                        showUpdateAvailableDialog = true
+                    } else {
+                        Toast.makeText(context, "DepthLens is completely up to date!", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            },
+            isChecking = isCheckingForUpdates,
+            autoCheckEnabled = updateAutoCheckEnabled,
+            onAutoCheckToggle = { enabled ->
+                GithubUpdateManager.setAutoCheckEnabled(context, enabled)
+            },
+            lastChecked = updateLastCheckedTimestamp,
+            latestRelease = latestRelease,
+            history = updateHistoryList,
+            currentVersion = curVerStr
+        )
+    }
+
     if (showClearConfirm) {
         AlertDialog(
             onDismissRequest = { showClearConfirm = false },
@@ -478,7 +686,7 @@ fun DashboardScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(46.dp)
-                        ) {
+                         ) {
                             Text(
                                 "Exit",
                                 fontSize = 14.sp,
@@ -490,6 +698,401 @@ fun DashboardScreen(
                 }
             }
         }
+    }
+
+    if (showFeedbackDialog) {
+        AlertDialog(
+            onDismissRequest = {
+                showFeedbackDialog = false
+                feedbackSubmitted = false
+                feedbackMessage = ""
+                feedbackEmail = ""
+            },
+            title = {
+                Text(
+                    text = "FEEDBACK CHOSEN PATH",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = PremiumCyan,
+                    letterSpacing = 1.sp,
+                    fontFamily = FontFamily.Monospace
+                )
+            },
+            text = {
+                if (!feedbackSubmitted) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Text(
+                            "Help us evolve DepthLens Omega. Share suggestions, feature requests, or performance notes directly.",
+                            fontSize = 12.sp,
+                            color = Color.White,
+                            lineHeight = 16.sp
+                        )
+
+                        Text("Category", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = PremiumCyan)
+                        val categories = listOf("Suggestion", "Feature Request", "UI Feedback", "Performance", "General")
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            categories.forEach { cat ->
+                                val isSelected = feedbackCategory == cat
+                                Card(
+                                    onClick = { feedbackCategory = cat },
+                                    shape = RoundedCornerShape(8.dp),
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = if (isSelected) ElectricViolet else RichNavy
+                                    ),
+                                    border = BorderStroke(1.dp, if (isSelected) PremiumCyan else SurfaceCardColor),
+                                    modifier = Modifier.padding(vertical = 2.dp)
+                                ) {
+                                    Text(
+                                        text = cat,
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.White,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)
+                                    )
+                                }
+                            }
+                        }
+
+                        Text("Message", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = PremiumCyan)
+                        TextField(
+                            value = feedbackMessage,
+                            onValueChange = { feedbackMessage = it },
+                            placeholder = { Text("What can we improve?", fontSize = 12.sp, color = TextSecondaryColor) },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(100.dp),
+                            shape = RoundedCornerShape(8.dp),
+                            colors = TextFieldDefaults.colors(
+                                focusedTextColor = Color.White,
+                                unfocusedTextColor = Color.White,
+                                focusedContainerColor = RichNavy,
+                                unfocusedContainerColor = RichNavy,
+                                cursorColor = PremiumCyan,
+                                focusedIndicatorColor = ElectricViolet,
+                                unfocusedIndicatorColor = Color.Transparent
+                            )
+                        )
+
+                        Text("Optional Email", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = PremiumCyan)
+                        TextField(
+                            value = feedbackEmail,
+                            onValueChange = { feedbackEmail = it },
+                            placeholder = { Text("your@email.com", fontSize = 12.sp, color = TextSecondaryColor) },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(8.dp),
+                            colors = TextFieldDefaults.colors(
+                                focusedTextColor = Color.White,
+                                unfocusedTextColor = Color.White,
+                                focusedContainerColor = RichNavy,
+                                unfocusedContainerColor = RichNavy,
+                                cursorColor = PremiumCyan,
+                                focusedIndicatorColor = ElectricViolet,
+                                unfocusedIndicatorColor = Color.Transparent
+                            )
+                        )
+                    }
+                } else {
+                    Column(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.CheckCircle,
+                            contentDescription = "Success",
+                            tint = SuccessColor,
+                            modifier = Modifier.size(48.dp)
+                        )
+                        Spacer(modifier = Modifier.height(14.dp))
+                        Text(
+                            text = "Thank You!",
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White,
+                            textAlign = TextAlign.Center
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = "Your feedback has been successfully securely registered. We review every submission manually.",
+                            fontSize = 12.sp,
+                            color = TextSecondaryColor,
+                            textAlign = TextAlign.Center,
+                            lineHeight = 16.sp
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                if (!feedbackSubmitted) {
+                    Button(
+                        onClick = {
+                            if (feedbackMessage.trim().isNotBlank()) {
+                                feedbackSubmitted = true
+                            }
+                        },
+                        enabled = feedbackMessage.trim().isNotBlank(),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = ElectricViolet,
+                            disabledContainerColor = RichNavy
+                        )
+                    ) {
+                        Text("Submit Feedback", color = Color.White, fontSize = 12.sp)
+                    }
+                } else {
+                    Button(
+                        onClick = {
+                            showFeedbackDialog = false
+                            feedbackSubmitted = false
+                            feedbackMessage = ""
+                            feedbackEmail = ""
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = ElectricViolet)
+                    ) {
+                        Text("Done", color = Color.White, fontSize = 12.sp)
+                    }
+                }
+            },
+            dismissButton = {
+                if (!feedbackSubmitted) {
+                    TextButton(onClick = { showFeedbackDialog = false }) {
+                        Text("Cancel", color = ErrorColor, fontSize = 12.sp)
+                    }
+                }
+            },
+            containerColor = DeepMidnight,
+            shape = RoundedCornerShape(16.dp),
+            modifier = Modifier.border(1.2.dp, ElectricViolet, RoundedCornerShape(16.dp))
+        )
+    }
+
+    if (showReportBugDialog) {
+        val packageInfoReport = try {
+            context.packageManager.getPackageInfo(context.packageName, 0)
+        } catch (e: Exception) {
+            null
+        }
+        val appVerStr = packageInfoReport?.versionName ?: "2.0-Omega"
+        val deviceModel = android.os.Build.MODEL ?: "Unknown Device"
+        val androidVer = android.os.Build.VERSION.RELEASE ?: "Unknown Android"
+        val reportTimestamp = remember { java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date()) }
+
+        AlertDialog(
+            onDismissRequest = {
+                showReportBugDialog = false
+                reportBugSubmitted = false
+                reportBugMessage = ""
+            },
+            title = {
+                Text(
+                    text = "DIAGNOSTIC SYSTEM FAULT REPORT",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = ErrorColor,
+                    letterSpacing = 1.sp,
+                    fontFamily = FontFamily.Monospace
+                )
+            },
+            text = {
+                if (!reportBugSubmitted) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Text(
+                            "DepthLens automatically registers local systems diagnostic data to trace core issues. No conversation context is shared.",
+                            fontSize = 12.sp,
+                            color = Color.White,
+                            lineHeight = 16.sp
+                        )
+
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = RichNavy),
+                            border = BorderStroke(1.dp, SurfaceCardColor),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Text("SYSTEM TELEMETRY CACHE:", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = PremiumCyan, fontFamily = FontFamily.Monospace)
+                                Text("• App Version: $appVerStr", fontSize = 10.sp, color = TextSecondaryColor, fontFamily = FontFamily.Monospace)
+                                Text("• Device Model: $deviceModel", fontSize = 10.sp, color = TextSecondaryColor, fontFamily = FontFamily.Monospace)
+                                Text("• Android Core: v$androidVer", fontSize = 10.sp, color = TextSecondaryColor, fontFamily = FontFamily.Monospace)
+                                Text("• Log Timestamp: $reportTimestamp", fontSize = 10.sp, color = TextSecondaryColor, fontFamily = FontFamily.Monospace)
+                            }
+                        }
+
+                        Text("Describe What Happened", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = PremiumCyan)
+                        TextField(
+                            value = reportBugMessage,
+                            onValueChange = { reportBugMessage = it },
+                            placeholder = { Text("Describe sequence which triggered unexpected system behaviour...", fontSize = 12.sp, color = TextSecondaryColor) },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(100.dp),
+                            shape = RoundedCornerShape(8.dp),
+                            colors = TextFieldDefaults.colors(
+                                focusedTextColor = Color.White,
+                                unfocusedTextColor = Color.White,
+                                focusedContainerColor = RichNavy,
+                                unfocusedContainerColor = RichNavy,
+                                cursorColor = PremiumCyan,
+                                focusedIndicatorColor = ElectricViolet,
+                                unfocusedIndicatorColor = Color.Transparent
+                            )
+                        )
+
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            androidx.compose.material3.Checkbox(
+                                checked = reportBugUserConsented,
+                                onCheckedChange = { reportBugUserConsented = it },
+                                colors = androidx.compose.material3.CheckboxDefaults.colors(
+                                    checkedColor = ElectricViolet,
+                                    uncheckedColor = Color.Gray
+                                )
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                "I consent to submit technical logs for diagnostic repairs.",
+                                fontSize = 11.sp,
+                                color = TextSecondaryColor
+                            )
+                        }
+                    }
+                } else {
+                    Column(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.CheckCircle,
+                            contentDescription = "Success",
+                            tint = SuccessColor,
+                            modifier = Modifier.size(48.dp)
+                        )
+                        Spacer(modifier = Modifier.height(14.dp))
+                        Text(
+                            text = "Thank You",
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White,
+                            textAlign = TextAlign.Center
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = "The systems team has received your telemetry and report. Your file-access data remains protected.",
+                            fontSize = 12.sp,
+                            color = TextSecondaryColor,
+                            textAlign = TextAlign.Center,
+                            lineHeight = 16.sp
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                if (!reportBugSubmitted) {
+                    Button(
+                        onClick = {
+                            if (reportBugMessage.trim().isNotBlank()) {
+                                reportBugSubmitted = true
+                            }
+                        },
+                        enabled = reportBugMessage.trim().isNotBlank(),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = ErrorColor,
+                            disabledContainerColor = RichNavy
+                        )
+                    ) {
+                        Text("Send Report", color = Color.White, fontSize = 12.sp)
+                    }
+                } else {
+                    Button(
+                        onClick = {
+                            showReportBugDialog = false
+                            reportBugSubmitted = false
+                            reportBugMessage = ""
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = ElectricViolet)
+                    ) {
+                        Text("Done", color = Color.White, fontSize = 12.sp)
+                    }
+                }
+            },
+            dismissButton = {
+                if (!reportBugSubmitted) {
+                    TextButton(onClick = { showReportBugDialog = false }) {
+                        Text("Cancel", color = Color.White, fontSize = 12.sp)
+                    }
+                }
+            },
+            containerColor = DeepMidnight,
+            shape = RoundedCornerShape(16.dp),
+            modifier = Modifier.border(1.2.dp, ErrorColor, RoundedCornerShape(16.dp))
+        )
+    }
+
+    if (showPermissionExplanationDialog != null) {
+        AlertDialog(
+            onDismissRequest = { showPermissionExplanationDialog = null },
+            title = {
+                Text(
+                    "MEDIA ACCESS SAFEGUARD",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = PremiumCyan,
+                    letterSpacing = 1.sp,
+                    fontFamily = FontFamily.Monospace
+                )
+            },
+            text = {
+                Column {
+                    Text(
+                        showPermissionExplanationDialog!!,
+                        color = Color.White,
+                        fontSize = 13.sp,
+                        lineHeight = 18.sp
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        "DepthLens only accesses files you explicitly choose to analyze.",
+                        color = TextSecondaryColor,
+                        fontSize = 12.sp,
+                        fontStyle = FontStyle.Italic
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showPermissionExplanationDialog = null
+                        permissionToRequest?.let { perm ->
+                            mediaPermissionLauncher.launch(perm)
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = ElectricViolet)
+                ) {
+                    Text("Allow Access", color = Color.White, fontSize = 12.sp)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showPermissionExplanationDialog = null }) {
+                    Text("Don't Allow", color = ErrorColor, fontSize = 12.sp)
+                }
+            },
+            containerColor = DeepMidnight,
+            shape = RoundedCornerShape(16.dp),
+            modifier = Modifier.border(1.2.dp, ElectricViolet, RoundedCornerShape(16.dp))
+        )
     }
 
     // Beautiful Premium Modal Sidebar Redesign
@@ -649,12 +1252,11 @@ fun DashboardScreen(
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(horizontal = 16.dp, vertical = 6.dp)
-                                    .height(40.dp)
+                                    .padding(horizontal = 16.dp, vertical = 4.dp)
                                     .clip(RoundedCornerShape(10.dp))
                                     .background(DeepMidnight)
                                     .border(1.dp, SurfaceCardColor, RoundedCornerShape(10.dp))
-                                    .padding(horizontal = 12.dp),
+                                    .padding(horizontal = 12.dp, vertical = 8.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Icon(
@@ -840,7 +1442,7 @@ fun DashboardScreen(
                         .background(DeepMidnight)
                         .padding(14.dp)
                 ) {
-                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically,
@@ -868,6 +1470,53 @@ fun DashboardScreen(
                             }
                         }
 
+                        // Feedback button
+                        Button(
+                            onClick = {
+                                coroutineScope.launch { drawerState.close() }
+                                showFeedbackDialog = true
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = SurfaceCardColor),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(40.dp),
+                            contentPadding = PaddingValues(10.dp, 4.dp)
+                        ) {
+                            Icon(Icons.Default.Email, contentDescription = null, tint = PremiumCyan, modifier = Modifier.size(14.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "Feedback",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color.White
+                            )
+                        }
+
+                        // Report Bug button
+                        Button(
+                            onClick = {
+                                coroutineScope.launch { drawerState.close() }
+                                showReportBugDialog = true
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = SurfaceCardColor),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(40.dp),
+                            contentPadding = PaddingValues(10.dp, 4.dp)
+                        ) {
+                            Icon(Icons.Default.Warning, contentDescription = null, tint = PremiumCyan, modifier = Modifier.size(14.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "Report Bug",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color.White
+                            )
+                        }
+
+                        // Manage Memory & Privacy button
                         Button(
                             onClick = {
                                 coroutineScope.launch { drawerState.close() }
@@ -877,7 +1526,7 @@ fun DashboardScreen(
                             shape = RoundedCornerShape(8.dp),
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(42.dp),
+                                .height(40.dp),
                             contentPadding = PaddingValues(10.dp, 4.dp)
                         ) {
                             Icon(Icons.Default.Lock, contentDescription = null, tint = PremiumCyan, modifier = Modifier.size(14.dp))
@@ -885,10 +1534,41 @@ fun DashboardScreen(
                             Text(
                                 text = "Manage Memory & Privacy",
                                 fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold,
+                                fontWeight = FontWeight.SemiBold,
                                 color = Color.White
                             )
                         }
+
+                        // Check For Updates button
+                        Button(
+                            onClick = {
+                                coroutineScope.launch { drawerState.close() }
+                                showUpdatesDialog = true
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = SurfaceCardColor),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(40.dp),
+                            contentPadding = PaddingValues(10.dp, 4.dp)
+                        ) {
+                            Icon(Icons.Default.Refresh, contentDescription = null, tint = PremiumCyan, modifier = Modifier.size(14.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "Check For Updates",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color.White
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "About DepthLens v2.0-Omega",
+                            fontSize = 10.sp,
+                            color = TextSecondaryColor.copy(alpha = 0.6f),
+                            modifier = Modifier.align(Alignment.CenterHorizontally)
+                        )
                     }
                 }
             }
@@ -963,11 +1643,7 @@ fun DashboardScreen(
                             // Centered spacious Homepage / Landing Screen redesign
                             LandingScreen(
                                 onQuerySelected = { query -> viewModel.sendQuery(query) },
-                                onAddAttachment = {
-                                    pickMediaLauncher.launch(
-                                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                                    )
-                                },
+                                onAddAttachment = { showAttachmentSelector = true },
                                 onRemoveAttachment = { viewModel.clearAttachment() },
                                 attachedImageUri = attachedImageUri,
                                 isLoading = isLoading
@@ -980,34 +1656,130 @@ fun DashboardScreen(
                                 contentPadding = PaddingValues(16.dp, 12.dp, 16.dp, 90.dp),
                                 verticalArrangement = Arrangement.spacedBy(16.dp)
                             ) {
+                                item {
+                                    ConversationContinuityDashboard(
+                                        brief = continuityBrief,
+                                        status = continuityBriefStatus,
+                                        onSync = { viewModel.reconnectConversationContext() }
+                                    )
+                                }
                                 items(activeMessages) { message ->
                                     if (message.role == "user") {
                                         UserMessageBubble(message)
                                     } else {
-                                        val parsed = remember(message.text) { ResponseParser.parse(message.text) }
-                                        DepthLensDiagnosticCard(
-                                            parsed = parsed,
-                                            onPromptSelected = { query -> viewModel.sendQuery(query) }
-                                        )
+                                        if (message.text.startsWith("Error:") || message.text.contains("Error invoking DepthLens")) {
+                                            AnalysisFailureErrorCard(
+                                                errorMessage = message.text,
+                                                onRetry = { viewModel.retryLastAnalysis(message.id) },
+                                                onReportBug = { showReportBugDialog = true },
+                                                onCancel = { viewModel.deleteMessage(message.id) }
+                                            )
+                                        } else {
+                                            val parsed = remember(message.text) { ResponseParser.parse(message.text) }
+                                            DepthLensDiagnosticCard(
+                                                parsed = parsed,
+                                                onPromptSelected = { query -> viewModel.sendQuery(query) }
+                                            )
+                                        }
                                     }
                                 }
                             }
                         }
                     }
 
-                    // Bottom chat panel is displayed ONLY when actively chatting (Hides nested messy overlapping components on pristine home)
-                    if (activeMessages.isNotEmpty()) {
+                    // Bottom chat panel handles voice recording overrides & triggers
+                    if (isRecordingAudio) {
+                        RecordingVoiceHud(
+                            durationSeconds = recordingDuration,
+                            onSave = { toggleRecording() },
+                            onCancel = {
+                                isRecordingAudio = false
+                                voiceRecorder.stopRecording()
+                            }
+                        )
+                    } else if (activeMessages.isNotEmpty()) {
                         BottomInputPanel(
                             attachedImageUri = attachedImageUri,
                             isLoading = isLoading,
-                            onAddAttachment = {
-                                pickMediaLauncher.launch(
-                                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                                )
-                            },
+                            onAddAttachment = { showAttachmentSelector = true },
                             onRemoveAttachment = { viewModel.clearAttachment() },
                             onSubmit = { text -> viewModel.sendQuery(text) }
                         )
+                    }
+                }
+
+                if (showAttachmentSelector) {
+                    androidx.compose.ui.window.Dialog(onDismissRequest = { showAttachmentSelector = false }) {
+                        Card(
+                            shape = RoundedCornerShape(16.dp),
+                            colors = CardDefaults.cardColors(containerColor = DeepMidnight),
+                            border = BorderStroke(1.2.dp, ElectricViolet),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp)
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(18.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Text(
+                                    text = "UNIVERSAL INPUT SELECTION™",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = PremiumCyan,
+                                    letterSpacing = 1.sp
+                                )
+                                Spacer(modifier = Modifier.height(14.dp))
+                                
+                                Button(
+                                    onClick = {
+                                        showAttachmentSelector = false
+                                        requestMediaPermissionAndLaunch(getStoragePermissionForType("image")) {
+                                            pickMediaLauncher.launch(
+                                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                                            )
+                                        }
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = RichNavy),
+                                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                                    shape = RoundedCornerShape(10.dp)
+                                ) {
+                                    Icon(Icons.Default.Share, contentDescription = null, tint = PremiumCyan, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("Photo / Image Asset", color = Color.White, fontSize = 12.sp)
+                                }
+
+                                Button(
+                                    onClick = {
+                                        showAttachmentSelector = false
+                                        requestMediaPermissionAndLaunch(getStoragePermissionForType("video")) {
+                                            pickDocumentLauncher.launch("*/*")
+                                        }
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = RichNavy),
+                                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                                    shape = RoundedCornerShape(10.dp)
+                                ) {
+                                    Icon(Icons.Default.List, contentDescription = null, tint = PremiumCyan, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("PDF, Video or Data Document", color = Color.White, fontSize = 12.sp)
+                                }
+
+                                Button(
+                                    onClick = {
+                                        showAttachmentSelector = false
+                                        toggleRecording()
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = RichNavy),
+                                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                                    shape = RoundedCornerShape(10.dp)
+                                ) {
+                                    Icon(Icons.Default.Place, contentDescription = null, tint = PremiumCyan, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("Live Voice Recording Input", color = Color.White, fontSize = 12.sp)
+                                }
+                            }
+                        }
                     }
                 }
 
@@ -1051,6 +1823,18 @@ fun DashboardScreen(
                         }
                     }
                 }
+
+                if (isDownloadingUpdate) {
+                    SoftwareDownloadProgressBarCard(
+                        progress = updateDownloadProgress,
+                        downloadedBytes = updateDownloadedBytes,
+                        totalBytes = updateServerTotalBytes,
+                        onCancel = {
+                            GithubUpdateManager.cancelDownload()
+                        },
+                        modifier = Modifier.align(Alignment.BottomCenter)
+                    )
+                }
             }
         }
     }
@@ -1076,11 +1860,19 @@ fun LandingScreen(
 ) {
     var rawText by remember { mutableStateOf("") }
     val currentHour = remember { Calendar.getInstance().get(Calendar.HOUR_OF_DAY) }
-    val greeting = remember {
-        when {
-            currentHour < 12 -> "Good Morning"
-            currentHour < 18 -> "Good Afternoon"
-            else -> "Good Evening"
+    val greeting = remember(currentHour) {
+        when (currentHour) {
+            in 5..11 -> "Good Morning"
+            in 12..16 -> "Good Afternoon"
+            in 17..20 -> "Good Evening"
+            else -> "Good Night"
+        }
+    }
+    val subtitleText = remember(greeting) {
+        if (greeting == "Good Morning") {
+            "Ready to explore deeper?"
+        } else {
+            "What would you like to understand today?"
         }
     }
 
@@ -1133,7 +1925,7 @@ fun LandingScreen(
         Spacer(modifier = Modifier.height(2.dp))
 
         Text(
-            text = "Ready to explore deeper?",
+            text = subtitleText,
             style = MaterialTheme.typography.headlineSmall,
             color = PremiumCyan,
             fontWeight = FontWeight.Bold,
@@ -1153,36 +1945,13 @@ fun LandingScreen(
                 .padding(bottom = 24.dp)
         ) {
             Column(modifier = Modifier.padding(14.dp)) {
-                // If there's an active attached thumbnail preview in center
+                // If there's an active attached preview in center
                 attachedImageUri?.let { uri ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(bottom = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(48.dp)
-                                .clip(RoundedCornerShape(6.dp))
-                                .border(1.dp, PremiumCyan.copy(alpha = 0.5f), RoundedCornerShape(6.dp))
-                        ) {
-                            AsyncImage(
-                                model = uri,
-                                contentDescription = "Attached Thumbnail",
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier.fillMaxSize()
-                            )
-                        }
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text("Image Attached", fontSize = 11.sp, color = SuccessColor, fontWeight = FontWeight.Bold)
-                            Text("Ready for multi-dimensional scan", fontSize = 9.sp, color = TextSecondaryColor)
-                        }
-                        IconButton(onClick = onRemoveAttachment, modifier = Modifier.size(24.dp)) {
-                            Icon(Icons.Default.Close, contentDescription = "Remove", tint = ErrorColor, modifier = Modifier.size(14.dp))
-                        }
-                    }
+                    AttachmentPreviewItem(
+                        uri = uri,
+                        onRemove = onRemoveAttachment,
+                        modifier = Modifier.padding(bottom = 10.dp)
+                    )
                 }
 
                 // Spacious multiline text input area
@@ -1344,19 +2113,32 @@ fun UserMessageBubble(
         ) {
             Column(horizontalAlignment = Alignment.End) {
                 if (!message.imageUri.isNullOrEmpty()) {
-                    Card(
-                        border = BorderStroke(1.dp, SurfaceCardColor),
-                        shape = RoundedCornerShape(10.dp),
-                        modifier = Modifier
-                            .padding(bottom = 6.dp)
-                            .size(130.dp)
-                    ) {
-                        AsyncImage(
-                            model = message.imageUri,
-                            contentDescription = "Source thumbnail",
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize()
-                        )
+                    val context = LocalContext.current
+                    val mimeType = remember(message.imageUri) { getUriMimeType(context, message.imageUri) }
+                    
+                    when {
+                        mimeType.startsWith("image/") -> {
+                            Card(
+                                border = BorderStroke(1.dp, SurfaceCardColor),
+                                shape = RoundedCornerShape(10.dp),
+                                modifier = Modifier
+                                    .padding(bottom = 6.dp)
+                                    .size(130.dp)
+                            ) {
+                                AsyncImage(
+                                    model = message.imageUri,
+                                    contentDescription = "Source thumbnail",
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            }
+                        }
+                        mimeType.startsWith("audio/") -> {
+                            AudioPlayBubble(uriString = message.imageUri)
+                        }
+                        else -> {
+                            FileDocumentBubble(uriString = message.imageUri, mimeType = mimeType)
+                        }
                     }
                 }
 
@@ -1855,34 +2637,11 @@ fun BottomInputPanel(
             .padding(10.dp)
     ) {
         attachedImageUri?.let { uri ->
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(46.dp)
-                        .clip(RoundedCornerShape(6.dp))
-                        .border(1.dp, SurfaceCardColor, RoundedCornerShape(6.dp))
-                ) {
-                    AsyncImage(
-                        model = uri,
-                        contentDescription = "Attachment description",
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                }
-                Spacer(modifier = Modifier.width(10.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text("Multimodal asset ready", fontSize = 11.sp, color = SuccessColor, fontWeight = FontWeight.Bold)
-                    Text("Analyzing graphical structure", fontSize = 9.sp, color = TextSecondaryColor)
-                }
-                IconButton(onClick = onRemoveAttachment, modifier = Modifier.size(22.dp)) {
-                    Icon(Icons.Default.Close, contentDescription = "Deattach", tint = ErrorColor, modifier = Modifier.size(12.dp))
-                }
-            }
+            AttachmentPreviewItem(
+                uri = uri,
+                onRemove = onRemoveAttachment,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
         }
 
         Row(
@@ -1975,3 +2734,1096 @@ fun getRelativeTimeString(timestamp: Long): String {
     val weeks = days / 7
     return if (weeks == 1L) "1 week ago" else "$weeks weeks ago"
 }
+
+@Composable
+fun AudioPlayBubble(uriString: String) {
+    val context = LocalContext.current
+    var isPlaying by remember { mutableStateOf(false) }
+    var mediaPlayer by remember { mutableStateOf<android.media.MediaPlayer?>(null) }
+    var progress by remember { mutableStateOf(0.0f) }
+    
+    DisposableEffect(Unit) {
+        onDispose {
+            mediaPlayer?.release()
+        }
+    }
+    
+    LaunchedEffect(isPlaying) {
+        if (isPlaying) {
+            while (isPlaying) {
+                mediaPlayer?.let { player ->
+                    if (player.isPlaying) {
+                        val current = player.currentPosition.toFloat()
+                        val duration = player.duration.toFloat()
+                        if (duration > 0) {
+                            progress = current / duration
+                        }
+                    } else {
+                        isPlaying = false
+                        progress = 1.0f
+                    }
+                }
+                kotlinx.coroutines.delay(200)
+            }
+        }
+    }
+
+    Row(
+        modifier = Modifier
+            .padding(vertical = 4.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(RichNavy)
+            .border(1.dp, SurfaceCardColor, RoundedCornerShape(12.dp))
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        IconButton(
+            onClick = {
+                try {
+                    if (isPlaying) {
+                        mediaPlayer?.pause()
+                        isPlaying = false
+                    } else {
+                        if (mediaPlayer == null) {
+                            mediaPlayer = android.media.MediaPlayer.create(context, Uri.parse(uriString))
+                        }
+                        mediaPlayer?.start()
+                        isPlaying = true
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                    isPlaying = !isPlaying
+                }
+            },
+            modifier = Modifier
+                .size(32.dp)
+                .background(PremiumCyan.copy(alpha = 0.2f), CircleShape)
+        ) {
+            Icon(
+                imageVector = if (isPlaying) Icons.Default.Close else Icons.Default.PlayArrow,
+                contentDescription = "Play voice note",
+                tint = PremiumCyan,
+                modifier = Modifier.size(16.dp)
+            )
+        }
+        
+        Spacer(modifier = Modifier.width(12.dp))
+        
+        Column(modifier = Modifier.weight(1f)) {
+            Text("Voice Input Diagnostic", fontSize = 11.sp, color = SuccessColor, fontWeight = FontWeight.Bold)
+            Spacer(modifier = Modifier.height(4.dp))
+            LinearProgressIndicator(
+                progress = { progress },
+                color = PremiumCyan,
+                trackColor = SurfaceCardColor,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(4.dp)
+                    .clip(RoundedCornerShape(2.dp))
+            )
+        }
+    }
+}
+
+@Composable
+fun FileDocumentBubble(uriString: String, mimeType: String) {
+    val (typeName, color) = remember(mimeType) {
+        when {
+            mimeType == "application/pdf" -> "PDF Source Document" to ErrorColor
+            mimeType.startsWith("video/") -> "Video Evidence File" to ElectricViolet
+            else -> "Source Intellectual File" to WarningColor
+        }
+    }
+    
+    Row(
+        modifier = Modifier
+            .padding(vertical = 4.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(RichNavy)
+            .border(1.dp, SurfaceCardColor, RoundedCornerShape(12.dp))
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(36.dp)
+                .clip(RoundedCornerShape(6.dp))
+                .background(color.copy(alpha = 0.15f))
+                .border(1.dp, color.copy(alpha = 0.4f), RoundedCornerShape(6.dp)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = if (mimeType.startsWith("video/")) Icons.Default.PlayArrow else Icons.Default.List,
+                contentDescription = typeName,
+                tint = color,
+                modifier = Modifier.size(18.dp)
+            )
+        }
+        
+        Spacer(modifier = Modifier.width(12.dp))
+        
+        Column {
+            Text(typeName, fontSize = 11.sp, color = Color.White, fontWeight = FontWeight.Bold)
+            Text("First-class semantic token active", fontSize = 9.sp, color = TextSecondaryColor)
+        }
+    }
+}
+
+@Composable
+fun AttachmentPreviewItem(
+    uri: String,
+    onRemove: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    val mimeType = remember(uri) { getUriMimeType(context, uri) }
+    
+    val (typeName, colorAccent) = remember(mimeType) {
+        when {
+            mimeType.startsWith("image/") -> "Image Asset" to PremiumCyan
+            mimeType.startsWith("audio/") -> "Audio Recording" to SuccessColor
+            mimeType.startsWith("video/") -> "Video Source" to ElectricViolet
+            mimeType == "application/pdf" -> "PDF Document" to ErrorColor
+            else -> "Document Resource" to WarningColor
+        }
+    }
+
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .background(RichNavy)
+            .border(1.dp, SurfaceCardColor, RoundedCornerShape(10.dp))
+            .padding(10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(46.dp)
+                .clip(RoundedCornerShape(6.dp))
+                .background(colorAccent.copy(alpha = 0.15f))
+                .border(1.dp, colorAccent.copy(alpha = 0.4f), RoundedCornerShape(6.dp)),
+            contentAlignment = Alignment.Center
+        ) {
+            if (mimeType.startsWith("image/")) {
+                AsyncImage(
+                    model = uri,
+                    contentDescription = "Preview Image",
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else {
+                Icon(
+                    imageVector = when {
+                        mimeType.startsWith("audio/") -> Icons.Default.Place
+                        mimeType.startsWith("video/") -> Icons.Default.PlayArrow
+                        mimeType == "application/pdf" -> Icons.Default.List
+                        else -> Icons.Default.Edit
+                    },
+                    contentDescription = typeName,
+                    tint = colorAccent,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+        }
+        
+        Spacer(modifier = Modifier.width(12.dp))
+        
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = typeName,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.White
+            )
+            Text(
+                text = "First-class source: Ready for contextual reasoning",
+                fontSize = 9.sp,
+                color = TextSecondaryColor
+            )
+        }
+        
+        IconButton(onClick = onRemove, modifier = Modifier.size(28.dp)) {
+            Icon(
+                imageVector = Icons.Default.Close,
+                contentDescription = "Deattach",
+                tint = ErrorColor.copy(alpha = 0.8f),
+                modifier = Modifier.size(14.dp)
+            )
+        }
+    }
+}
+
+@Composable
+fun RecordingVoiceHud(
+    durationSeconds: Int,
+    onSave: () -> Unit,
+    onCancel: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .background(DeepMidnight)
+            .border(BorderStroke(1.dp, ErrorColor))
+            .navigationBarsPadding()
+            .padding(14.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        var dotAlpha by remember { mutableStateOf(1f) }
+        LaunchedEffect(Unit) {
+            while (true) {
+                dotAlpha = if (dotAlpha == 1f) 0.2f else 1f
+                kotlinx.coroutines.delay(600)
+            }
+        }
+        Box(
+            modifier = Modifier
+                .size(10.dp)
+                .clip(CircleShape)
+                .background(ErrorColor.copy(alpha = dotAlpha))
+        )
+        
+        Spacer(modifier = Modifier.width(10.dp))
+        
+        Text(
+            text = "LIVE AUDIO SPECTRA SCAN ACTIVE",
+            color = ErrorColor,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.weight(1f)
+        )
+        
+        Text(
+            text = String.format("%02d:%02d", durationSeconds / 60, durationSeconds % 60),
+            color = Color.White,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Bold
+        )
+        
+        Spacer(modifier = Modifier.width(12.dp))
+        
+        IconButton(
+            onClick = onSave,
+            modifier = Modifier
+                .size(34.dp)
+                .background(SuccessColor, CircleShape)
+        ) {
+            Icon(Icons.Default.Send, contentDescription = "Accept Audio", tint = Color.White, modifier = Modifier.size(16.dp))
+        }
+        
+        Spacer(modifier = Modifier.width(6.dp))
+        
+        IconButton(
+            onClick = onCancel,
+            modifier = Modifier
+                .size(34.dp)
+                .background(RichNavy, CircleShape)
+                .border(1.dp, SurfaceCardColor, CircleShape)
+        ) {
+            Icon(Icons.Default.Close, contentDescription = "Cancel Recording", tint = ErrorColor, modifier = Modifier.size(14.dp))
+        }
+    }
+}
+
+@Composable
+fun ConversationContinuityDashboard(
+    brief: String?,
+    status: String,
+    onSync: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var expanded by remember { mutableStateOf(true) }
+
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        border = BorderStroke(1.dp, if (status == "Syncing") PremiumCyan else ElectricViolet.copy(alpha = 0.5f)),
+        colors = CardDefaults.cardColors(containerColor = RichNavy.copy(alpha = 0.85f)),
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(bottom = 8.dp)
+    ) {
+        Column(modifier = Modifier.padding(14.dp)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.Star,
+                        contentDescription = "Continuity Engine",
+                        tint = PremiumCyan,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "CONVERSATION CONTINUITY ACTIVE",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                        letterSpacing = 1.sp
+                    )
+                }
+                
+                if (brief != null) {
+                    IconButton(
+                        onClick = { expanded = !expanded },
+                        modifier = Modifier.size(24.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (expanded) Icons.Default.Close else Icons.Default.PlayArrow,
+                            contentDescription = "Toggle Expand",
+                            tint = TextSecondaryColor,
+                            modifier = Modifier.size(14.dp)
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "Tracks discussion vectors across sessions.",
+                fontSize = 9.sp,
+                color = TextSecondaryColor
+            )
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            when (status) {
+                "Idle" -> {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+                        Text(
+                            text = "Context re-connection point available.",
+                            fontSize = 11.sp,
+                            color = TextSecondaryColor,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        )
+                        Button(
+                            onClick = onSync,
+                            colors = ButtonDefaults.buttonColors(containerColor = ElectricViolet),
+                            shape = RoundedCornerShape(8.dp),
+                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
+                            modifier = Modifier.height(34.dp)
+                        ) {
+                            Text("Reconnect Previous Discussion", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                        }
+                    }
+                }
+                "Syncing" -> {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        CircularProgressIndicator(
+                            color = PremiumCyan,
+                            modifier = Modifier.size(14.dp),
+                            strokeWidth = 2.dp
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text(
+                            "Synthesizing cognitive continuity tracking...",
+                            fontSize = 11.sp,
+                            color = PremiumCyan,
+                            style = androidx.compose.ui.text.TextStyle(fontStyle = FontStyle.Italic)
+                        )
+                    }
+                }
+                "Done" -> {
+                    if (brief != null && expanded) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(DeepMidnight)
+                                .border(1.dp, SurfaceCardColor, RoundedCornerShape(8.dp))
+                                .padding(12.dp)
+                        ) {
+                            Text(
+                                text = brief,
+                                fontSize = 11.sp,
+                                color = TextSecondaryColor,
+                                lineHeight = 16.sp,
+                                fontFamily = FontFamily.Monospace
+                            )
+                        }
+                    } else if (brief != null && !expanded) {
+                        Text(
+                            text = "Continuity summary minimized. Tap arrow to expand.",
+                            fontSize = 10.sp,
+                            color = PremiumCyan,
+                            fontStyle = FontStyle.Italic
+                        )
+                    }
+                }
+                "Error" -> {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Reconnection failed.",
+                            fontSize = 11.sp,
+                            color = ErrorColor
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Retry Sync",
+                            fontSize = 11.sp,
+                            color = PremiumCyan,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.clickable { onSync() }
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+fun getUriMimeType(context: android.content.Context, uriString: String): String {
+    val uri = Uri.parse(uriString)
+    if (uri.scheme == "content" || uri.scheme == "android.resource") {
+        return context.contentResolver.getType(uri) ?: "application/octet-stream"
+    }
+    val ext = android.webkit.MimeTypeMap.getFileExtensionFromUrl(uriString)
+    if (!ext.isNullOrEmpty()) {
+        return android.webkit.MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext.lowercase()) ?: "application/octet-stream"
+    }
+    return when {
+        uriString.endsWith(".pdf", ignoreCase = true) -> "application/pdf"
+        uriString.endsWith(".mp3", ignoreCase = true) || uriString.endsWith(".m4a", ignoreCase = true) || uriString.endsWith(".aac", ignoreCase = true) || uriString.endsWith(".wav", ignoreCase = true) -> "audio/mpeg"
+        uriString.endsWith(".mp4", ignoreCase = true) || uriString.endsWith(".mov", ignoreCase = true) -> "video/mp4"
+        uriString.endsWith(".png", ignoreCase = true) || uriString.endsWith(".jpg", ignoreCase = true) || uriString.endsWith(".jpeg", ignoreCase = true) || uriString.endsWith(".webp", ignoreCase = true) -> "image/png"
+        else -> "application/octet-stream"
+    }
+}
+
+class VoiceRecorder(private val context: android.content.Context) {
+    private var recorder: android.media.MediaRecorder? = null
+    private var outputFile: java.io.File? = null
+
+    fun startRecording(): String? {
+        return try {
+            val file = java.io.File(context.cacheDir, "voice_input_${System.currentTimeMillis()}.m4a")
+            outputFile = file
+            
+            val rec = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+                android.media.MediaRecorder(context)
+            } else {
+                @Suppress("DEPRECATION")
+                android.media.MediaRecorder()
+            }
+            
+            rec.apply {
+                setAudioSource(android.media.MediaRecorder.AudioSource.MIC)
+                setOutputFormat(android.media.MediaRecorder.OutputFormat.MPEG_4)
+                setAudioEncoder(android.media.MediaRecorder.AudioEncoder.AAC)
+                setOutputFile(file.absolutePath)
+                prepare()
+                start()
+            }
+            recorder = rec
+            file.absolutePath
+        } catch (e: Exception) {
+            e.printStackTrace()
+            null
+        }
+    }
+
+    fun stopRecording(): String? {
+        try {
+            recorder?.apply {
+                stop()
+                release()
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+        recorder = null
+        return outputFile?.absolutePath
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun DepthLensUpdateAvailableDialog(
+    release: GitHubRelease,
+    onDismiss: () -> Unit,
+    onUpdateNow: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = RichNavy,
+        textContentColor = TextPrimaryColor,
+        title = {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Star,
+                    contentDescription = null,
+                    tint = PremiumCyan,
+                    modifier = Modifier.size(24.dp)
+                )
+                Text(
+                    text = "DepthLens Update Available",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White,
+                    fontFamily = FontFamily.Monospace
+                )
+            }
+        },
+        text = {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    text = "A new version of DepthLens is available with improvements and new features.",
+                    fontSize = 13.sp,
+                    color = TextPrimaryColor,
+                    lineHeight = 18.sp
+                )
+                
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = DeepMidnight),
+                    border = BorderStroke(1.dp, SurfaceCardColor),
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 240.dp)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .verticalScroll(rememberScrollState())
+                            .padding(12.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "VERSION ${release.tagName}",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = PremiumCyan,
+                                fontFamily = FontFamily.Monospace
+                            )
+                            Text(
+                                text = release.publishedAt,
+                                fontSize = 11.sp,
+                                color = TextSecondaryColor
+                            )
+                        }
+                        
+                        HorizontalDivider(
+                            modifier = Modifier.padding(vertical = 8.dp),
+                            color = SurfaceCardColor
+                        )
+                        
+                        val bodyText = release.body
+                        bodyText.split("\n").forEach { line ->
+                            val trimmedLine = line.trim()
+                            if (trimmedLine.startsWith("###")) {
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Text(
+                                    text = trimmedLine.replace("###", "").trim().uppercase(),
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = ElectricViolet,
+                                    modifier = Modifier.padding(bottom = 4.dp),
+                                    fontFamily = FontFamily.Monospace
+                                )
+                            } else if (trimmedLine.startsWith("-") || trimmedLine.startsWith("*")) {
+                                Row(
+                                    modifier = Modifier.padding(bottom = 2.dp, start = 4.dp),
+                                    verticalAlignment = Alignment.Top
+                                ) {
+                                    Text("•", color = PremiumCyan, modifier = Modifier.padding(end = 6.dp))
+                                    Text(
+                                        text = trimmedLine.substring(1).trim(),
+                                        fontSize = 12.sp,
+                                        color = TextPrimaryColor,
+                                        lineHeight = 16.sp
+                                    )
+                                }
+                            } else if (trimmedLine.isNotEmpty()) {
+                                Text(
+                                    text = trimmedLine,
+                                    fontSize = 12.sp,
+                                    color = TextSecondaryColor,
+                                    lineHeight = 16.sp,
+                                    modifier = Modifier.padding(bottom = 4.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = onUpdateNow,
+                colors = ButtonDefaults.buttonColors(containerColor = ElectricViolet),
+                shape = RoundedCornerShape(8.dp)
+            ) {
+                Text("Update Now", color = Color.White, fontWeight = FontWeight.Bold)
+            }
+        },
+        dismissButton = {
+            TextButton(
+                onClick = onDismiss,
+                colors = ButtonDefaults.textButtonColors(contentColor = TextSecondaryColor)
+            ) {
+                Text("Later")
+            }
+        }
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SoftwareUpdatesDialog(
+    onDismissRequest: () -> Unit,
+    onManualCheck: () -> Unit,
+    isChecking: Boolean,
+    autoCheckEnabled: Boolean,
+    onAutoCheckToggle: (Boolean) -> Unit,
+    lastChecked: Long,
+    latestRelease: GitHubRelease?,
+    history: List<String>,
+    currentVersion: String
+) {
+    AlertDialog(
+        onDismissRequest = onDismissRequest,
+        containerColor = RichNavy,
+        textContentColor = TextPrimaryColor,
+        title = {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Refresh,
+                    contentDescription = null,
+                    tint = PremiumCyan,
+                    modifier = Modifier.size(22.dp)
+                )
+                Text(
+                    text = "Software Updates",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White,
+                    fontFamily = FontFamily.Monospace
+                )
+            }
+        },
+        text = {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(14.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+            ) {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = DeepMidnight),
+                    border = BorderStroke(1.dp, SurfaceCardColor),
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text("Current Version", fontSize = 11.sp, color = TextSecondaryColor)
+                            Text(
+                                "v$currentVersion",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = SuccessColor,
+                                fontFamily = FontFamily.Monospace
+                            )
+                        }
+                        
+                        Spacer(modifier = Modifier.height(8.dp))
+                        
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("Last Safety Check", fontSize = 11.sp, color = TextSecondaryColor)
+                            val checkStr = if (lastChecked == 0L) "Never" else {
+                                val sdf = SimpleDateFormat("MMM d, yyyy HH:mm", Locale.getDefault())
+                                sdf.format(Date(lastChecked))
+                            }
+                            Text(
+                                checkStr,
+                                fontSize = 11.sp,
+                                color = Color.White,
+                                fontFamily = FontFamily.Monospace
+                            )
+                        }
+                    }
+                }
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(DeepMidnight)
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                        Text(
+                            text = "Auto Check for Updates",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                        Text(
+                            text = "Verify security release updates silently on startup (every 24h).",
+                            fontSize = 10.sp,
+                            color = TextSecondaryColor,
+                            lineHeight = 14.sp
+                        )
+                    }
+                    Switch(
+                        checked = autoCheckEnabled,
+                        onCheckedChange = onAutoCheckToggle,
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = Color.White,
+                            checkedTrackColor = PremiumCyan,
+                            uncheckedThumbColor = TextSecondaryColor,
+                            uncheckedTrackColor = SurfaceCardColor
+                        )
+                    )
+                }
+
+                Button(
+                    onClick = onManualCheck,
+                    enabled = !isChecking,
+                    colors = ButtonDefaults.buttonColors(containerColor = SurfaceCardColor),
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.fillMaxWidth().height(40.dp),
+                    contentPadding = PaddingValues(0.dp)
+                ) {
+                    if (isChecking) {
+                        CircularProgressIndicator(
+                            color = PremiumCyan,
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Connecting to server...", fontSize = 12.sp, color = PremiumCyan)
+                    } else {
+                        Icon(Icons.Default.Refresh, contentDescription = null, tint = PremiumCyan, modifier = Modifier.size(14.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Check for Updates Now", fontSize = 12.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                    }
+                }
+
+                if (latestRelease != null) {
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = SuccessColor.copy(alpha = 0.05f)),
+                        border = BorderStroke(1.dp, SuccessColor.copy(alpha = 0.2f)),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(10.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(6.dp)
+                                        .background(SuccessColor, CircleShape)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "Latest Release Cached",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = SuccessColor
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "Tag: ${latestRelease.tagName} • ${latestRelease.name}",
+                                fontSize = 11.sp,
+                                color = Color.White,
+                                fontFamily = FontFamily.Monospace
+                            )
+                        }
+                    }
+                }
+
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(
+                        text = "UPDATE PIPELINE HISTORY",
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = PremiumCyan,
+                        fontFamily = FontFamily.Monospace,
+                        letterSpacing = 0.5.sp
+                    )
+                    
+                    if (history.isEmpty()) {
+                        Text(
+                            text = "No recorded updates yet.",
+                            fontSize = 11.sp,
+                            color = TextSecondaryColor
+                        )
+                    } else {
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = DeepMidnight),
+                            border = BorderStroke(1.dp, SurfaceCardColor),
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .heightIn(max = 120.dp)
+                                    .padding(8.dp)
+                                    .verticalScroll(rememberScrollState()),
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                history.forEach { h ->
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalAlignment = Alignment.Top
+                                    ) {
+                                        Text("✓", color = SuccessColor, modifier = Modifier.padding(end = 6.dp), fontSize = 11.sp)
+                                        Text(
+                                            text = h,
+                                            fontSize = 11.sp,
+                                            color = TextPrimaryColor,
+                                            lineHeight = 15.sp
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = onDismissRequest,
+                colors = ButtonDefaults.textButtonColors(contentColor = PremiumCyan)
+            ) {
+                Text("Close", fontWeight = FontWeight.Bold)
+            }
+        }
+    )
+}
+
+@Composable
+fun SoftwareDownloadProgressBarCard(
+    progress: Float,
+    downloadedBytes: Long,
+    totalBytes: Long,
+    onCancel: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = DeepMidnight.copy(alpha = 0.95f)),
+        border = BorderStroke(1.dp, PremiumCyan.copy(alpha = 0.4f)),
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(14.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .size(36.dp)
+                    .background(PremiumCyan.copy(alpha = 0.15f), CircleShape)
+            ) {
+                CircularProgressIndicator(
+                    progress = { if (progress >= 0f) progress else 0f },
+                    color = PremiumCyan,
+                    trackColor = SurfaceCardColor,
+                    strokeWidth = 3.dp,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.width(12.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "UPDATING SYSTEM DEPTHLENS...",
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = PremiumCyan,
+                    fontFamily = FontFamily.Monospace,
+                    letterSpacing = 0.5.sp
+                )
+                
+                Spacer(modifier = Modifier.height(2.dp))
+                
+                val percentageStr = if (progress >= 0f) "${(progress * 100).toInt()}%" else "Downloading..."
+                val progressMbStr = if (totalBytes > 0) {
+                    val downloadedMb = downloadedBytes.toFloat() / (1024 * 1024)
+                    val totalMb = totalBytes.toFloat() / (1024 * 1024)
+                    String.format("%.1f MB / %.1f MB", downloadedMb, totalMb)
+                } else {
+                    val downloadedKb = downloadedBytes / 1024
+                    "$downloadedKb KB downloaded"
+                }
+
+                Text(
+                    text = "$percentageStr ($progressMbStr)",
+                    fontSize = 11.sp,
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold
+                )
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                LinearProgressIndicator(
+                    progress = { if (progress >= 0f) progress else 0f },
+                    color = PremiumCyan,
+                    trackColor = SurfaceCardColor,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(3.dp)
+                        .clip(RoundedCornerShape(1.5.dp))
+                )
+            }
+
+            Spacer(modifier = Modifier.width(12.dp))
+
+            IconButton(
+                onClick = onCancel,
+                modifier = Modifier
+                    .background(SurfaceCardColor, CircleShape)
+                    .size(28.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Close,
+                    contentDescription = "Cancel update download",
+                    tint = ErrorColor,
+                    modifier = Modifier.size(12.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun AnalysisFailureErrorCard(
+    errorMessage: String,
+    onRetry: () -> Unit,
+    onReportBug: () -> Unit,
+    onCancel: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = SurfaceCardColor),
+        border = BorderStroke(1.2.dp, ErrorColor.copy(alpha = 0.5f)),
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp)
+    ) {
+        Column(modifier = Modifier.padding(18.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Default.Warning,
+                    contentDescription = null,
+                    tint = ErrorColor,
+                    modifier = Modifier.size(22.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Analysis Couldn't Be Completed",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+            }
+            
+            Spacer(modifier = Modifier.height(10.dp))
+            
+            Text(
+                text = "Something went wrong while processing your request. Please check your connectivity and confirm configuration settings.",
+                fontSize = 12.sp,
+                color = TextSecondaryColor,
+                lineHeight = 16.sp
+            )
+            
+            Spacer(modifier = Modifier.height(8.dp))
+            
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(DeepMidnight, RoundedCornerShape(8.dp))
+                    .padding(8.dp)
+            ) {
+                Text(
+                    text = errorMessage.removePrefix("Error invoking DepthLens engine:").trim(),
+                    fontSize = 11.sp,
+                    color = ErrorColor.copy(alpha = 0.9f),
+                    fontFamily = FontFamily.Monospace,
+                    maxLines = 3,
+                    lineHeight = 15.sp
+                )
+            }
+            
+            Spacer(modifier = Modifier.height(14.dp))
+            
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Button(
+                    onClick = onRetry,
+                    colors = ButtonDefaults.buttonColors(containerColor = ElectricViolet),
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.weight(1f),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                ) {
+                    Text("Retry Analysis", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                }
+                
+                Button(
+                    onClick = onReportBug,
+                    colors = ButtonDefaults.buttonColors(containerColor = RichNavy),
+                    border = BorderStroke(1.dp, SurfaceCardColor),
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.weight(1.3f),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                ) {
+                    Text("Report Bug", color = PremiumCyan, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                }
+                
+                TextButton(
+                    onClick = onCancel,
+                    modifier = Modifier.align(Alignment.CenterVertically)
+                ) {
+                    Text("Cancel", color = Color.Gray, fontSize = 11.sp)
+                }
+            }
+        }
+    }
+}
+

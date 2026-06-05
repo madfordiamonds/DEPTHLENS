@@ -45,14 +45,14 @@ class IntelligenceViewModel(application: Application) : AndroidViewModel(applica
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     init {
-        // Initialize with default session if none exists
+        // Always open the Home Screen on app launch / entry
+        _activeSessionId.value = null
+        
         viewModelScope.launch {
             val existing = repository.allSessionsFlow.firstOrNull() ?: emptyList()
-            if (existing.isNotEmpty()) {
-                _activeSessionId.value = existing.first().id
-            } else {
-                val newSession = repository.createNewSession("Global Intelligence Feed")
-                _activeSessionId.value = newSession.id
+            if (existing.isEmpty()) {
+                // Pre-seed a default session silently so workspace is ready
+                repository.createNewSession("Global Intelligence Feed")
             }
         }
     }
@@ -60,11 +60,12 @@ class IntelligenceViewModel(application: Application) : AndroidViewModel(applica
     fun selectSession(sessionId: String?) {
         _activeSessionId.value = sessionId
         clearAttachment()
+        clearContinuityBrief()
     }
 
     fun createSession(title: String) {
         viewModelScope.launch {
-            val newSession = repository.createNewSession(title.ifBlank { "Intel Thread ${System.currentTimeMillis() % 1000}" })
+            val newSession = repository.createNewSession(title.ifBlank { "New Intelligence Thread" })
             _activeSessionId.value = newSession.id
             clearAttachment()
         }
@@ -74,8 +75,7 @@ class IntelligenceViewModel(application: Application) : AndroidViewModel(applica
         viewModelScope.launch {
             repository.deleteSession(sessionId)
             if (_activeSessionId.value == sessionId) {
-                val rem = repository.allSessionsFlow.firstOrNull() ?: emptyList()
-                _activeSessionId.value = rem.firstOrNull()?.id
+                _activeSessionId.value = null
             }
         }
     }
@@ -94,8 +94,35 @@ class IntelligenceViewModel(application: Application) : AndroidViewModel(applica
         _attachedImageUri.value = null
     }
 
-    fun sendQuery(text: String) {
+    fun deleteMessage(messageId: String) {
+        viewModelScope.launch {
+            repository.deleteMessageById(messageId)
+        }
+    }
+
+    fun retryLastAnalysis(errorMessageId: String) {
         val sessionId = _activeSessionId.value ?: return
+        viewModelScope.launch {
+            _isLoading.value = true
+            try {
+                // Delete the error message
+                repository.deleteMessageById(errorMessageId)
+                // Determine if there are still any messages
+                val existingHistory = repository.getMessagesFlow(sessionId).firstOrNull() ?: emptyList()
+                val lastUserMsg = existingHistory.lastOrNull { it.role == "user" }
+                if (lastUserMsg != null) {
+                    // Trigger analysis again
+                    repository.generateAnalysis(sessionId)
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            } finally {
+                _isLoading.value = false
+            }
+        }
+    }
+
+    fun sendQuery(text: String) {
         val cleanQuery = text.trim()
         if (cleanQuery.isEmpty() && _attachedImageUri.value == null) return
 
@@ -105,6 +132,13 @@ class IntelligenceViewModel(application: Application) : AndroidViewModel(applica
         viewModelScope.launch {
             _isLoading.value = true
             try {
+                // Determine or create session if none active (e.g. from Home screen prompt)
+                val sessionId = _activeSessionId.value ?: run {
+                    val newSession = repository.createNewSession("Intelligence Diagnostic")
+                    _activeSessionId.value = newSession.id
+                    newSession.id
+                }
+
                 // Determine if this is the first user query in this conversation
                 val existingHistory = repository.getMessagesFlow(sessionId).firstOrNull() ?: emptyList()
                 val isFirstQuery = existingHistory.none { it.role == "user" }
@@ -155,6 +189,34 @@ class IntelligenceViewModel(application: Application) : AndroidViewModel(applica
             repository.clearAllData()
             _activeSessionId.value = null
             createSession("New Reality Intel")
+        }
+    }
+
+    // Conversation Continuity States
+    private val _continuityBrief = MutableStateFlow<String?>(null)
+    val continuityBrief: StateFlow<String?> = _continuityBrief.asStateFlow()
+
+    private val _continuityBriefStatus = MutableStateFlow("Idle")
+    val continuityBriefStatus: StateFlow<String> = _continuityBriefStatus.asStateFlow()
+
+    fun clearContinuityBrief() {
+        _continuityBrief.value = null
+        _continuityBriefStatus.value = "Idle"
+    }
+
+    fun reconnectConversationContext() {
+        val sessionId = _activeSessionId.value ?: return
+        _continuityBriefStatus.value = "Syncing"
+        _continuityBrief.value = null
+        viewModelScope.launch {
+            try {
+                val brief = repository.generateContinuityBrief(sessionId)
+                _continuityBrief.value = brief
+                _continuityBriefStatus.value = "Done"
+            } catch (e: Exception) {
+                e.printStackTrace()
+                _continuityBriefStatus.value = "Error"
+            }
         }
     }
 }

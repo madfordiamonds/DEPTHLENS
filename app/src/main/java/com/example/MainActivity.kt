@@ -12,6 +12,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import com.example.ui.screens.DashboardScreen
 import com.example.ui.screens.SplashOpeningScreen
+import com.example.ui.screens.GithubUpdateManager
 import com.example.ui.theme.MyApplicationTheme
 import com.example.ui.viewmodel.IntelligenceViewModel
 
@@ -19,6 +20,11 @@ class MainActivity : ComponentActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
     enableEdgeToEdge()
+    
+    // Initialize the DepthLens Software Update System
+    GithubUpdateManager.init(applicationContext)
+    GithubUpdateManager.checkForUpdates(applicationContext, force = false)
+
     setContent {
       MyApplicationTheme {
         var showSplash by remember { mutableStateOf(true) }

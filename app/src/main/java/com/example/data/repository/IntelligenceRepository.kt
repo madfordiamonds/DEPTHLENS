@@ -75,7 +75,7 @@ class IntelligenceRepository(private val context: Context) {
             generationConfig = GenerationConfig(temperature = 0.5f)
         )
 
-        val modelsToTry = listOf("gemini-1.5-flash")
+        val modelsToTry = listOf("gemini-3.5-flash")
         var generatedTitle: String? = null
 
         for (modelName in modelsToTry) {
@@ -105,6 +105,10 @@ class IntelligenceRepository(private val context: Context) {
             sessionDao.deleteSession(sessionItem)
             messageDao.deleteMessagesForSession(sessionId)
         }
+    }
+
+    suspend fun deleteMessageById(messageId: String) = withContext(Dispatchers.IO) {
+        messageDao.deleteMessage(messageId)
     }
 
     suspend fun clearAllData() = withContext(Dispatchers.IO) {
@@ -273,12 +277,11 @@ Follow this format meticulously. Wrap each visual module within its respective t
         for (msg in history) {
             val partsList = mutableListOf<Part>()
             
-            // If image is present, convert and attach as part
+            // If any media/file attachment is present, attach it using its detected MIME type!
             if (!msg.imageUri.isNullOrEmpty() && msg.role == "user") {
-                val bitmap = loadUriAsBitmap(msg.imageUri)
-                if (bitmap != null) {
-                    val base64Data = bitmapToBase64(bitmap)
-                    partsList.add(Part(inlineData = InlineData(mimeType = "image/jpeg", data = base64Data)))
+                val mediaData = loadUriAsMediaData(msg.imageUri)
+                if (mediaData != null) {
+                    partsList.add(Part(inlineData = InlineData(mimeType = mediaData.mimeType, data = mediaData.base64)))
                 }
             }
             
@@ -295,7 +298,7 @@ Follow this format meticulously. Wrap each visual module within its respective t
 
         var modelText: String? = null
         var lastException: Exception? = null
-        val modelsToTry = listOf("gemini-3.5-flash", "gemini-2.5-flash", "gemini-1.5-flash")
+        val modelsToTry = listOf("gemini-3.5-flash", "gemini-2.5-flash")
 
         for (modelName in modelsToTry) {
             try {
@@ -360,6 +363,104 @@ Follow this format meticulously. Wrap each visual module within its respective t
     private fun extractTagContent(text: String, tag: String): String? {
         val pattern = Regex("<$tag>(.*?)</$tag>", RegexOption.DOT_MATCHES_ALL)
         return pattern.find(text)?.groupValues?.getOrNull(1)?.trim()
+    }
+
+    data class MediaData(val mimeType: String, val base64: String)
+
+    private fun loadUriAsMediaData(uriString: String): MediaData? {
+        return try {
+            val uri = Uri.parse(uriString)
+            val resolver = context.contentResolver
+            var mimeType = resolver.getType(uri) ?: "application/octet-stream"
+            
+            // Fallback content-type detection
+            if (mimeType == "application/octet-stream") {
+                val extension = android.webkit.MimeTypeMap.getFileExtensionFromUrl(uriString)
+                if (!extension.isNullOrEmpty()) {
+                    val detected = android.webkit.MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension.lowercase())
+                    if (detected != null) {
+                        mimeType = detected
+                    }
+                }
+            }
+            
+            val inputStream = resolver.openInputStream(uri) ?: return null
+            val bytes = inputStream.use { it.readBytes() }
+            
+            var finalBytes = bytes
+            var finalMime = mimeType
+            
+            // Compress large images to avoid exceeding Gemini payload size limits
+            if (mimeType.startsWith("image/") && bytes.size > 1024 * 1024) {
+                val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                if (bitmap != null) {
+                    val outputStream = ByteArrayOutputStream()
+                    bitmap.compress(Bitmap.CompressFormat.JPEG, 75, outputStream)
+                    finalBytes = outputStream.toByteArray()
+                    finalMime = "image/jpeg"
+                }
+            }
+            
+            val base64Data = Base64.encodeToString(finalBytes, Base64.NO_WRAP)
+            MediaData(mimeType = finalMime, base64 = base64Data)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            null
+        }
+    }
+
+    suspend fun generateContinuityBrief(sessionId: String): String = withContext(Dispatchers.IO) {
+        val apiKey = BuildConfig.GEMINI_API_KEY
+        if (apiKey.isEmpty() || apiKey == "MY_GEMINI_API_KEY") {
+            return@withContext "API key not found. Please configure Gemini API key in Secrets panel."
+        }
+        
+        val history = messageDao.getMessagesForSession(sessionId)
+        if (history.isEmpty()) {
+            return@withContext "This is a brand new conversation thread. Start by writing a query or attaching any content (image, document, PDF, voice memo) to begin your intelligence diagnostic!"
+        }
+        
+        val systemPrompt = """
+            You are the DepthLens Conversation Continuity Engine™. Your role is to reconnect the context of a previous conversation.
+            You are given a historic log of messages. Analyze them carefully.
+            Generate a brief, highly structured summary to restore active mental models.
+            
+            IMPORTANT: Use exactly this pure text layout (DO NOT use asterisk markdown '**' or '#' headings):
+            
+            ⚡ CONTEXT RESTORED BRIEF
+            
+            PREVIOUS CONTEXT:
+            [2-3 sentences summarizing the core topic discussed]
+            
+            CURRENT PROGRESS & GOALS:
+            [Identify the main user goals/concerns and what has been discovered so far]
+            
+            UNANSWERED QUESTIONS:
+            [List 2-3 critical open questions to answer next to depth-test this situation]
+            
+            SUGGESTED NEXT STEPS:
+            [1-2 clear immediate prompt items to explore]
+        """.trimIndent()
+        
+        val contentsPayload = mutableListOf<Content>()
+        for (msg in history) {
+            contentsPayload.add(Content(role = msg.role, parts = listOf(Part(text = msg.text))))
+        }
+        
+        val request = GenerateContentRequest(
+            contents = contentsPayload,
+            generationConfig = GenerationConfig(temperature = 0.4f),
+            systemInstruction = Content(parts = listOf(Part(text = systemPrompt)))
+        )
+        
+        try {
+            val response = apiService.generateContent("gemini-3.5-flash", apiKey, request)
+            response.candidates?.firstOrNull()?.content?.parts?.firstOrNull()?.text?.trim()
+                ?: "Unable to sync session context at this moment."
+        } catch (e: Exception) {
+            e.printStackTrace()
+            "Error syncing context: ${e.message}"
+        }
     }
 
     private fun loadUriAsBitmap(uriString: String): Bitmap? {
