@@ -39,8 +39,6 @@ fun SplashOpeningScreen(
     val irisRotation = remember { Animatable(-90f) }     // For diagonal line alignment
     val splashAlpha = remember { Animatable(1f) }        // For entire screen exit transition
 
-    var statusText by remember { mutableStateOf("CONNECTING CORE NEURAL LINK...") }
-
     LaunchedEffect(Unit) {
         // Step 1: Fade-in and scale up the core symbol base
         launch {
@@ -54,7 +52,6 @@ fun SplashOpeningScreen(
         }
         
         delay(300)
-        statusText = "INITIALIZING LENS ARRAY..."
         
         // Step 2: Smooth eye opening animation
         launch {
@@ -68,7 +65,6 @@ fun SplashOpeningScreen(
         }
         
         delay(400)
-        statusText = "SYNCHRONIZING REASONING COGNITIVE NODES..."
         
         // Step 3: Spin-lock diagonal line iris
         launch {
@@ -81,10 +77,7 @@ fun SplashOpeningScreen(
             )
         }
         
-        delay(700)
-        statusText = "REALITY TUNNEL OPERATIONAL."
-        
-        delay(400)
+        delay(1100)
         // Step 4: Fade out splash stage
         splashAlpha.animateTo(
             targetValue = 0f,
@@ -251,29 +244,28 @@ fun SplashOpeningScreen(
                 }
             }
             
-            Spacer(modifier = Modifier.height(35.dp))
+            Spacer(modifier = Modifier.height(40.dp))
             
-            // Subtitle metadata terminal aesthetics
             Text(
-                text = "DEPTHLENS OMEGA",
-                style = MaterialTheme.typography.titleMedium,
-                color = TextPrimary,
+                text = "DEPTHLENS",
+                style = MaterialTheme.typography.headlineMedium,
+                color = Color.White,
                 fontWeight = FontWeight.Bold,
-                letterSpacing = 2.sp,
-                fontFamily = FontFamily.Monospace,
+                letterSpacing = 6.sp,
+                fontFamily = FontFamily.SansSerif,
                 modifier = Modifier.alpha(introProgress.value)
             )
             
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(12.dp))
             
             Text(
-                text = statusText.uppercase(),
-                style = MaterialTheme.typography.labelSmall,
-                color = SuccessGreen,
-                fontWeight = FontWeight.SemiBold,
+                text = "See Beyond Surface",
+                style = MaterialTheme.typography.bodyMedium,
+                color = PurpleGrey80,
+                fontWeight = FontWeight.Medium,
+                letterSpacing = 2.sp,
                 fontFamily = FontFamily.Monospace,
-                letterSpacing = 1.sp,
-                modifier = Modifier.height(20.dp).alpha(introProgress.value * 0.82f)
+                modifier = Modifier.alpha(introProgress.value * 0.85f)
             )
         }
     }

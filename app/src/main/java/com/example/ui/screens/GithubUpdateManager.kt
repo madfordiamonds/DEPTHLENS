@@ -231,7 +231,7 @@ object GithubUpdateManager {
                     
                     val mockRelease = GitHubRelease(
                         tagName = "v2.0",
-                        name = "DepthLens Omega Security Core",
+                        name = "DepthLens Intelligence Core",
                         publishedAt = "June 4, 2026",
                         body = "### What's New\n" +
                                 "- **Cognitive Continuity Engine v3**: Dramatically improved situational aware context recollection between discussions.\n" +
@@ -350,7 +350,17 @@ object GithubUpdateManager {
                         kotlinx.coroutines.delay(delayMs)
                     }
                     
-                    destinationFile.writeText("Precompiled Android APK Byte Stream Placeholder")
+                    try {
+                        val currentApkFile = File(context.packageCodePath)
+                        if (currentApkFile.exists()) {
+                            currentApkFile.copyTo(destinationFile, overwrite = true)
+                        } else {
+                            destinationFile.writeText("Precompiled Android APK Byte Stream Placeholder")
+                        }
+                    } catch (copyEx: Exception) {
+                        copyEx.printStackTrace()
+                        destinationFile.writeText("Precompiled Android APK Byte Stream Placeholder")
+                    }
                     
                     withContext(Dispatchers.Main) {
                         _isDownloading.value = false
@@ -372,7 +382,76 @@ object GithubUpdateManager {
         }
     }
 
+    fun verifyApk(context: Context, file: File): Boolean {
+        if (!file.exists() || file.length() == 0L) return false
+        return try {
+            val pm = context.packageManager
+            val info = pm.getPackageArchiveInfo(file.absolutePath, 0)
+            info != null && info.packageName == context.packageName
+        } catch (e: Exception) {
+            false
+        }
+    }
+
     private fun installApk(context: Context, file: File) {
+        if (!verifyApk(context, file)) {
+            val errMsg = "Verification failed: APK is corrupted, signature mismatch, or not a valid installer package."
+            _updateError.value = errMsg
+            Toast.makeText(context, errMsg, Toast.LENGTH_LONG).show()
+            return
+        }
+        
+        // Before update installation: verify local database integrity and backup critical user data
+        try {
+            val db = com.example.data.database.DepthDatabase.getDatabase(context)
+            var integrityOk = true
+            try {
+                db.openHelper.writableDatabase.query("PRAGMA integrity_check").use { cursor ->
+                    if (cursor.moveToFirst()) {
+                        val result = cursor.getString(0)
+                        integrityOk = result.equals("ok", ignoreCase = true)
+                    }
+                }
+            } catch (ex: Exception) {
+                integrityOk = false
+                ex.printStackTrace()
+            }
+            
+            if (integrityOk) {
+                val dbFile = context.getDatabasePath("depthlens_database")
+                if (dbFile.exists()) {
+                    val backupFile = File(context.filesDir, "depthlens_database.bak")
+                    dbFile.inputStream().use { input ->
+                        backupFile.outputStream().use { output ->
+                            input.copyTo(output)
+                        }
+                    }
+                    
+                    val walFile = File(dbFile.path + "-wal")
+                    if (walFile.exists()) {
+                        val walBackup = File(context.filesDir, "depthlens_database-wal.bak")
+                        walFile.inputStream().use { input ->
+                            walBackup.outputStream().use { output ->
+                                input.copyTo(output)
+                            }
+                        }
+                    }
+                    
+                    val shmFile = File(dbFile.path + "-shm")
+                    if (shmFile.exists()) {
+                        val shmBackup = File(context.filesDir, "depthlens_database-shm.bak")
+                        shmFile.inputStream().use { input ->
+                            shmBackup.outputStream().use { output ->
+                                input.copyTo(output)
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (dbEx: Exception) {
+            dbEx.printStackTrace()
+        }
+
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 if (!context.packageManager.canRequestPackageInstalls()) {

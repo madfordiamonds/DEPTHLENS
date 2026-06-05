@@ -9,9 +9,14 @@ import com.example.data.database.DepthDatabase
 import com.example.data.model.*
 import com.example.data.network.*
 import com.example.BuildConfig
+import android.content.Intent
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
 import java.util.UUID
@@ -136,7 +141,7 @@ class IntelligenceRepository(private val context: Context) {
     suspend fun generateAnalysis(sessionId: String): ParsedResponse = withContext(Dispatchers.IO) {
         val apiKey = BuildConfig.GEMINI_API_KEY
         if (apiKey.isEmpty() || apiKey == "MY_GEMINI_API_KEY") {
-            val errorMsg = "Error: Missing Gemini API Key. Please add your key to the Secrets panel in Google AI Studio to unlock DepthLens Omega's operations."
+            val errorMsg = "Error: Missing Gemini API Key. Please add your key to the Secrets panel in Google AI Studio to unlock DepthLens's operations."
             try {
                 val assistantMsg = MessageEntity(
                     id = UUID.randomUUID().toString(),
@@ -183,7 +188,7 @@ class IntelligenceRepository(private val context: Context) {
 
         // Compile clean, adaptive system instructions
         val systemInstructionText = """
-You are DepthLens Omega, the ultimate Reality Intelligence Operating System.
+You are DepthLens, the ultimate Reality Intelligence Platform. You help users see beyond the surface.
 You are designed to help humans analyze decisions, behaviors, conflicts, psychological patterns, business strategies, and systemic incentives.
 
 PRECONSTRUCTED IDENTITY & MISSION:
@@ -478,6 +483,76 @@ Follow this format meticulously. Wrap each visual module within its respective t
         val outputStream = ByteArrayOutputStream()
         bitmap.compress(Bitmap.CompressFormat.JPEG, 70, outputStream)
         return Base64.encodeToString(outputStream.toByteArray(), Base64.NO_WRAP)
+    }
+
+    fun startBackgroundAnalysis(sessionId: String, onComplete: () -> Unit = {}) {
+        synchronized(this) {
+            val current = _runningAnalyses.value
+            if (current.contains(sessionId)) return // Already running
+            _runningAnalyses.value = current + sessionId
+        }
+
+        backgroundScope.launch {
+            try {
+                generateAnalysis(sessionId)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            } finally {
+                synchronized(this) {
+                    _runningAnalyses.value = _runningAnalyses.value - sessionId
+                }
+                sendLocalNotification(context, sessionId)
+                onComplete()
+            }
+        }
+    }
+
+    private fun sendLocalNotification(context: Context, sessionId: String) {
+        try {
+            val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+            val channelId = "depthlens_analysis_channel"
+            val channelName = "DepthLens Analysis Notifications"
+
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                val channel = android.app.NotificationChannel(channelId, channelName, android.app.NotificationManager.IMPORTANCE_HIGH).apply {
+                    description = "Notifications for completed strategic analyses."
+                }
+                notificationManager.createNotificationChannel(channel)
+            }
+
+            val launchIntent = context.packageManager.getLaunchIntentForPackage(context.packageName)?.apply {
+                putExtra("SESSION_ID", sessionId)
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            }
+
+            val pendingIntent = android.app.PendingIntent.getActivity(
+                context,
+                sessionId.hashCode(),
+                launchIntent,
+                android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
+            )
+
+            val builder = androidx.core.app.NotificationCompat.Builder(context, channelId)
+                .setSmallIcon(android.R.drawable.stat_notify_chat)
+                .setContentTitle("Analysis Complete")
+                .setContentText("Your DepthLens analysis is ready.")
+                .setPriority(androidx.core.app.NotificationCompat.PRIORITY_HIGH)
+                .setAutoCancel(true)
+                .setContentIntent(pendingIntent)
+
+            notificationManager.notify(sessionId.hashCode(), builder.build())
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    companion object {
+        private val _runningAnalyses = kotlinx.coroutines.flow.MutableStateFlow<Set<String>>(emptySet())
+        val runningAnalyses: kotlinx.coroutines.flow.StateFlow<Set<String>> = _runningAnalyses.asStateFlow()
+
+        private val backgroundScope = kotlinx.coroutines.CoroutineScope(
+            kotlinx.coroutines.Dispatchers.IO + kotlinx.coroutines.SupervisorJob()
+        )
     }
 }
 

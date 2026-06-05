@@ -17,9 +17,13 @@ class IntelligenceViewModel(application: Application) : AndroidViewModel(applica
     private val _activeSessionId = MutableStateFlow<String?>(null)
     val activeSessionId: StateFlow<String?> = _activeSessionId.asStateFlow()
 
-    // Loading indicator
-    private val _isLoading = MutableStateFlow(false)
-    val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
+    // Loading indicator dynamically mapped from the repository's background analyses set
+    val isLoading: StateFlow<Boolean> = combine(
+        _activeSessionId,
+        IntelligenceRepository.runningAnalyses
+    ) { activeId: String?, runningSet: Set<String> ->
+        activeId != null && runningSet.contains(activeId)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
     // Attached media asset
     private val _attachedImageUri = MutableStateFlow<String?>(null)
@@ -103,7 +107,6 @@ class IntelligenceViewModel(application: Application) : AndroidViewModel(applica
     fun retryLastAnalysis(errorMessageId: String) {
         val sessionId = _activeSessionId.value ?: return
         viewModelScope.launch {
-            _isLoading.value = true
             try {
                 // Delete the error message
                 repository.deleteMessageById(errorMessageId)
@@ -111,13 +114,25 @@ class IntelligenceViewModel(application: Application) : AndroidViewModel(applica
                 val existingHistory = repository.getMessagesFlow(sessionId).firstOrNull() ?: emptyList()
                 val lastUserMsg = existingHistory.lastOrNull { it.role == "user" }
                 if (lastUserMsg != null) {
-                    // Trigger analysis again
-                    repository.generateAnalysis(sessionId)
+                    // Trigger analysis again in background
+                    repository.startBackgroundAnalysis(sessionId)
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
-            } finally {
-                _isLoading.value = false
+            }
+        }
+    }
+
+    fun regenerateLastAnalysis(aiMessageId: String) {
+        val sessionId = _activeSessionId.value ?: return
+        viewModelScope.launch {
+            try {
+                // Delete this AI response
+                repository.deleteMessageById(aiMessageId)
+                // Trigger background analysis again
+                repository.startBackgroundAnalysis(sessionId)
+            } catch (e: Exception) {
+                e.printStackTrace()
             }
         }
     }
@@ -130,7 +145,6 @@ class IntelligenceViewModel(application: Application) : AndroidViewModel(applica
         clearAttachment()
 
         viewModelScope.launch {
-            _isLoading.value = true
             try {
                 // Determine or create session if none active (e.g. from Home screen prompt)
                 val sessionId = _activeSessionId.value ?: run {
@@ -146,19 +160,17 @@ class IntelligenceViewModel(application: Application) : AndroidViewModel(applica
                 // 1. Insert user message to initiate continuity UI rendering
                 repository.insertUserMessage(sessionId, cleanQuery, attachedUri)
                 
-                // 2. Perform intelligence analysis call to external models
-                repository.generateAnalysis(sessionId)
-
-                // 3. Asynchronously generate an aesthetic title if first query
-                if (isFirstQuery && cleanQuery.isNotEmpty()) {
-                    launch {
-                        repository.generateTitleForSession(sessionId, cleanQuery)
+                // 2. Perform intelligence analysis call to external models in background (non-blocking)
+                repository.startBackgroundAnalysis(sessionId) {
+                    // Asynchronously generate an aesthetic title if first query
+                    if (isFirstQuery && cleanQuery.isNotEmpty()) {
+                        viewModelScope.launch {
+                            repository.generateTitleForSession(sessionId, cleanQuery)
+                        }
                     }
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
-            } finally {
-                _isLoading.value = false
             }
         }
     }
@@ -218,5 +230,32 @@ class IntelligenceViewModel(application: Application) : AndroidViewModel(applica
                 _continuityBriefStatus.value = "Error"
             }
         }
+    }
+
+    // Collapsible System Controls state saved in SharedPreferences
+    private val prefs = getApplication<Application>().getSharedPreferences("depthlens_prefs", android.content.Context.MODE_PRIVATE)
+
+    private val _isSystemControlsExpanded = MutableStateFlow(prefs.getBoolean("system_controls_expanded", false))
+    val isSystemControlsExpanded: StateFlow<Boolean> = _isSystemControlsExpanded.asStateFlow()
+
+    fun setSystemControlsExpanded(expanded: Boolean) {
+        _isSystemControlsExpanded.value = expanded
+        prefs.edit().putBoolean("system_controls_expanded", expanded).apply()
+    }
+
+    private val _notificationsEnabled = MutableStateFlow(prefs.getBoolean("notifications_enabled", true))
+    val notificationsEnabled: StateFlow<Boolean> = _notificationsEnabled.asStateFlow()
+
+    fun setNotificationsEnabled(enabled: Boolean) {
+        _notificationsEnabled.value = enabled
+        prefs.edit().putBoolean("notifications_enabled", enabled).apply()
+    }
+
+    private val _darkModeEnabled = MutableStateFlow(prefs.getBoolean("dark_mode_enabled", true))
+    val darkModeEnabled: StateFlow<Boolean> = _darkModeEnabled.asStateFlow()
+
+    fun setDarkModeEnabled(enabled: Boolean) {
+        _darkModeEnabled.value = enabled
+        prefs.edit().putBoolean("dark_mode_enabled", enabled).apply()
     }
 }

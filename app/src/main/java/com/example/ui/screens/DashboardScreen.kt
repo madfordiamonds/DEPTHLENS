@@ -64,12 +64,28 @@ fun DashboardScreen(
     
     val isMemoryEnabled by viewModel.isMemoryEnabled.collectAsState()
     val isCollectiveOptIn by viewModel.isCollectiveIntelligenceOptIn.collectAsState()
+    val isSystemControlsExpanded by viewModel.isSystemControlsExpanded.collectAsState()
+    val notificationsEnabled by viewModel.notificationsEnabled.collectAsState()
+    val darkModeEnabled by viewModel.darkModeEnabled.collectAsState()
 
     val continuityBrief by viewModel.continuityBrief.collectAsState()
     val continuityBriefStatus by viewModel.continuityBriefStatus.collectAsState()
 
     val context = LocalContext.current
     val listState = rememberLazyListState()
+
+    androidx.compose.runtime.LaunchedEffect(activeSessionId) {
+        if (activeSessionId != null) {
+            viewModel.reconnectConversationContext()
+        }
+    }
+
+    androidx.compose.runtime.LaunchedEffect(continuityBriefStatus) {
+        if (continuityBriefStatus == "Done") {
+            android.widget.Toast.makeText(context, "✓ Previous conversation restored", android.widget.Toast.LENGTH_SHORT).show()
+            viewModel.clearContinuityBrief()
+        }
+    }
 
     // Pick media launcher
     val pickMediaLauncher = rememberLauncherForActivityResult(
@@ -81,6 +97,7 @@ fun DashboardScreen(
     }
 
     var showFeedbackDialog by remember { mutableStateOf(false) }
+    var showAboutDialog by remember { mutableStateOf(false) }
     var showReportBugDialog by remember { mutableStateOf(false) }
     
     var reportBugMessage by remember { mutableStateOf("") }
@@ -250,6 +267,9 @@ fun DashboardScreen(
             showMemoryDialog -> {
                 showMemoryDialog = false
             }
+            showAboutDialog -> {
+                showAboutDialog = false
+            }
             showClearConfirm -> {
                 showClearConfirm = false
             }
@@ -308,7 +328,8 @@ fun DashboardScreen(
                 }
             },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                androidx.compose.foundation.text.selection.SelectionContainer {
+                    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
                     Text(
                         text = "DepthLens compiles persistent cognitive insights locally on your device to dynamically adapt future reasoning flows.",
                         fontSize = 12.sp,
@@ -449,6 +470,7 @@ fun DashboardScreen(
                             Text("Clear Logs", fontSize = 11.sp, color = Color.White)
                         }
                     }
+                }
                 }
             },
             confirmButton = {
@@ -700,6 +722,95 @@ fun DashboardScreen(
         }
     }
 
+    if (showAboutDialog) {
+        val packageInfo = try {
+            context.packageManager.getPackageInfo(context.packageName, 0)
+        } catch (e: java.lang.Exception) {
+            null
+        }
+        val appVersion = packageInfo?.versionName ?: "2.0"
+        
+        AlertDialog(
+            onDismissRequest = { showAboutDialog = false },
+            title = {
+                Text(
+                    text = "ABOUT DEPTHLENS",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = PremiumCyan,
+                    letterSpacing = 1.sp,
+                    fontFamily = FontFamily.Monospace
+                )
+            },
+            text = {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier
+                            .size(64.dp)
+                            .background(
+                                Brush.radialGradient(
+                                    colors = listOf(ElectricViolet.copy(alpha = 0.35f), Color.Transparent)
+                                )
+                            )
+                    ) {
+                        Image(
+                            painter = painterResource(id = R.drawable.ic_depthlens_logo),
+                            contentDescription = "DepthLens Logo",
+                            modifier = Modifier.size(36.dp)
+                        )
+                    }
+                    
+                    Text(
+                        text = "DEPTHLENS",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                        letterSpacing = 2.sp,
+                        fontFamily = FontFamily.Monospace
+                    )
+                    
+                    Text(
+                        text = "Version $appVersion",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextSecondaryColor,
+                        fontFamily = FontFamily.Monospace
+                    )
+                    
+                    Text(
+                        text = "See Beyond Surface",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = PremiumCyan,
+                        fontWeight = FontWeight.SemiBold,
+                        letterSpacing = 1.sp
+                    )
+                    
+                    Spacer(modifier = Modifier.height(6.dp))
+                    
+                    Text(
+                        text = "Most people see the surface.\n\nDepthLens reveals what lies beneath reality.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Color.White.copy(alpha = 0.9f),
+                        textAlign = TextAlign.Center,
+                        lineHeight = 18.sp
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showAboutDialog = false }) {
+                    Text("CLOSE", color = PremiumCyan, fontWeight = FontWeight.Bold)
+                }
+            },
+            containerColor = DeepMidnight,
+            shape = RoundedCornerShape(16.dp),
+            modifier = Modifier.border(1.2.dp, ElectricViolet, RoundedCornerShape(16.dp))
+        )
+    }
+
     if (showFeedbackDialog) {
         AlertDialog(
             onDismissRequest = {
@@ -727,7 +838,7 @@ fun DashboardScreen(
                         verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         Text(
-                            "Help us evolve DepthLens Omega. Share suggestions, feature requests, or performance notes directly.",
+                            "Help us evolve DepthLens. Share suggestions, feature requests, or performance notes directly.",
                             fontSize = 12.sp,
                             color = Color.White,
                             lineHeight = 16.sp
@@ -881,7 +992,7 @@ fun DashboardScreen(
         } catch (e: Exception) {
             null
         }
-        val appVerStr = packageInfoReport?.versionName ?: "2.0-Omega"
+        val appVerStr = packageInfoReport?.versionName ?: "2.0"
         val deviceModel = android.os.Build.MODEL ?: "Unknown Device"
         val androidVer = android.os.Build.VERSION.RELEASE ?: "Unknown Android"
         val reportTimestamp = remember { java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date()) }
@@ -1133,7 +1244,7 @@ fun DashboardScreen(
                             Spacer(modifier = Modifier.width(10.dp))
                             Column {
                                 Text(
-                                    text = "DEPTHLENS OMEGA",
+                                    text = "DEPTHLENS",
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold,
                                     color = Color.White,
@@ -1141,7 +1252,7 @@ fun DashboardScreen(
                                     fontFamily = FontFamily.Monospace
                                 )
                                 Text(
-                                    text = "Reality Intelligence OS",
+                                    text = "See Beyond Surface",
                                     fontSize = 11.sp,
                                     color = PremiumCyan,
                                     fontWeight = FontWeight.SemiBold,
@@ -1444,131 +1555,287 @@ fun DashboardScreen(
                 ) {
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Row(
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { viewModel.setSystemControlsExpanded(!isSystemControlsExpanded) }
+                                .padding(vertical = 6.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(Icons.Default.Settings, contentDescription = null, tint = PremiumCyan, modifier = Modifier.size(16.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("SYSTEMS CONTROLS", fontSize = 11.sp, color = Color.White, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                                Text("💡 SYSTEM CONTROLS", fontSize = 11.sp, color = Color.White, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
                             }
 
-                            if (isMemoryEnabled) {
+                            Icon(
+                                imageVector = if (isSystemControlsExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                                contentDescription = if (isSystemControlsExpanded) "Collapse" else "Expand",
+                                tint = PremiumCyan,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+
+                        AnimatedVisibility(
+                            visible = isSystemControlsExpanded,
+                            enter = expandVertically(animationSpec = tween(250)) + fadeIn(animationSpec = tween(250)),
+                            exit = shrinkVertically(animationSpec = tween(250)) + fadeOut(animationSpec = tween(250))
+                        ) {
+                            Column(
+                                verticalArrangement = Arrangement.spacedBy(6.dp),
+                                modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
+                            ) {
+                                // Collective Learning toggle row
                                 Card(
-                                    colors = CardDefaults.cardColors(containerColor = SuccessColor.copy(alpha = 0.15f)),
-                                    border = BorderStroke(1.dp, SuccessColor.copy(alpha = 0.3f))
+                                    colors = CardDefaults.cardColors(containerColor = SurfaceCardColor),
+                                    shape = RoundedCornerShape(8.dp),
+                                    modifier = Modifier.fillMaxWidth().height(40.dp)
                                 ) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .fillMaxHeight()
+                                            .padding(horizontal = 10.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(Icons.Default.Info, contentDescription = null, tint = PremiumCyan, modifier = Modifier.size(14.dp))
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text(
+                                                text = "Collective Learning",
+                                                fontSize = 12.sp,
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = Color.White
+                                            )
+                                        }
+                                        
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                        ) {
+                                            Text(
+                                                text = if (isCollectiveOptIn) "ON" else "OFF",
+                                                fontSize = 10.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = if (isCollectiveOptIn) SuccessColor else TextSecondaryColor
+                                            )
+                                            Switch(
+                                                checked = isCollectiveOptIn,
+                                                onCheckedChange = { viewModel.setCollectiveIntelligenceOptIn(it) },
+                                                colors = SwitchDefaults.colors(
+                                                    checkedThumbColor = SuccessColor,
+                                                    checkedTrackColor = SuccessColor.copy(alpha = 0.3f),
+                                                    uncheckedThumbColor = TextSecondaryColor,
+                                                    uncheckedTrackColor = SurfaceCardColor.copy(alpha = 0.5f)
+                                                ),
+                                                modifier = Modifier.scale(0.75f)
+                                            )
+                                        }
+                                    }
+                                }
+
+                                // Notifications toggle row
+                                Card(
+                                    colors = CardDefaults.cardColors(containerColor = SurfaceCardColor),
+                                    shape = RoundedCornerShape(8.dp),
+                                    modifier = Modifier.fillMaxWidth().height(40.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .fillMaxHeight()
+                                            .padding(horizontal = 10.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(Icons.Default.Notifications, contentDescription = null, tint = PremiumCyan, modifier = Modifier.size(14.dp))
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text(
+                                                text = "Notifications",
+                                                fontSize = 12.sp,
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = Color.White
+                                            )
+                                        }
+                                        
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                        ) {
+                                            Text(
+                                                text = if (notificationsEnabled) "ON" else "OFF",
+                                                fontSize = 10.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = if (notificationsEnabled) SuccessColor else TextSecondaryColor
+                                            )
+                                            Switch(
+                                                checked = notificationsEnabled,
+                                                onCheckedChange = { viewModel.setNotificationsEnabled(it) },
+                                                colors = SwitchDefaults.colors(
+                                                    checkedThumbColor = SuccessColor,
+                                                    checkedTrackColor = SuccessColor.copy(alpha = 0.3f),
+                                                    uncheckedThumbColor = TextSecondaryColor,
+                                                    uncheckedTrackColor = SurfaceCardColor.copy(alpha = 0.5f)
+                                                ),
+                                                modifier = Modifier.scale(0.75f)
+                                            )
+                                        }
+                                    }
+                                }
+
+                                // Appearance row
+                                Card(
+                                    colors = CardDefaults.cardColors(containerColor = SurfaceCardColor),
+                                    shape = RoundedCornerShape(8.dp),
+                                    modifier = Modifier.fillMaxWidth().height(40.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .fillMaxHeight()
+                                            .padding(horizontal = 10.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(Icons.Default.Star, contentDescription = null, tint = PremiumCyan, modifier = Modifier.size(14.dp))
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text(
+                                                text = "Appearance",
+                                                fontSize = 12.sp,
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = Color.White
+                                            )
+                                        }
+                                        Text(
+                                            text = "Deep Midnight",
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = PremiumCyan,
+                                            fontFamily = FontFamily.Monospace,
+                                            modifier = Modifier.padding(end = 4.dp)
+                                        )
+                                    }
+                                }
+
+                                // Feedback button
+                                Button(
+                                    onClick = {
+                                        coroutineScope.launch { drawerState.close() }
+                                        showFeedbackDialog = true
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = SurfaceCardColor),
+                                    shape = RoundedCornerShape(8.dp),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(40.dp),
+                                    contentPadding = PaddingValues(10.dp, 4.dp)
+                                ) {
+                                    Icon(Icons.Default.Email, contentDescription = null, tint = PremiumCyan, modifier = Modifier.size(14.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
                                     Text(
-                                        text = "LEARNING ON",
-                                        fontSize = 8.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = SuccessColor,
-                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                        text = "Feedback",
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = Color.White
+                                    )
+                                }
+
+                                // Report Bug button
+                                Button(
+                                    onClick = {
+                                        coroutineScope.launch { drawerState.close() }
+                                        showReportBugDialog = true
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = SurfaceCardColor),
+                                    shape = RoundedCornerShape(8.dp),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(40.dp),
+                                    contentPadding = PaddingValues(10.dp, 4.dp)
+                                ) {
+                                    Icon(Icons.Default.Warning, contentDescription = null, tint = PremiumCyan, modifier = Modifier.size(14.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = "Report Bug",
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = Color.White
+                                    )
+                                }
+
+                                // Manage Memory & Privacy button
+                                Button(
+                                    onClick = {
+                                        coroutineScope.launch { drawerState.close() }
+                                        showMemoryDialog = true
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = SurfaceCardColor),
+                                    shape = RoundedCornerShape(8.dp),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(40.dp),
+                                    contentPadding = PaddingValues(10.dp, 4.dp)
+                                ) {
+                                    Icon(Icons.Default.Lock, contentDescription = null, tint = PremiumCyan, modifier = Modifier.size(14.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = "Manage Memory & Privacy",
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = Color.White
+                                    )
+                                }
+
+                                // Check For Updates button
+                                Button(
+                                    onClick = {
+                                        coroutineScope.launch { drawerState.close() }
+                                        showUpdatesDialog = true
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = SurfaceCardColor),
+                                    shape = RoundedCornerShape(8.dp),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(40.dp),
+                                    contentPadding = PaddingValues(10.dp, 4.dp)
+                                ) {
+                                    Icon(Icons.Default.Refresh, contentDescription = null, tint = PremiumCyan, modifier = Modifier.size(14.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = "Check For Updates",
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = Color.White
+                                    )
+                                }
+
+                                // About DepthLens button
+                                Button(
+                                    onClick = {
+                                        coroutineScope.launch { drawerState.close() }
+                                        showAboutDialog = true
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = SurfaceCardColor),
+                                    shape = RoundedCornerShape(8.dp),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(40.dp),
+                                    contentPadding = PaddingValues(10.dp, 4.dp)
+                                ) {
+                                    Icon(Icons.Default.Info, contentDescription = null, tint = PremiumCyan, modifier = Modifier.size(14.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = "About DepthLens",
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = Color.White
                                     )
                                 }
                             }
                         }
-
-                        // Feedback button
-                        Button(
-                            onClick = {
-                                coroutineScope.launch { drawerState.close() }
-                                showFeedbackDialog = true
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = SurfaceCardColor),
-                            shape = RoundedCornerShape(8.dp),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(40.dp),
-                            contentPadding = PaddingValues(10.dp, 4.dp)
-                        ) {
-                            Icon(Icons.Default.Email, contentDescription = null, tint = PremiumCyan, modifier = Modifier.size(14.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = "Feedback",
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = Color.White
-                            )
-                        }
-
-                        // Report Bug button
-                        Button(
-                            onClick = {
-                                coroutineScope.launch { drawerState.close() }
-                                showReportBugDialog = true
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = SurfaceCardColor),
-                            shape = RoundedCornerShape(8.dp),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(40.dp),
-                            contentPadding = PaddingValues(10.dp, 4.dp)
-                        ) {
-                            Icon(Icons.Default.Warning, contentDescription = null, tint = PremiumCyan, modifier = Modifier.size(14.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = "Report Bug",
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = Color.White
-                            )
-                        }
-
-                        // Manage Memory & Privacy button
-                        Button(
-                            onClick = {
-                                coroutineScope.launch { drawerState.close() }
-                                showMemoryDialog = true
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = SurfaceCardColor),
-                            shape = RoundedCornerShape(8.dp),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(40.dp),
-                            contentPadding = PaddingValues(10.dp, 4.dp)
-                        ) {
-                            Icon(Icons.Default.Lock, contentDescription = null, tint = PremiumCyan, modifier = Modifier.size(14.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = "Manage Memory & Privacy",
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = Color.White
-                            )
-                        }
-
-                        // Check For Updates button
-                        Button(
-                            onClick = {
-                                coroutineScope.launch { drawerState.close() }
-                                showUpdatesDialog = true
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = SurfaceCardColor),
-                            shape = RoundedCornerShape(8.dp),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(40.dp),
-                            contentPadding = PaddingValues(10.dp, 4.dp)
-                        ) {
-                            Icon(Icons.Default.Refresh, contentDescription = null, tint = PremiumCyan, modifier = Modifier.size(14.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = "Check For Updates",
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = Color.White
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = "About DepthLens v2.0-Omega",
-                            fontSize = 10.sp,
-                            color = TextSecondaryColor.copy(alpha = 0.6f),
-                            modifier = Modifier.align(Alignment.CenterHorizontally)
-                        )
                     }
                 }
             }
@@ -1580,24 +1847,20 @@ fun DashboardScreen(
                     title = {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(
-                                text = "DEPTHLENS OMEGA",
+                                text = "DEPTHLENS",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
-                                letterSpacing = 1.2.sp,
+                                letterSpacing = 2.sp,
                                 color = Color.White,
                                 fontFamily = FontFamily.Monospace
                             )
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Box(modifier = Modifier.size(5.dp).background(SuccessColor, CircleShape))
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    text = "SECURE LOCAL OS v2.0",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = SuccessColor,
-                                    fontWeight = FontWeight.Bold,
-                                    letterSpacing = 0.5.sp
-                                )
-                            }
+                            Text(
+                                text = "See Beyond Surface",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = PremiumCyan,
+                                fontWeight = FontWeight.SemiBold,
+                                letterSpacing = 0.5.sp
+                            )
                         }
                     },
                     navigationIcon = {
@@ -1650,41 +1913,43 @@ fun DashboardScreen(
                             )
                         } else {
                             // Comfortably padded scrolling Chat Feed
-                            LazyColumn(
-                                state = listState,
-                                modifier = Modifier.fillMaxSize(),
-                                contentPadding = PaddingValues(16.dp, 12.dp, 16.dp, 90.dp),
-                                verticalArrangement = Arrangement.spacedBy(16.dp)
-                            ) {
-                                item {
-                                    ConversationContinuityDashboard(
-                                        brief = continuityBrief,
-                                        status = continuityBriefStatus,
-                                        onSync = { viewModel.reconnectConversationContext() }
-                                    )
-                                }
-                                items(activeMessages) { message ->
-                                    if (message.role == "user") {
-                                        UserMessageBubble(message)
-                                    } else {
-                                        if (message.text.startsWith("Error:") || message.text.contains("Error invoking DepthLens")) {
-                                            AnalysisFailureErrorCard(
-                                                errorMessage = message.text,
-                                                onRetry = { viewModel.retryLastAnalysis(message.id) },
-                                                onReportBug = { showReportBugDialog = true },
-                                                onCancel = { viewModel.deleteMessage(message.id) }
-                                            )
+                            androidx.compose.foundation.text.selection.SelectionContainer {
+                                LazyColumn(
+                                    state = listState,
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentPadding = PaddingValues(16.dp, 12.dp, 16.dp, 90.dp),
+                                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                                ) {
+                                    items(activeMessages) { message ->
+                                        if (message.role == "user") {
+                                            UserMessageBubble(message)
                                         } else {
-                                            val parsed = remember(message.text) { ResponseParser.parse(message.text) }
-                                            DepthLensDiagnosticCard(
-                                                parsed = parsed,
-                                                onPromptSelected = { query -> viewModel.sendQuery(query) }
-                                            )
+                                            if (message.text.startsWith("Error:") || message.text.contains("Error invoking DepthLens")) {
+                                                AnalysisFailureErrorCard(
+                                                    errorMessage = message.text,
+                                                    onRetry = { viewModel.retryLastAnalysis(message.id) },
+                                                    onReportBug = { showReportBugDialog = true },
+                                                    onCancel = { viewModel.deleteMessage(message.id) }
+                                                )
+                                            } else {
+                                                val parsed = remember(message.text) { ResponseParser.parse(message.text) }
+                                                DepthLensDiagnosticCard(
+                                                    parsed = parsed,
+                                                    onPromptSelected = { query -> viewModel.sendQuery(query) },
+                                                    messageId = message.id,
+                                                    onRegenerate = { viewModel.regenerateLastAnalysis(message.id) }
+                                                )
+                                            }
                                         }
                                     }
                                 }
                             }
                         }
+                    }
+
+                    // Dynamic non-blocking Inline Loading State
+                    if (isLoading && activeMessages.isNotEmpty()) {
+                        InlineLoadingIndicator()
                     }
 
                     // Bottom chat panel handles voice recording overrides & triggers
@@ -1783,46 +2048,7 @@ fun DashboardScreen(
                     }
                 }
 
-                // Dynamic loading block screen overlay - Reconstructed to look ultra-futuristic
-                if (isLoading) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(DeepMidnight.copy(alpha = 0.85f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Card(
-                            colors = CardDefaults.cardColors(containerColor = RichNavy),
-                            border = BorderStroke(1.2.dp, PremiumCyan.copy(alpha = 0.4f)),
-                            modifier = Modifier.padding(24.dp),
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(28.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                CircularProgressIndicator(color = PremiumCyan, strokeWidth = 3.dp)
-                                Spacer(modifier = Modifier.height(24.dp))
-                                Text(
-                                    text = "RECONSTRUCTING COGNITIVE NODES...",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.White,
-                                    letterSpacing = 1.5.sp,
-                                    fontFamily = FontFamily.Monospace
-                                )
-                                Spacer(modifier = Modifier.height(10.dp))
-                                Text(
-                                    text = "Deconstructing inputs across 10 progressive layers of reality, running pattern search systems, analyzing drivers... Complete reports caching in on-device memory.",
-                                    fontSize = 11.sp,
-                                    color = TextSecondaryColor,
-                                    textAlign = TextAlign.Center,
-                                    lineHeight = 16.sp
-                                )
-                            }
-                        }
-                    }
-                }
+                // Fullscreen loading overlay removed. Interactive inline loading active.
 
                 if (isDownloadingUpdate) {
                     SoftwareDownloadProgressBarCard(
@@ -1862,19 +2088,13 @@ fun LandingScreen(
     val currentHour = remember { Calendar.getInstance().get(Calendar.HOUR_OF_DAY) }
     val greeting = remember(currentHour) {
         when (currentHour) {
-            in 5..11 -> "Good Morning"
-            in 12..16 -> "Good Afternoon"
-            in 17..20 -> "Good Evening"
-            else -> "Good Night"
+            in 5..11 -> "Good Morning."
+            in 12..16 -> "Good Afternoon."
+            in 17..20 -> "Good Evening."
+            else -> "Good Night."
         }
     }
-    val subtitleText = remember(greeting) {
-        if (greeting == "Good Morning") {
-            "Ready to explore deeper?"
-        } else {
-            "What would you like to understand today?"
-        }
-    }
+    val subtitleText = "Are you ready to dive deeper and reveal the absolute reality?"
 
     Column(
         modifier = modifier
@@ -1911,29 +2131,28 @@ fun LandingScreen(
             }
         }
 
-        Spacer(modifier = Modifier.height(14.dp))
+        Spacer(modifier = Modifier.height(18.dp))
 
-        // Dynamic Premium Greeting
         Text(
-            text = "$greeting.",
+            text = greeting,
             style = MaterialTheme.typography.displaySmall,
             fontWeight = FontWeight.ExtraBold,
             color = Color.White,
             textAlign = TextAlign.Center
         )
 
-        Spacer(modifier = Modifier.height(2.dp))
+        Spacer(modifier = Modifier.height(6.dp))
 
         Text(
             text = subtitleText,
-            style = MaterialTheme.typography.headlineSmall,
+            style = MaterialTheme.typography.titleMedium,
             color = PremiumCyan,
-            fontWeight = FontWeight.Bold,
+            fontWeight = FontWeight.SemiBold,
             letterSpacing = 0.5.sp,
             textAlign = TextAlign.Center
         )
 
-        Spacer(modifier = Modifier.height(18.dp))
+        Spacer(modifier = Modifier.height(24.dp))
 
         // Premium Center conversational Input Panel
         Card(
@@ -2174,6 +2393,8 @@ fun UserMessageBubble(
 fun DepthLensDiagnosticCard(
     parsed: ParsedResponse,
     onPromptSelected: (String) -> Unit,
+    messageId: String,
+    onRegenerate: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -2584,6 +2805,98 @@ fun DepthLensDiagnosticCard(
                 }
             }
         }
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 12.dp, start = 4.dp, end = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp, Alignment.Start),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            val context = LocalContext.current
+            val shareableText = remember(parsed) { parsed.toShareableText() }
+            
+            // 📋 Copy Button
+            Row(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(6.dp))
+                    .clickable {
+                        val clipboardManager = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                        val clipData = android.content.ClipData.newPlainText("DepthLens Analysis", shareableText)
+                        clipboardManager.setPrimaryClip(clipData)
+                        Toast.makeText(context, "Copied to Clipboard", Toast.LENGTH_SHORT).show()
+                    }
+                    .padding(vertical = 4.dp, horizontal = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text(
+                    text = "📋",
+                    fontSize = 12.sp
+                )
+                Text(
+                    text = "Copy",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = PremiumCyan,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+            
+            // ↗ Share Button
+            Row(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(6.dp))
+                    .clickable {
+                        val shareIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                            type = "text/plain"
+                            putExtra(android.content.Intent.EXTRA_TEXT, shareableText)
+                            putExtra(android.content.Intent.EXTRA_SUBJECT, "DepthLens Analysis")
+                        }
+                        context.startActivity(android.content.Intent.createChooser(shareIntent, "Share DepthLens Report"))
+                    }
+                    .padding(vertical = 4.dp, horizontal = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text(
+                    text = "↗",
+                    fontSize = 12.sp,
+                    color = PremiumCyan,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = "Share",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = PremiumCyan,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            // 🔄 Regenerate Button (AI response only)
+            Row(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(6.dp))
+                    .clickable {
+                        onRegenerate()
+                    }
+                    .padding(vertical = 4.dp, horizontal = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text(
+                    text = "🔄",
+                    fontSize = 12.sp
+                )
+                Text(
+                    text = "Regenerate",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = PremiumCyan,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
 
         Spacer(modifier = Modifier.height(4.dp))
         Text(
@@ -3290,6 +3603,31 @@ fun DepthLensUpdateAvailableDialog(
                     color = TextPrimaryColor,
                     lineHeight = 18.sp
                 )
+
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = SuccessColor.copy(alpha = 0.12f)),
+                    border = BorderStroke(1.dp, SuccessColor.copy(alpha = 0.35f)),
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = "🛡️",
+                            fontSize = 16.sp
+                        )
+                        Text(
+                            text = "Your conversations, memories, and settings will be preserved during this update.",
+                            fontSize = 12.sp,
+                            color = SuccessColor,
+                            fontWeight = FontWeight.Bold,
+                            lineHeight = 16.sp
+                        )
+                    }
+                }
                 
                 Card(
                     colors = CardDefaults.cardColors(containerColor = DeepMidnight),
@@ -3825,5 +4163,122 @@ fun AnalysisFailureErrorCard(
             }
         }
     }
+}
+
+@Composable
+fun InlineLoadingIndicator() {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 6.dp),
+        shape = RoundedCornerShape(10.dp),
+        colors = CardDefaults.cardColors(containerColor = RichNavy.copy(alpha = 0.9f)),
+        border = BorderStroke(1.dp, PremiumCyan.copy(alpha = 0.3f))
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(16.dp),
+                color = PremiumCyan,
+                strokeWidth = 2.dp
+            )
+            Spacer(modifier = Modifier.width(12.dp))
+            Column {
+                Text(
+                    text = "RUNNING RECONSTRUCTION...",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = FontFamily.Monospace,
+                    letterSpacing = 1.2.sp
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = "Deconstructing inputs across progressive layers of reality...",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TextSecondaryColor,
+                    fontSize = 10.sp
+                )
+            }
+        }
+    }
+}
+
+fun ParsedResponse.toShareableText(): String {
+    val builder = java.lang.StringBuilder()
+    builder.append("=== DEPTHLENS STRATEGIC RECONSTRUCTION REPORT ===\n\n")
+    if (introduction.isNotBlank()) {
+        builder.append("INTRODUCTION\n")
+        builder.append(introduction).append("\n\n")
+    }
+    
+    val summary = executiveSummary
+    if (!summary.isNullOrBlank()) {
+        builder.append("EXECUTIVE SUMMARY\n")
+        builder.append(summary).append("\n\n")
+    }
+    
+    if (depthLayers.isNotEmpty()) {
+        builder.append("DEPTH LAYERS (DECONSTRUCTING REALITY)\n")
+        depthLayers.forEach { layer ->
+            builder.append("• LAYER ").append(layer.layerNumber).append(" (").append(layer.layerName.uppercase()).append("): ")
+                .append(layer.description).append("\n")
+        }
+        builder.append("\n")
+    }
+    
+    val rcr = rootCauseReport
+    if (rcr != null) {
+        builder.append("ROOT CAUSE REPORT (THE 'WHY')\n")
+        builder.append("Symptom: ").append(rcr.symptom).append("\n")
+        builder.append("Immediate Cause: ").append(rcr.immediateCause).append("\n")
+        builder.append("Underlying Cause: ").append(rcr.underlyingCause).append("\n")
+        builder.append("Deeper Cause: ").append(rcr.deeperCause).append("\n")
+        builder.append("Root Cause Estimate: ").append(rcr.rootCauseEstimate).append("\n")
+        builder.append("Supporting Evidence: ").append(rcr.supportingEvidence).append("\n")
+        if (rcr.alternativeExplanation.isNotBlank()) {
+            builder.append("Alternative Explanation: ").append(rcr.alternativeExplanation).append("\n")
+        }
+        builder.append("\n")
+    }
+    
+    val hd = humanDrivers
+    if (hd != null) {
+        builder.append("HUMAN DRIVERS (PSYCHOMOTIVE ANATOMY)\n")
+        builder.append("Surface Intention: ").append(hd.surfaceIntention).append("\n")
+        builder.append("Emotional Driver: ").append(hd.emotionalDriver).append("\n")
+        builder.append("Core Need: ").append(hd.needDriver).append("\n")
+        builder.append("Core Fear: ").append(hd.fearDriver).append("\n")
+        builder.append("Incentives: ").append(hd.incentiveDriver).append("\n")
+        builder.append("Identity Alignment: ").append(hd.identityDriver).append("\n")
+        builder.append("Hidden Motives: ").append(hd.hiddenMotives).append("\n")
+        builder.append("\n")
+    }
+    
+    if (futureScenarios.isNotEmpty()) {
+        builder.append("FUTURE SCENARIOS & PROBABILITIES\n")
+        futureScenarios.forEach { scenario ->
+            builder.append("- ").append(scenario.codeName.uppercase()).append(" - ").append(scenario.displayName).append(" (Prob: ").append(scenario.probability).append("%)\n")
+            builder.append("  Outcome: ").append(scenario.impactText).append("\n")
+            if (scenario.earlyWarningSigns.isNotEmpty()) {
+                builder.append("  Early Warning Signs:\n")
+                scenario.earlyWarningSigns.forEach { sign ->
+                    builder.append("    * ").append(sign).append("\n")
+                }
+            }
+        }
+        builder.append("\n")
+    }
+    
+    val conf = confidence
+    if (!conf.isNullOrBlank()) {
+        builder.append("Confidence Level: ").append(conf).append("\n")
+    }
+    builder.append("=================================================")
+    return builder.toString()
 }
 

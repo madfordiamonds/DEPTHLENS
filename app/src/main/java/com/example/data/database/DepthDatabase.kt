@@ -69,15 +69,127 @@ abstract class DepthDatabase : RoomDatabase() {
 
         fun getDatabase(context: android.content.Context): DepthDatabase {
             return INSTANCE ?: synchronized(this) {
-                val instance = Room.databaseBuilder(
+                val dbFile = context.getDatabasePath("depthlens_database")
+                val backupFile = java.io.File(context.filesDir, "depthlens_database.bak")
+                
+                // If dbFile exists, create a backup of it before attempting to open the Room database
+                if (dbFile.exists() && dbFile.length() > 0) {
+                    try {
+                        dbFile.inputStream().use { input ->
+                            backupFile.outputStream().use { output ->
+                                input.copyTo(output)
+                            }
+                        }
+                        val walFile = java.io.File(dbFile.path + "-wal")
+                        if (walFile.exists()) {
+                            val walBackup = java.io.File(context.filesDir, "depthlens_database-wal.bak")
+                            walFile.inputStream().use { input ->
+                                walBackup.outputStream().use { output ->
+                                    input.copyTo(output)
+                                }
+                            }
+                        }
+                        val shmFile = java.io.File(dbFile.path + "-shm")
+                        if (shmFile.exists()) {
+                            val shmBackup = java.io.File(context.filesDir, "depthlens_database-shm.bak")
+                            shmFile.inputStream().use { input ->
+                                shmBackup.outputStream().use { output ->
+                                    input.copyTo(output)
+                                }
+                            }
+                        }
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }
+
+                var instance: DepthDatabase? = null
+                try {
+                    instance = Room.databaseBuilder(
+                        context.applicationContext,
+                        DepthDatabase::class.java,
+                        "depthlens_database"
+                    )
+                    .addCallback(object : RoomDatabase.Callback() {
+                        override fun onOpen(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                            super.onOpen(db)
+                            // Verify integrity of database tables when opened
+                            try {
+                                db.query("PRAGMA integrity_check").use { cursor ->
+                                    if (cursor.moveToFirst()) {
+                                        val res = cursor.getString(0)
+                                        if (!res.equals("ok", ignoreCase = true)) {
+                                            throw android.database.sqlite.SQLiteException("Corruption detected: $res")
+                                        }
+                                    }
+                                }
+                            } catch (e: Exception) {
+                                e.printStackTrace()
+                            }
+                        }
+                    })
+                    .fallbackToDestructiveMigration()
+                    .build()
+                    
+                    // Force opening database to verify migration/initialization is successful
+                    instance.openHelper.writableDatabase
+                } catch (migrationEx: Exception) {
+                    migrationEx.printStackTrace()
+                    // Reconnection/migration failed! Automatically restore from pre-upgrade backup
+                    if (backupFile.exists()) {
+                        try {
+                            instance?.close()
+                        } catch (closeEx: Exception) {}
+                        
+                        try {
+                            backupFile.inputStream().use { input ->
+                                dbFile.outputStream().use { output ->
+                                    input.copyTo(output)
+                                }
+                            }
+                            val walBackup = java.io.File(context.filesDir, "depthlens_database-wal.bak")
+                            val walFile = java.io.File(dbFile.path + "-wal")
+                            if (walBackup.exists()) {
+                                walBackup.inputStream().use { input ->
+                                    walFile.outputStream().use { output ->
+                                        input.copyTo(output)
+                                    }
+                                }
+                            }
+                            val shmBackup = java.io.File(context.filesDir, "depthlens_database-shm.bak")
+                            val shmFile = java.io.File(dbFile.path + "-shm")
+                            if (shmBackup.exists()) {
+                                shmBackup.inputStream().use { input ->
+                                    shmFile.outputStream().use { output ->
+                                        input.copyTo(output)
+                                    }
+                                }
+                            }
+                            
+                            instance = Room.databaseBuilder(
+                                context.applicationContext,
+                                DepthDatabase::class.java,
+                                "depthlens_database"
+                            )
+                            .fallbackToDestructiveMigration()
+                            .build()
+                            instance.openHelper.writableDatabase
+                        } catch (restoreEx: Exception) {
+                            restoreEx.printStackTrace()
+                        }
+                    }
+                }
+                
+                val finalInstance = instance ?: Room.databaseBuilder(
                     context.applicationContext,
                     DepthDatabase::class.java,
                     "depthlens_database"
                 )
                 .fallbackToDestructiveMigration()
                 .build()
-                INSTANCE = instance
-                instance
+                
+                INSTANCE = finalInstance
+                finalInstance
             }
         }
     }
