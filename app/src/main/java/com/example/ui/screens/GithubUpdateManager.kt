@@ -465,20 +465,43 @@ object GithubUpdateManager {
         }
 
         try {
-            // Play Protect Compliance Upgrade:
-            // Sideloaded / programmatic APK installation via package-archive packageManager flags
-            // are considered suspicious administrative routines and frequently blocked by Google Play Protect.
-            // Under Android security best practices, sideloaded applications must redirect the user to download 
-            // and install package updates through authorized, signed browsers (Chrome, Firefox, etc.).
-            val targetUrl = latestRelease.value?.apkUrl ?: "https://github.com/guy-with-ideas-uncoded/DEPTHLENS/releases/download/v4.0.1/DEPTHLENS.apk"
-            val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(targetUrl)).apply {
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            val apkUri: Uri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                // Android 7+ requires FileProvider URI for APK installs
+                FileProvider.getUriForFile(
+                    context,
+                    "${context.packageName}.fileprovider",
+                    file
+                )
+            } else {
+                Uri.fromFile(file)
             }
-            context.startActivity(browserIntent)
-            Toast.makeText(context, "Redirecting to system browser for safe, secure installation...", Toast.LENGTH_LONG).show()
+
+            // On Android 8+ check if the app is allowed to install unknown sources
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val canInstall = context.packageManager.canRequestPackageInstalls()
+                if (!canInstall) {
+                    // Send user to grant "Install unknown apps" permission for this app
+                    val permIntent = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES).apply {
+                        data = Uri.parse("package:${context.packageName}")
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    context.startActivity(permIntent)
+                    Toast.makeText(context, "Please allow installing unknown apps, then try updating again.", Toast.LENGTH_LONG).show()
+                    return
+                }
+            }
+
+            val installIntent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(apkUri, "application/vnd.android.package-archive")
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            context.startActivity(installIntent)
+            Toast.makeText(context, "Opening installer...", Toast.LENGTH_SHORT).show()
         } catch (e: Exception) {
             e.printStackTrace()
-            Toast.makeText(context, "Failed to launch browser: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
+            _updateError.value = "Failed to launch installer: ${e.localizedMessage}"
+            Toast.makeText(context, "Failed to launch installer: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
         }
     }
 }

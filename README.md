@@ -8,21 +8,23 @@ https://shorturl.at/TDOZi
 
 ---
 
-# DEPTHLENS
+# DEPTHLENS - See Beyond the Surface
 
-### SEE BEYOND THE SURFACE
+<img width="2880" height="5786" alt="bash" src="https://github.com/user-attachments/assets/6657a73d-6277-4d78-a638-7e337f6147f9" />
 
-Most people see symptoms.
+---
 
-DepthLens reveals patterns.
+**Most people see symptoms.**
 
-Most people see events.
+**DepthLens reveals patterns.**
 
-DepthLens reveals systems.
+**Most people see events.**
 
-Most people see answers.
+**DepthLens reveals systems.**
 
-DepthLens reveals reality.
+**Most people see answers.**
+
+**DepthLens reveals reality.**
 
 ---
 

@@ -14,6 +14,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.rounded.Add
@@ -45,7 +46,10 @@ import android.os.Bundle
 import android.content.pm.PackageManager
 import androidx.core.content.ContextCompat
 import java.util.Calendar
-import com.example.data.repository.ResponseParser
+import androidx.compose.ui.res.painterResource
+import com.example.R
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -190,34 +194,109 @@ fun HomeScreen(
                 }
             }
 
-            // Landing Hero Headline
+            // Landing Hero — DepthLens Logo instead of headline text
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(vertical = 8.dp)
             ) {
-                Text(
-                    text = "What do you want\nto understand?",
-                    fontFamily = DMSerifDisplayFontFamily,
-                    fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
-                    fontSize = 26.sp,
-                    lineHeight = 31.sp,
-                    color = TextPrimaryColor,
-                    modifier = Modifier.padding(bottom = 6.dp)
+                Image(
+                    painter = painterResource(id = R.drawable.ic_depthlens_logo),
+                    contentDescription = "DepthLens",
+                    modifier = Modifier
+                        .height(52.dp)
+                        .padding(bottom = 6.dp)
                 )
 
                 Text(
                     text = "Choose a mode or start typing — DepthLens will reveal what lies beneath.",
                     fontFamily = InstrumentSansFontFamily,
                     fontSize = 11.sp,
-                    color = TextMutedColor,
+                    color = Color.White,
                     lineHeight = 16.sp
                 )
             }
 
             Spacer(modifier = Modifier.height(10.dp))
 
+            // Mode grid header row: label + Multi-Layer button + collapse toggle
+            var modesExpanded by remember { mutableStateOf(false) }
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = "MODES",
+                    fontSize = 8.sp,
+                    letterSpacing = 1.2.sp,
+                    fontFamily = DMMonoFontFamily,
+                    fontWeight = FontWeight.Bold,
+                    color = TextMutedColor
+                )
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    // Multi-Layer button (compact)
+                    val isMultiLayer = selectedMode == "Multi-Layer"
+                    Box(
+                        modifier = Modifier
+                            .height(22.dp)
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(
+                                if (isMultiLayer)
+                                    Brush.linearGradient(listOf(ElectricViolet, PremiumCyan.copy(alpha = 0.8f)))
+                                else
+                                    Brush.linearGradient(listOf(ElectricViolet.copy(alpha = 0.15f), PremiumCyan.copy(alpha = 0.08f)))
+                            )
+                            .border(
+                                1.dp,
+                                if (isMultiLayer) ElectricViolet else ElectricViolet.copy(alpha = 0.5f),
+                                RoundedCornerShape(6.dp)
+                            )
+                            .clickable { onModeSelected("Multi-Layer") }
+                            .padding(horizontal = 8.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text("✦", fontSize = 8.sp, color = if (isMultiLayer) Color.White else ElectricViolet)
+                            Text(
+                                text = "Multi-Layer",
+                                fontSize = 8.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = DMMonoFontFamily,
+                                color = if (isMultiLayer) Color.White else ElectricViolet
+                            )
+                        }
+                    }
+
+                    // Collapse/expand toggle
+                    Box(
+                        modifier = Modifier
+                            .size(22.dp)
+                            .clip(RoundedCornerShape(5.dp))
+                            .background(Surface2)
+                            .border(1.dp, BorderSubtle, RoundedCornerShape(5.dp))
+                            .clickable { modesExpanded = !modesExpanded },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = if (modesExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                            contentDescription = if (modesExpanded) "Collapse modes" else "Expand modes",
+                            tint = TextMutedColor,
+                            modifier = Modifier.size(14.dp)
+                        )
+                    }
+                }
+            }
+
             // Quick Mode Selection Grid — minimized cards (reduced padding, tighter layout)
+            androidx.compose.animation.AnimatedVisibility(visible = modesExpanded) {
             Column(
                 modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
@@ -289,6 +368,7 @@ fun HomeScreen(
                     }
                 }
             }
+            } // end AnimatedVisibility modesExpanded
 
             // ── Inline Analysis Results ──────────────────────────────────────
             if (activeMessages.isNotEmpty() || isLoading) {
@@ -567,6 +647,43 @@ fun HomeScreen(
                                                                 modifier = Modifier.weight(1f)
                                                             )
                                                         }
+                                                    }
+                                                }
+                                            }
+
+                                            // ── Copy Button ────────────────────────────────
+                                            val clipboardManager = LocalClipboardManager.current
+                                            var copied by remember { mutableStateOf(false) }
+                                            Spacer(modifier = Modifier.height(10.dp))
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.End
+                                            ) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .clip(RoundedCornerShape(7.dp))
+                                                        .background(if (copied) ElectricViolet.copy(alpha = 0.18f) else Surface3)
+                                                        .border(1.dp, if (copied) ElectricViolet.copy(alpha = 0.6f) else BorderSubtle, RoundedCornerShape(7.dp))
+                                                        .clickable {
+                                                            clipboardManager.setText(AnnotatedString(message.text))
+                                                            copied = true
+                                                        }
+                                                        .padding(horizontal = 10.dp, vertical = 5.dp),
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                                        Icon(
+                                                            imageVector = Icons.Default.ContentCopy,
+                                                            contentDescription = "Copy analysis",
+                                                            tint = if (copied) ElectricViolet else TextMutedColor,
+                                                            modifier = Modifier.size(10.dp)
+                                                        )
+                                                        Text(
+                                                            text = if (copied) "Copied!" else "Copy",
+                                                            fontSize = 8.5.sp,
+                                                            fontFamily = DMMonoFontFamily,
+                                                            color = if (copied) ElectricViolet else TextMutedColor
+                                                        )
                                                     }
                                                 }
                                             }

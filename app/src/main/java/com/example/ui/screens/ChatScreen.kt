@@ -15,6 +15,7 @@ import androidx.compose.material.icons.filled.Create
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Mic
@@ -50,6 +51,8 @@ import android.os.Bundle
 import android.content.pm.PackageManager
 import androidx.core.content.ContextCompat
 import coil.compose.AsyncImage
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -593,6 +596,39 @@ fun ChatScreen(
                                                             tint = TextMutedColor,
                                                             modifier = Modifier.size(14.dp)
                                                         )
+                                                    }
+
+                                                    Spacer(modifier = Modifier.width(6.dp))
+
+                                                    // Copy button
+                                                    val clipboardManager = LocalClipboardManager.current
+                                                    var copied by remember { mutableStateOf(false) }
+                                                    Box(
+                                                        modifier = androidx.compose.ui.Modifier
+                                                            .clip(androidx.compose.foundation.shape.RoundedCornerShape(7.dp))
+                                                            .background(if (copied) ElectricViolet.copy(alpha = 0.18f) else Surface3)
+                                                            .border(1.dp, if (copied) ElectricViolet.copy(alpha = 0.6f) else BorderSubtle, androidx.compose.foundation.shape.RoundedCornerShape(7.dp))
+                                                            .clickable {
+                                                                clipboardManager.setText(AnnotatedString(message.text))
+                                                                copied = true
+                                                            }
+                                                            .padding(horizontal = 8.dp, vertical = 4.dp),
+                                                        contentAlignment = androidx.compose.ui.Alignment.Center
+                                                    ) {
+                                                        Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                                            Icon(
+                                                                imageVector = Icons.Default.ContentCopy,
+                                                                contentDescription = "Copy analysis",
+                                                                tint = if (copied) ElectricViolet else TextMutedColor,
+                                                                modifier = androidx.compose.ui.Modifier.size(10.dp)
+                                                            )
+                                                            Text(
+                                                                text = if (copied) "Copied!" else "Copy",
+                                                                fontSize = 8.sp,
+                                                                fontFamily = DMMonoFontFamily,
+                                                                color = if (copied) ElectricViolet else TextMutedColor
+                                                            )
+                                                        }
                                                     }
 
                                                     Spacer(modifier = Modifier.width(6.dp))

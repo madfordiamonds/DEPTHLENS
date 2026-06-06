@@ -545,6 +545,11 @@ class IntelligenceViewModel(application: Application) : AndroidViewModel(applica
                 "Decision Framework Audit", "Risk-Benefit Map", "Choice Architecture Study",
                 "Heuristic Bias Probe", "Trade-off Analysis Trace", "Strategic Choice Scan",
                 "Decision Quality Map", "Option Evaluation Study", "Choice Driver Audit"
+            ),
+            "Multi-Layer" to listOf(
+                "Reality Architecture Scan", "Multi-Dimensional Audit", "Full-Spectrum Analysis",
+                "Deep-Layer Probe", "Reality Tunnel Trace", "Ontological Pattern Map",
+                "Consciousness Layer Study", "Meta-Pattern Audit", "Invisible Architecture Scan"
             )
         )
         val topics = topicsByMode[mode] ?: topicsByMode["Root Cause"]!!

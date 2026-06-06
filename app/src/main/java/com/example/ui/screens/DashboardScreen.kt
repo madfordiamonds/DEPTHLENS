@@ -2993,24 +2993,40 @@ fun DepthLensDiagnosticCard(
             val context = LocalContext.current
             val shareableText = remember(parsed) { parsed.toShareableText() }
             
-            // 📋 Copy Button
-            Row(
+            // Copy Button - styled consistent with app design
+            var dashCopied by remember { mutableStateOf(false) }
+            Box(
                 modifier = Modifier
-                    .clip(RoundedCornerShape(6.dp))
+                    .clip(RoundedCornerShape(7.dp))
+                    .background(if (dashCopied) ElectricViolet.copy(alpha = 0.18f) else Surface3)
+                    .border(1.dp, if (dashCopied) ElectricViolet.copy(alpha = 0.6f) else BorderSubtle, RoundedCornerShape(7.dp))
                     .clickable {
                         val clipboardManager = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
                         val clipData = android.content.ClipData.newPlainText("DepthLens Analysis", shareableText)
                         clipboardManager.setPrimaryClip(clipData)
                         Toast.makeText(context, "Copied to Clipboard", Toast.LENGTH_SHORT).show()
+                        dashCopied = true
                     }
-                    .padding(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Center
+                    .padding(horizontal = 10.dp, vertical = 5.dp),
+                contentAlignment = Alignment.Center
             ) {
-                Text(
-                    text = "📋",
-                    fontSize = 15.sp
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(5.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.ContentCopy,
+                        contentDescription = "Copy analysis",
+                        tint = if (dashCopied) ElectricViolet else TextMutedColor,
+                        modifier = Modifier.size(11.dp)
+                    )
+                    Text(
+                        text = if (dashCopied) "Copied!" else "Copy",
+                        fontSize = 8.5.sp,
+                        fontFamily = DMMonoFontFamily,
+                        color = if (dashCopied) ElectricViolet else TextMutedColor
+                    )
+                }
             }
             
             // ↗ Share Button
@@ -3100,7 +3116,7 @@ fun BottomInputPanel(
     modifier: Modifier = Modifier
 ) {
     var rawText by remember { mutableStateOf("") }
-    val modes = listOf("Root Cause", "Psychology", "Systems", "Probability")
+    val modes = listOf("Root Cause", "Psychology", "Systems", "Probability", "Multi-Layer")
     var selectedMode by remember { mutableStateOf("Root Cause") }
 
     Column(
