@@ -20,16 +20,48 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
 import java.util.UUID
+import com.example.data.network.CloudSyncService
 
 class IntelligenceRepository(private val context: Context) {
     private val db = DepthDatabase.getDatabase(context)
     private val sessionDao = db.sessionDao()
     private val messageDao = db.messageDao()
     private val memoryInsightDao = db.memoryInsightDao()
+    private val archivedInsightDao = db.archivedInsightDao()
     private val apiService = RetrofitClient.service
 
     val allSessionsFlow: Flow<List<SessionEntity>> = sessionDao.getAllSessionsFlow()
     val allMemoryInsightsFlow: Flow<List<MemoryInsight>> = memoryInsightDao.getAllInsightsFlow()
+    val allArchivedInsightsFlow: Flow<List<ArchivedInsightEntity>> = archivedInsightDao.getAllArchivedInsightsFlow()
+
+    suspend fun insertArchivedInsight(insight: ArchivedInsightEntity) {
+        archivedInsightDao.insertArchivedInsight(insight)
+    }
+
+    suspend fun deleteArchivedInsight(id: String) {
+        archivedInsightDao.deleteArchivedInsight(id)
+    }
+
+    suspend fun deleteAllArchivedInsights() {
+        archivedInsightDao.deleteAllArchivedInsights()
+    }
+
+    private val backgroundScope = kotlinx.coroutines.CoroutineScope(Dispatchers.IO)
+
+    private fun triggerUpload(block: suspend (userId: String) -> Unit) {
+        val prefs = context.getSharedPreferences("depthlens_prefs", Context.MODE_PRIVATE)
+        val isLoggedIn = prefs.getBoolean("is_logged_in", false)
+        val userId = prefs.getString("user_id", "") ?: ""
+        if (isLoggedIn && userId.isNotEmpty()) {
+            backgroundScope.launch {
+                try {
+                    block(userId)
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+        }
+    }
 
     fun getMessagesFlow(sessionId: String): Flow<List<MessageEntity>> {
         return messageDao.getMessagesForSessionFlow(sessionId)
@@ -44,20 +76,31 @@ class IntelligenceRepository(private val context: Context) {
             lastUpdatedAt = System.currentTimeMillis()
         )
         sessionDao.insertSession(session)
+        triggerUpload { uid ->
+            CloudSyncService.uploadSession(uid, id, title, false, session.createdAt, session.lastUpdatedAt)
+        }
         session
     }
 
     suspend fun updateSessionTitle(sessionId: String, newTitle: String) = withContext(Dispatchers.IO) {
         val sessionItem = sessionDao.getAllSessionsFlow().firstOrNull()?.find { it.id == sessionId }
         if (sessionItem != null) {
-            sessionDao.insertSession(sessionItem.copy(title = newTitle, lastUpdatedAt = System.currentTimeMillis()))
+            val updated = sessionItem.copy(title = newTitle, lastUpdatedAt = System.currentTimeMillis())
+            sessionDao.insertSession(updated)
+            triggerUpload { uid ->
+                CloudSyncService.uploadSession(uid, updated.id, updated.title, updated.isPinned, updated.createdAt, updated.lastUpdatedAt)
+            }
         }
     }
 
     suspend fun togglePinSession(sessionId: String) = withContext(Dispatchers.IO) {
         val sessionItem = sessionDao.getAllSessionsFlow().firstOrNull()?.find { it.id == sessionId }
         if (sessionItem != null) {
-            sessionDao.insertSession(sessionItem.copy(isPinned = !sessionItem.isPinned))
+            val updated = sessionItem.copy(isPinned = !sessionItem.isPinned, lastUpdatedAt = System.currentTimeMillis())
+            sessionDao.insertSession(updated)
+            triggerUpload { uid ->
+                CloudSyncService.uploadSession(uid, updated.id, updated.title, updated.isPinned, updated.createdAt, updated.lastUpdatedAt)
+            }
         }
     }
 
@@ -136,9 +179,12 @@ class IntelligenceRepository(private val context: Context) {
         )
         messageDao.insertMessage(userMsg)
         sessionDao.updateLastUsed(sessionId, System.currentTimeMillis())
+        triggerUpload { uid ->
+            CloudSyncService.uploadMessage(uid, userMsg.id, userMsg.sessionId, userMsg.role, userMsg.text, userMsg.imageUri, userMsg.timestamp)
+        }
     }
 
-    suspend fun generateAnalysis(sessionId: String): ParsedResponse = withContext(Dispatchers.IO) {
+    suspend fun generateAnalysis(sessionId: String, customInstructionOverride: String? = null): ParsedResponse = withContext(Dispatchers.IO) {
         val apiKey = BuildConfig.GEMINI_API_KEY
         if (apiKey.isEmpty() || apiKey == "MY_GEMINI_API_KEY") {
             val errorMsg = "Error: Missing Gemini API Key. Please add your key to the Secrets panel in Google AI Studio to unlock DepthLens's operations."
@@ -298,7 +344,7 @@ Follow this format meticulously. Wrap each visual module within its respective t
         val request = GenerateContentRequest(
             contents = contentsPayload,
             generationConfig = GenerationConfig(temperature = 0.5f),
-            systemInstruction = Content(parts = listOf(Part(text = systemInstructionText)))
+            systemInstruction = Content(parts = listOf(Part(text = customInstructionOverride ?: systemInstructionText)))
         )
 
         var modelText: String? = null
@@ -328,6 +374,9 @@ Follow this format meticulously. Wrap each visual module within its respective t
                 timestamp = System.currentTimeMillis()
             )
             messageDao.insertMessage(assistantMsg)
+            triggerUpload { uid ->
+                CloudSyncService.uploadMessage(uid, assistantMsg.id, assistantMsg.sessionId, assistantMsg.role, assistantMsg.text, assistantMsg.imageUri, assistantMsg.timestamp)
+            }
 
             // Extract and save memory insights proactively to complete Memory Intelligence System
             val extractedMemoryBlock = extractTagContent(modelText, "memory_insight")
@@ -335,13 +384,21 @@ Follow this format meticulously. Wrap each visual module within its respective t
                 extractedMemoryBlock.split("\n").forEach { line ->
                     val cleanLine = line.trim().removePrefix("-").removePrefix("•").trim()
                     if (cleanLine.isNotBlank() && cleanLine.length > 10) {
-                        memoryInsightDao.insertInsight(
-                            MemoryInsight(
-                                category = "Pattern",
-                                content = cleanLine,
-                                timestamp = System.currentTimeMillis()
-                            )
+                        val memoryVal = MemoryInsight(
+                            category = "Pattern",
+                            content = cleanLine,
+                            timestamp = System.currentTimeMillis()
                         )
+                        backgroundScope.launch {
+                            try {
+                                memoryInsightDao.insertInsight(memoryVal)
+                                triggerUpload { uid ->
+                                    CloudSyncService.uploadMemoryInsight(uid, memoryVal.id, memoryVal.category, memoryVal.content, memoryVal.timestamp)
+                                }
+                            } catch (e: Exception) {
+                                e.printStackTrace()
+                            }
+                        }
                     }
                 }
             }
@@ -358,6 +415,9 @@ Follow this format meticulously. Wrap each visual module within its respective t
                     timestamp = System.currentTimeMillis()
                 )
                 messageDao.insertMessage(assistantMsg)
+                triggerUpload { uid ->
+                    CloudSyncService.uploadMessage(uid, assistantMsg.id, assistantMsg.sessionId, assistantMsg.role, assistantMsg.text, assistantMsg.imageUri, assistantMsg.timestamp)
+                }
             } catch (dbEx: Exception) {
                 dbEx.printStackTrace()
             }

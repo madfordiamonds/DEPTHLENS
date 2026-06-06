@@ -24,9 +24,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
@@ -59,6 +67,9 @@ fun DashboardScreen(
     val sessions by viewModel.sessions.collectAsState()
     val activeSessionId by viewModel.activeSessionId.collectAsState()
     val activeMessages by viewModel.activeMessages.collectAsState()
+    val currentSession = remember(sessions, activeSessionId) {
+        sessions.find { it.id == activeSessionId }
+    }
     val isLoading by viewModel.isLoading.collectAsState()
     val attachedImageUri by viewModel.attachedImageUri.collectAsState()
     val memoryInsights by viewModel.memoryInsights.collectAsState()
@@ -68,6 +79,15 @@ fun DashboardScreen(
     val isSystemControlsExpanded by viewModel.isSystemControlsExpanded.collectAsState()
     val notificationsEnabled by viewModel.notificationsEnabled.collectAsState()
     val darkModeEnabled by viewModel.darkModeEnabled.collectAsState()
+
+    val isLoggedIn by viewModel.isLoggedIn.collectAsState()
+    val isGuest by viewModel.isGuest.collectAsState()
+    val userName by viewModel.userName.collectAsState()
+    val userEmail by viewModel.userEmail.collectAsState()
+    val githubToken by viewModel.githubToken.collectAsState()
+    val repoOwnerAndName by viewModel.repoOwnerAndName.collectAsState()
+    val onboardingCompleted by viewModel.onboardingCompleted.collectAsState()
+    val archivedInsights by viewModel.archivedInsights.collectAsState()
 
     val continuityBrief by viewModel.continuityBrief.collectAsState()
     val continuityBriefStatus by viewModel.continuityBriefStatus.collectAsState()
@@ -101,6 +121,7 @@ fun DashboardScreen(
     var showThemeSelectorDialog by remember { mutableStateOf(false) }
     var showAboutDialog by remember { mutableStateOf(false) }
     var showReportBugDialog by remember { mutableStateOf(false) }
+    var selectedMode by remember { mutableStateOf("Root Cause") }
     
     var reportBugMessage by remember { mutableStateOf("") }
     var reportBugSubmitted by remember { mutableStateOf(false) }
@@ -183,14 +204,6 @@ fun DashboardScreen(
         }
     }
 
-    val pickDocumentLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
-    ) { uri: Uri? ->
-        if (uri != null) {
-            viewModel.setAttachment(uri.toString())
-        }
-    }
-
     val toggleRecording = {
         if (!isRecordingAudio) {
             val hasPermission = androidx.core.content.ContextCompat.checkSelfPermission(
@@ -214,6 +227,17 @@ fun DashboardScreen(
             }
         }
     }
+
+
+    val pickDocumentLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            viewModel.setAttachment(uri.toString())
+        }
+    }
+
+
 
     // DEPTHLENS GITHUB UPDATE SYSTEM STATES & FLOW COLLECTORS
     val latestRelease by GithubUpdateManager.latestRelease.collectAsState()
@@ -305,6 +329,114 @@ fun DashboardScreen(
         if (activeMessages.isNotEmpty()) {
             listState.animateScrollToItem(activeMessages.size - 1)
         }
+    }
+
+    // Interactive onboarding overlay if not completed
+    if (!onboardingCompleted) {
+        var onboardingName by remember { mutableStateOf("") }
+        var onboardingEmail by remember { mutableStateOf("") }
+        val isEmailValid = onboardingEmail.contains("@") && onboardingEmail.length > 5
+
+        AlertDialog(
+            onDismissRequest = {}, // Disallow dismissal without completing onboarding
+            containerColor = DeepMidnight,
+            title = {
+                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        text = "DEPTHLENS RECONSTRUCTION",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = PremiumCyan,
+                        fontFamily = FontFamily.Monospace,
+                        letterSpacing = 1.3.sp
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "Welcome Explorer",
+                        fontSize = 20.sp,
+                        fontFamily = DMSerifDisplayFontFamily,
+                        fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+                        color = TextPrimaryColor
+                    )
+                }
+            },
+            text = {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(14.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = "Initialize your system. Choose offline local-only guest mode or connect with secure cloud syncing via Google Firestore.",
+                        fontSize = 12.sp,
+                        color = TextSecondaryColor,
+                        textAlign = TextAlign.Center,
+                        lineHeight = 17.sp
+                    )
+
+                    OutlinedTextField(
+                        value = onboardingName,
+                        onValueChange = { onboardingName = it },
+                        label = { Text("Explorer Name", fontSize = 11.sp) },
+                        placeholder = { Text("e.g. Neo", fontSize = 11.sp) },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = TextPrimaryColor,
+                            unfocusedTextColor = TextPrimaryColor,
+                            focusedBorderColor = ElectricViolet,
+                            unfocusedBorderColor = BorderSubtle
+                        )
+                    )
+
+                    OutlinedTextField(
+                        value = onboardingEmail,
+                        onValueChange = { onboardingEmail = it },
+                        label = { Text("your@email.com (Required for Cloud)", fontSize = 11.sp) },
+                        placeholder = { Text("e.g. neo@matrix.com", fontSize = 11.sp) },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = TextPrimaryColor,
+                            unfocusedTextColor = TextPrimaryColor,
+                            focusedBorderColor = ElectricViolet,
+                            unfocusedBorderColor = BorderSubtle
+                        )
+                    )
+                }
+            },
+            confirmButton = {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Button(
+                        onClick = {
+                            if (onboardingName.isNotBlank() && isEmailValid) {
+                                viewModel.loginWithGoogle(onboardingEmail, onboardingName)
+                                viewModel.setOnboardingCompleted(true)
+                            }
+                        },
+                        enabled = onboardingName.isNotBlank() && isEmailValid,
+                        colors = ButtonDefaults.buttonColors(containerColor = ElectricViolet, disabledContainerColor = RichNavy),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("Cloud Sync", fontSize = 11.sp, color = Color.White)
+                    }
+
+                    OutlinedButton(
+                        onClick = {
+                            viewModel.loginAsGuest(onboardingName.ifBlank { "Guest Explorer" })
+                            viewModel.setOnboardingCompleted(true)
+                        },
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("Local Guest", fontSize = 11.sp, color = TextPrimaryColor)
+                    }
+                }
+            },
+            modifier = Modifier.border(1.2.dp, ElectricViolet, RoundedCornerShape(20.dp)),
+            shape = RoundedCornerShape(20.dp)
+        )
     }
 
     // Interactive confirm loops for memory actions
@@ -505,7 +637,7 @@ fun DashboardScreen(
 
     if (showUpdatesDialog) {
         val packageInfo = context.packageManager.getPackageInfo(context.packageName, 0)
-        val curVerStr = packageInfo.versionName ?: "1.0"
+        val curVerStr = packageInfo.versionName ?: "4.0.0"
         SoftwareUpdatesDialog(
             onDismissRequest = { showUpdatesDialog = false },
             onManualCheck = {
@@ -715,7 +847,7 @@ fun DashboardScreen(
         } catch (e: java.lang.Exception) {
             null
         }
-        val appVersion = packageInfo?.versionName ?: "2.0"
+        val appVersion = packageInfo?.versionName ?: "4.0.0"
         
         AlertDialog(
             onDismissRequest = { showAboutDialog = false },
@@ -779,7 +911,7 @@ fun DashboardScreen(
                     Spacer(modifier = Modifier.height(6.dp))
                     
                     Text(
-                        text = "Most people see the surface.\n\nDepthLens reveals what lies beneath reality.",
+                        text = "Most people see events.\nDepthLens reveals patterns.\n\nMost people see actions.\nDepthLens reveals motives.\n\nMost people see outcomes.\nDepthLens reveals causes.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = TextPrimaryColor,
                         textAlign = TextAlign.Center,
@@ -1089,7 +1221,13 @@ fun DashboardScreen(
                     Button(
                         onClick = {
                             if (feedbackMessage.trim().isNotBlank()) {
-                                feedbackSubmitted = true
+                                viewModel.submitFeedback(
+                                    category = feedbackCategory,
+                                    message = feedbackMessage,
+                                    email = feedbackEmail
+                                ) { _ ->
+                                    feedbackSubmitted = true
+                                }
                             }
                         },
                         enabled = feedbackMessage.trim().isNotBlank(),
@@ -1133,7 +1271,7 @@ fun DashboardScreen(
         } catch (e: Exception) {
             null
         }
-        val appVerStr = packageInfoReport?.versionName ?: "2.0"
+        val appVerStr = packageInfoReport?.versionName ?: "4.0.0"
         val deviceModel = android.os.Build.MODEL ?: "Unknown Device"
         val androidVer = android.os.Build.VERSION.RELEASE ?: "Unknown Android"
         val reportTimestamp = remember { java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date()) }
@@ -1256,7 +1394,11 @@ fun DashboardScreen(
                     Button(
                         onClick = {
                             if (reportBugMessage.trim().isNotBlank()) {
-                                reportBugSubmitted = true
+                                viewModel.submitBugReport(
+                                    message = reportBugMessage
+                                ) { _ ->
+                                    reportBugSubmitted = true
+                                }
                             }
                         },
                         enabled = reportBugMessage.trim().isNotBlank(),
@@ -1347,11 +1489,12 @@ fun DashboardScreen(
         )
     }
 
-    // Beautiful Premium Modal Sidebar Redesign
+    // Beautiful Premium Sidebar Redesign completely disabled for Bottom Nav ONLY
     ModalNavigationDrawer(
         drawerState = drawerState,
+        gesturesEnabled = false,
         drawerContent = {
-            ModalDrawerSheet(
+        ModalDrawerSheet(
                 drawerContainerColor = RichNavy,
                 drawerContentColor = TextPrimaryColor,
                 modifier = Modifier.width(320.dp)
@@ -2000,47 +2143,263 @@ fun DashboardScreen(
             }
         }
     ) {
+        // Active visual state controllers
+        var currentTab by remember { mutableStateOf("home") }
+        var activeThemeName by remember { mutableStateOf("Void") }
+
+        LaunchedEffect(activeThemeName) {
+            if (activeThemeName == "Polar Dawn") {
+                ThemeManager.isDarkTheme = false
+            } else {
+                ThemeManager.isDarkTheme = true
+            }
+        }
+
         Scaffold(
-            topBar = {
-                CenterAlignedTopAppBar(
-                    title = {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(
-                                text = "DEPTHLENS",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                letterSpacing = 2.sp,
-                                color = TextPrimaryColor,
-                                fontFamily = FontFamily.Monospace
-                            )
-                            Text(
-                                text = "See Beyond Surface",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = PremiumCyan,
-                                fontWeight = FontWeight.SemiBold,
-                                letterSpacing = 0.5.sp
-                            )
-                        }
-                    },
-                    navigationIcon = {
-                        IconButton(onClick = { coroutineScope.launch { drawerState.open() } }) {
-                            Icon(Icons.Default.Menu, contentDescription = "Sidebar Menu", tint = ElectricViolet)
-                        }
-                    },
-                    actions = {
-                        IconButton(onClick = { viewModel.createSession("") }) {
-                            Icon(Icons.Default.Create, contentDescription = "New Chat", tint = PremiumCyan)
-                        }
-                    },
-                    colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                        containerColor = DeepMidnight,
-                        titleContentColor = TextPrimaryColor,
-                        navigationIconContentColor = ElectricViolet,
-                        actionIconContentColor = PremiumCyan
+            containerColor = DeepMidnight,
+            bottomBar = {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(Surface1)
+                        .border(1.dp, BorderSubtle)
+                        .navigationBarsPadding()
+                        .padding(vertical = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceAround,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    BottomTabItem(
+                        tabId = "home",
+                        label = "Home",
+                        isActive = currentTab == "home",
+                        onClick = { currentTab = "home" }
                     )
-                )
+                    BottomTabItem(
+                        tabId = "chat",
+                        label = "Chat",
+                        isActive = currentTab == "chat",
+                        onClick = { currentTab = "chat" }
+                    )
+                    BottomTabItem(
+                        tabId = "analysis",
+                        label = "Analysis",
+                        isActive = currentTab == "analysis",
+                        onClick = { currentTab = "analysis" }
+                    )
+                    BottomTabItem(
+                        tabId = "sessions",
+                        label = "Sessions",
+                        isActive = currentTab == "sessions",
+                        onClick = { currentTab = "sessions" }
+                    )
+                    BottomTabItem(
+                        tabId = "settings",
+                        label = "Settings",
+                        isActive = currentTab == "settings",
+                        onClick = { currentTab = "settings" }
+                    )
+                }
+            }
+        ) { innerPadding ->
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(innerPadding)
+            ) {
+                // Multi-screen routing
+                when (currentTab) {
+                    "home" -> {
+                        HomeScreen(
+                            sessions = sessions,
+                            selectedMode = selectedMode,
+                            onModeSelected = { selectedMode = it },
+                            onSessionSelected = { sessionId -> viewModel.selectSession(sessionId) },
+                            onSubmitQuery = { text -> viewModel.sendQuery(text) },
+                            onNavigateToChat = { currentTab = "chat" },
+                            onNavigateToAnalysis = { currentTab = "analysis" },
+                            archivedInsights = archivedInsights,
+                            onDeleteArchivedInsight = { id -> viewModel.deleteArchivedInsight(id) }
+                        )
+                    }
+                    "chat" -> {
+                        ChatScreen(
+                            activeMessages = activeMessages,
+                            selectedMode = selectedMode,
+                            onModeChanged = { selectedMode = it },
+                            isLoading = isLoading,
+                            attachedImageUri = attachedImageUri,
+                            isRecordingAudio = isRecordingAudio,
+                            recordingDuration = recordingDuration,
+                            onAddAttachment = { uri -> viewModel.setAttachment(uri) },
+                            onRemoveAttachment = { viewModel.clearAttachment() },
+                            onSubmitQuery = { text -> viewModel.sendQuery(text) },
+                            onToggleRecording = { toggleRecording() },
+                            onCancelRecording = {
+                                isRecordingAudio = false
+                                voiceRecorder.stopRecording()
+                            },
+                            onRetryLastAnalysis = { msgId -> viewModel.retryLastAnalysis(msgId) },
+                            onRegenerateLastAnalysis = { msgId -> viewModel.regenerateLastAnalysis(msgId) },
+                            onReportBug = { showReportBugDialog = true },
+                            onDeleteMessage = { msgId -> viewModel.deleteMessage(msgId) },
+                            onCreateNewSession = { viewModel.createSession("") },
+                            onGoDeeper = { query -> viewModel.goDeeper(query) },
+                            onArchiveInsight = { query, intro, json ->
+                                viewModel.archiveInsight(activeSessionId ?: "", query, intro, json)
+                            }
+                        )
+                    }
+                    "analysis" -> {
+                        AnalysisScreen(
+                            activeMessages = activeMessages,
+                            selectedMode = selectedMode,
+                            onBackToHome = { currentTab = "home" },
+                            onSubmitQuery = { text -> viewModel.sendQuery(text) }
+                        )
+                    }
+                    "sessions" -> {
+                        SessionsScreen(
+                            sessions = sessions,
+                            activeSessionId = activeSessionId,
+                            onSessionSelected = { sessionId -> viewModel.selectSession(sessionId) },
+                            onCreateNewSession = { viewModel.createSession("") },
+                            onDeleteSession = { sessionId -> viewModel.deleteSession(sessionId) },
+                            onNavigateToChat = { currentTab = "chat" },
+                            onTogglePinSession = { sessionId -> viewModel.togglePinSession(sessionId) }
+                        )
+                    }
+                    "settings" -> {
+                        SettingsScreen(
+                            isMemoryEnabled = isMemoryEnabled,
+                            onMemoryEnabledChanged = { viewModel.setMemoryEnabled(it) },
+                            notificationsEnabled = notificationsEnabled,
+                            onNotificationsEnabledChanged = { viewModel.setNotificationsEnabled(it) },
+                            isCollectiveOptIn = isCollectiveOptIn,
+                            onCollectiveOptInChanged = { viewModel.setCollectiveIntelligenceOptIn(it) },
+                            activeThemeName = activeThemeName,
+                            onThemeSelected = { activeThemeName = it },
+                            onShowMemoryDetails = { showMemoryDialog = true },
+                            onShowUpdateDetails = { showUpdatesDialog = true },
+                            onWipeAllUserData = { showResetConfirm = true },
+                            onShowAbout = { showAboutDialog = true },
+                            onReportBug = { showReportBugDialog = true },
+                            isLoggedIn = isLoggedIn,
+                            isGuest = isGuest,
+                            userName = userName,
+                            userEmail = userEmail,
+                            githubToken = githubToken,
+                            repoOwnerAndName = repoOwnerAndName,
+                            onSaveGithubSettings = { token, repo -> viewModel.saveGithubSettings(token, repo) },
+                            onSignOut = { viewModel.signOut() },
+                            onLoginWithGoogle = { email, name -> viewModel.loginWithGoogle(email, name) },
+                            onLoginAsGuest = { name -> viewModel.loginAsGuest(name) }
+                        )
+                    }
+                }
+
+                if (isDownloadingUpdate) {
+                    SoftwareDownloadProgressBarCard(
+                        progress = updateDownloadProgress,
+                        downloadedBytes = updateDownloadedBytes,
+                        totalBytes = updateServerTotalBytes,
+                        onCancel = {
+                            GithubUpdateManager.cancelDownload()
+                        },
+                        modifier = Modifier.align(Alignment.BottomCenter)
+                    )
+                }
+            }
+        }
+
+        Box(modifier = Modifier.size(0.dp)) {
+            val legacyContentToIgnore = @Composable {
+                Scaffold(
+            topBar = {
+                androidx.compose.foundation.layout.Row(
+                    modifier = Modifier
+                        .statusBarsPadding()
+                        .fillMaxWidth()
+                        .height(56.dp)
+                        .background(Color(0xFF0D0D14))
+                        .drawBehind {
+                            val strokeWidth = 1.dp.toPx()
+                            drawLine(
+                                color = Color(0x0FFFFFFF), // Border subtle
+                                start = androidx.compose.ui.geometry.Offset(0f, size.height - strokeWidth/2),
+                                end = androidx.compose.ui.geometry.Offset(size.width, size.height - strokeWidth/2),
+                                strokeWidth = strokeWidth
+                            )
+                        }
+                        .padding(horizontal = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    androidx.compose.foundation.layout.Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        // Hamburger menu removed as per bottom-nav constraint
+
+                        // App icon area: violet tint background, border
+                        Box(
+                            modifier = Modifier
+                                .size(30.dp)
+                                .background(Color(0x2E7E65FF), shape = RoundedCornerShape(8.dp))
+                                .border(1.dp, Color(0x667E65FF), shape = RoundedCornerShape(8.dp)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Canvas(modifier = Modifier.size(16.dp)) {
+                                val w = size.width
+                                val h = size.height
+                                val outerPath = Path().apply {
+                                    moveTo(w * 0.15f, h * 0.5f)
+                                    cubicTo(w * 0.35f, h * 0.25f, w * 0.65f, h * 0.25f, w * 0.85f, h * 0.5f)
+                                    cubicTo(w * 0.65f, h * 0.75f, w * 0.35f, h * 0.75f, w * 0.15f, h * 0.5f)
+                                    close()
+                                }
+                                drawPath(path = outerPath, color = Color(0xFF7E65FF), style = Stroke(width = 1.2.dp.toPx()))
+                                drawCircle(color = Color(0xFF00D4FF), radius = w * 0.18f, style = Stroke(width = 1.dp.toPx()))
+                            }
+                        }
+
+                        Text(
+                            text = "DEPTHLENS",
+                            fontSize = 11.sp,
+                            letterSpacing = 1.3.sp,
+                            color = Color(0x99F0EEFF), // ink-2
+                            fontFamily = DMMonoFontFamily,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    androidx.compose.foundation.layout.Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        // Mode badge: violet text #7E65FF, violet-dim background Color(0x2E7E65FF), rounded pill shape
+                        Box(
+                            modifier = Modifier
+                                .background(Color(0x2E7E65FF), shape = RoundedCornerShape(20.dp))
+                                .border(1.dp, Color(0x667E65FF), shape = RoundedCornerShape(20.dp))
+                                .padding(horizontal = 8.dp, vertical = 3.dp)
+                        ) {
+                            Text(
+                                text = selectedMode.uppercase(),
+                                fontSize = 9.sp,
+                                color = Color(0xFF7E65FF),
+                                fontFamily = DMMonoFontFamily,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+
+                        IconButton(onClick = { viewModel.createSession("") }) {
+                            Icon(Icons.Default.Create, contentDescription = "New Session", tint = Color(0xFF00D4FF))
+                        }
+                    }
+                }
             },
-            containerColor = DeepMidnight
+            containerColor = Color(0xFF0D0D14) // Overall screen background: Color(0xFF0D0D14)
         ) { innerPadding ->
             Box(
                 modifier = modifier
@@ -2092,12 +2451,45 @@ fun DashboardScreen(
                                                 )
                                             } else {
                                                 val parsed = remember(message.text) { ResponseParser.parse(message.text) }
-                                                DepthLensDiagnosticCard(
-                                                    parsed = parsed,
-                                                    onPromptSelected = { query -> viewModel.sendQuery(query) },
-                                                    messageId = message.id,
-                                                    onRegenerate = { viewModel.regenerateLastAnalysis(message.id) }
-                                                )
+                                                Column(modifier = Modifier.fillMaxWidth()) {
+                                                    // AI label: violet color #7E65FF, DM Mono font, uppercase, 8sp, with a 6dp violet dot prefix
+                                                    Row(
+                                                        verticalAlignment = Alignment.CenterVertically,
+                                                        modifier = Modifier.padding(bottom = 6.dp)
+                                                    ) {
+                                                        Box(
+                                                            modifier = Modifier
+                                                                .size(6.dp)
+                                                                .background(Color(0xFF7E65FF), CircleShape)
+                                                        )
+                                                        Spacer(modifier = Modifier.width(6.dp))
+                                                        Text(
+                                                            text = "DEPTHLENS" + (if (parsed.depthLayers.isNotEmpty()) " · ${parsed.depthLayers.size} LAYERS" else ""),
+                                                            fontSize = 8.sp,
+                                                            color = Color(0xFF7E65FF),
+                                                            fontFamily = DMMonoFontFamily,
+                                                            fontWeight = FontWeight.Bold,
+                                                            letterSpacing = 1.sp
+                                                        )
+                                                    }
+
+                                                    // AI bubble background: Color(0xFF141420), border: Color(0x0FFFFFFF), corner radius 14dp (top-left 3dp)
+                                                    Card(
+                                                        shape = RoundedCornerShape(topStart = 3.dp, topEnd = 14.dp, bottomEnd = 14.dp, bottomStart = 14.dp),
+                                                        colors = CardDefaults.cardColors(containerColor = Color(0xFF141420)),
+                                                        border = BorderStroke(1.dp, Color(0x0FFFFFFF)),
+                                                        modifier = Modifier.fillMaxWidth()
+                                                    ) {
+                                                        Column(modifier = Modifier.padding(12.dp)) {
+                                                            DepthLensDiagnosticCard(
+                                                                parsed = parsed,
+                                                                onPromptSelected = { query -> viewModel.sendQuery(query) },
+                                                                messageId = message.id,
+                                                                onRegenerate = { viewModel.regenerateLastAnalysis(message.id) }
+                                                            )
+                                                        }
+                                                    }
+                                                }
                                             }
                                         }
                                     }
@@ -2127,7 +2519,8 @@ fun DashboardScreen(
                             isLoading = isLoading,
                             onAddAttachment = { showAttachmentSelector = true },
                             onRemoveAttachment = { viewModel.clearAttachment() },
-                            onSubmit = { text -> viewModel.sendQuery(text) }
+                            onSubmit = { text -> viewModel.sendQuery(text) },
+                            onModeChanged = { selectedMode = it }
                         )
                     }
                 }
@@ -2222,6 +2615,8 @@ fun DashboardScreen(
                 }
             }
         }
+    }
+    }
     }
 }
 
@@ -2523,16 +2918,18 @@ fun UserMessageBubble(
                 }
 
                 Card(
-                    shape = RoundedCornerShape(16.dp, 16.dp, 0.dp, 16.dp),
-                    colors = CardDefaults.cardColors(containerColor = ElectricViolet),
+                    shape = RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp, bottomEnd = 3.dp, bottomStart = 14.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color(0x2E7E65FF)),
+                    border = BorderStroke(1.dp, Color(0x667E65FF)),
                     modifier = Modifier.padding(bottom = 2.dp)
                 ) {
                     Text(
                         text = message.text,
-                        fontSize = 13.sp,
-                        color = Color.White,
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-                        lineHeight = 18.sp
+                        fontSize = 11.5.sp,
+                        color = Color(0xFFF0EEFF),
+                        fontFamily = InstrumentSansFontFamily,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
+                        lineHeight = 16.sp
                     )
                 }
 
@@ -3080,18 +3477,67 @@ fun BottomInputPanel(
     onAddAttachment: () -> Unit,
     onRemoveAttachment: () -> Unit,
     onSubmit: (String) -> Unit,
+    onModeChanged: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var rawText by remember { mutableStateOf("") }
+    val modes = listOf("Root Cause", "Psychology", "Systems", "Probability")
+    var selectedMode by remember { mutableStateOf("Root Cause") }
 
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .background(DeepMidnight)
-            .border(BorderStroke(1.dp, SurfaceCardColor))
+            .background(Color(0xFF0D0D14)) // Surface 1
+            .drawBehind {
+                val strokeWidth = 1.dp.toPx()
+                drawLine(
+                    color = Color(0x0FFFFFFF), // Border subtle top line
+                    start = androidx.compose.ui.geometry.Offset(0f, 0f),
+                    end = androidx.compose.ui.geometry.Offset(size.width, 0f),
+                    strokeWidth = strokeWidth
+                )
+            }
             .navigationBarsPadding()
-            .padding(10.dp)
+            .padding(12.dp)
     ) {
+        // Mode chips row: inactive chip has border Color(0x0FFFFFFF), text Color(0x4DF0EEFF). Active mode chip: border #7E65FF, text #7E65FF, background Color(0x2E7E65FF)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            modes.forEach { mode ->
+                val isActive = mode == selectedMode
+                Box(
+                    modifier = Modifier
+                        .clickable { 
+                            selectedMode = mode 
+                            onModeChanged(mode)
+                        }
+                        .background(
+                            color = if (isActive) Color(0x2E7E65FF) else Color.Transparent,
+                            shape = RoundedCornerShape(20.dp)
+                        )
+                        .border(
+                            width = 1.dp,
+                            color = if (isActive) Color(0xFF7E65FF) else Color(0x0FFFFFFF),
+                            shape = RoundedCornerShape(20.dp)
+                        )
+                        .padding(horizontal = 10.dp, vertical = 4.dp)
+                ) {
+                    Text(
+                        text = mode,
+                        fontSize = 8.5.sp,
+                        fontFamily = DMMonoFontFamily,
+                        fontWeight = FontWeight.Bold,
+                        color = if (isActive) Color(0xFF7E65FF) else Color(0x4DF0EEFF)
+                    )
+                }
+            }
+        }
+
         attachedImageUri?.let { uri ->
             AttachmentPreviewItem(
                 uri = uri,
@@ -3109,13 +3555,13 @@ fun BottomInputPanel(
                 enabled = !isLoading,
                 modifier = Modifier
                     .size(40.dp)
-                    .background(RichNavy, CircleShape)
-                    .border(1.dp, SurfaceCardColor, CircleShape)
+                    .background(Color(0xFF141420), CircleShape) // Surface 2
+                    .border(1.dp, Color(0x0FFFFFFF), CircleShape) // Border subtle
             ) {
                 Icon(
                     imageVector = Icons.Default.Add,
                     contentDescription = "Attach resource",
-                    tint = PremiumCyan,
+                    tint = Color(0xFF00D4FF), // PremiumCyan
                     modifier = Modifier.size(20.dp)
                 )
             }
@@ -3127,23 +3573,25 @@ fun BottomInputPanel(
                 onValueChange = { rawText = it },
                 placeholder = {
                     Text(
-                        text = "Reply, request deep loop, or query...",
+                        text = "Ask anything deeper...",
                         fontSize = 12.sp,
-                        color = TextSecondaryColor
+                        color = Color(0x4DF0EEFF), // ink-3
+                        fontFamily = InstrumentSansFontFamily
                     )
                 },
                 modifier = Modifier
                     .weight(1f)
-                    .clip(RoundedCornerShape(20.dp))
-                    .border(1.dp, SurfaceCardColor, RoundedCornerShape(20.dp))
+                    .clip(RoundedCornerShape(28.dp))
+                    .background(Color(0xFF141420)) // Surface 2
+                    .border(1.dp, Color(0x0FFFFFFF), RoundedCornerShape(28.dp)) // Border subtle
                     .heightIn(min = 40.dp, max = 110.dp),
                 maxLines = 4,
                 colors = TextFieldDefaults.colors(
-                    focusedTextColor = TextPrimaryColor,
-                    unfocusedTextColor = TextPrimaryColor,
-                    focusedContainerColor = RichNavy,
-                    unfocusedContainerColor = RichNavy,
-                    disabledContainerColor = RichNavy,
+                    focusedTextColor = Color(0xFFF0EEFF), // ink-1
+                    unfocusedTextColor = Color(0xFFF0EEFF),
+                    focusedContainerColor = Color(0xFF141420),
+                    unfocusedContainerColor = Color(0xFF141420),
+                    disabledContainerColor = Color(0xFF141420),
                     focusedIndicatorColor = Color.Transparent,
                     unfocusedIndicatorColor = Color.Transparent,
                     disabledIndicatorColor = Color.Transparent
@@ -3155,14 +3603,19 @@ fun BottomInputPanel(
             IconButton(
                 onClick = {
                     if (rawText.trim().isNotEmpty() || attachedImageUri != null) {
-                        onSubmit(rawText)
+                        val promptWithMode = if (selectedMode != "Root Cause") {
+                            "[$selectedMode Mode] ${rawText.trim()}"
+                        } else {
+                            rawText.trim()
+                        }
+                        onSubmit(promptWithMode)
                         rawText = ""
                     }
                 },
                 enabled = !isLoading && (rawText.trim().isNotBlank() || attachedImageUri != null),
                 modifier = Modifier
                     .size(40.dp)
-                    .background(if (isLoading) RichNavy else ElectricViolet, CircleShape)
+                    .background(Color(0xFF7E65FF), CircleShape) // Violet Send Button
                     .clip(CircleShape)
             ) {
                 Icon(
@@ -4423,5 +4876,140 @@ fun ParsedResponse.toShareableText(): String {
     }
     builder.append("=================================================")
     return builder.toString()
+}
+
+@Composable
+fun BottomTabItem(
+    tabId: String,
+    label: String,
+    isActive: Boolean,
+    onClick: () -> Unit
+) {
+    val tint = if (isActive) ElectricViolet else TextMutedColor
+    Column(
+        modifier = Modifier
+            .clickable { onClick() }
+            .padding(horizontal = 12.dp, vertical = 2.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Box(
+            modifier = Modifier.size(24.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            when (tabId) {
+                "home" -> {
+                    Canvas(modifier = Modifier.fillMaxSize()) {
+                        val path = Path().apply {
+                            moveTo(size.width * 0.15f, size.height * 0.85f)
+                            lineTo(size.width * 0.15f, size.height * 0.45f)
+                            lineTo(size.width * 0.5f, size.height * 0.15f)
+                            lineTo(size.width * 0.85f, size.height * 0.45f)
+                            lineTo(size.width * 0.85f, size.height * 0.85f)
+                            close()
+                            
+                            moveTo(size.width * 0.4f, size.height * 0.85f)
+                            lineTo(size.width * 0.4f, size.height * 0.55f)
+                            lineTo(size.width * 0.6f, size.height * 0.55f)
+                            lineTo(size.width * 0.6f, size.height * 0.85f)
+                        }
+                        drawPath(path, color = tint, style = Stroke(width = 1.8.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
+                    }
+                }
+                "chat" -> {
+                    Canvas(modifier = Modifier.fillMaxSize()) {
+                        val path = Path().apply {
+                            moveTo(size.width * 0.15f, size.height * 0.25f)
+                            lineTo(size.width * 0.85f, size.height * 0.25f)
+                            lineTo(size.width * 0.85f, size.height * 0.7f)
+                            lineTo(size.width * 0.55f, size.height * 0.7f)
+                            lineTo(size.width * 0.35f, size.height * 0.88f)
+                            lineTo(size.width * 0.35f, size.height * 0.7f)
+                            lineTo(size.width * 0.15f, size.height * 0.7f)
+                            close()
+                        }
+                        drawPath(path, color = tint, style = Stroke(width = 1.8.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
+                        
+                        val sparkleColor = if (isActive) PremiumCyan else tint
+                        drawCircle(color = sparkleColor, radius = 1.8.dp.toPx(), center = Offset(size.width * 0.75f, size.height * 0.15f))
+                        drawCircle(color = sparkleColor, radius = 1.0.dp.toPx(), center = Offset(size.width * 0.88f, size.height * 0.25f))
+                    }
+                }
+                "analysis" -> {
+                    Canvas(modifier = Modifier.fillMaxSize()) {
+                        drawCircle(color = tint, radius = size.minDimension * 0.38f, style = Stroke(width = 1.8.dp.toPx()))
+                        drawCircle(color = tint, radius = size.minDimension * 0.16f, style = Stroke(width = 1.dp.toPx()))
+                        
+                        if (isActive) {
+                            drawCircle(color = PremiumCyan, radius = 2.dp.toPx(), center = Offset(size.width * 0.5f, size.height * 0.5f))
+                        }
+                        drawLine(
+                            color = tint.copy(alpha = 0.5f),
+                            start = Offset(size.width * 0.5f, size.height * 0.05f),
+                            end = Offset(size.width * 0.5f, size.height * 0.95f),
+                            strokeWidth = 1.2.dp.toPx()
+                        )
+                        drawLine(
+                            color = tint.copy(alpha = 0.5f),
+                            start = Offset(size.width * 0.05f, size.height * 0.5f),
+                            end = Offset(size.width * 0.95f, size.height * 0.5f),
+                            strokeWidth = 1.2.dp.toPx()
+                        )
+                    }
+                }
+                "sessions" -> {
+                    Canvas(modifier = Modifier.fillMaxSize()) {
+                        val path = Path().apply {
+                            moveTo(size.width * 0.15f, size.height * 0.25f)
+                            lineTo(size.width * 0.85f, size.height * 0.25f)
+                            lineTo(size.width * 0.85f, size.height * 0.85f)
+                            lineTo(size.width * 0.15f, size.height * 0.85f)
+                            close()
+                            
+                            moveTo(size.width * 0.15f, size.height * 0.55f)
+                            lineTo(size.width * 0.85f, size.height * 0.55f)
+                        }
+                        drawPath(path, color = tint, style = Stroke(width = 1.8.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
+                        
+                        val handlePath = Path().apply {
+                            moveTo(size.width * 0.42f, size.height * 0.4f)
+                            lineTo(size.width * 0.58f, size.height * 0.4f)
+                            
+                            moveTo(size.width * 0.42f, size.height * 0.7f)
+                            lineTo(size.width * 0.58f, size.height * 0.7f)
+                        }
+                        drawPath(handlePath, color = tint, style = Stroke(width = 1.5.dp.toPx(), cap = StrokeCap.Round))
+                    }
+                }
+                "settings" -> {
+                    Canvas(modifier = Modifier.fillMaxSize()) {
+                        drawLine(color = tint, start = Offset(size.width * 0.15f, size.height * 0.35f), end = Offset(size.width * 0.85f, size.height * 0.35f), strokeWidth = 1.5.dp.toPx())
+                        drawLine(color = tint, start = Offset(size.width * 0.15f, size.height * 0.65f), end = Offset(size.width * 0.85f, size.height * 0.65f), strokeWidth = 1.5.dp.toPx())
+                        
+                        drawRoundRect(
+                            color = if (isActive) PremiumCyan else tint,
+                            topLeft = Offset(size.width * 0.3f, size.height * 0.22f),
+                            size = Size(8.dp.toPx(), 6.dp.toPx()),
+                            cornerRadius = CornerRadius(1.5.dp.toPx())
+                        )
+                        drawRoundRect(
+                            color = if (isActive) PremiumCyan else tint,
+                            topLeft = Offset(size.width * 0.6f, size.height * 0.52f),
+                            size = Size(8.dp.toPx(), 6.dp.toPx()),
+                            cornerRadius = CornerRadius(1.5.dp.toPx())
+                        )
+                    }
+                }
+            }
+        }
+        Spacer(modifier = Modifier.height(3.dp))
+        Text(
+            text = label,
+            fontSize = 7.5.sp,
+            fontFamily = DMMonoFontFamily,
+            color = tint,
+            letterSpacing = 0.08.sp
+        )
+    }
 }
 

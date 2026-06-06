@@ -116,9 +116,9 @@ object GithubUpdateManager {
         
         return try {
             val packageInfo = context.packageManager.getPackageInfo(context.packageName, 0)
-            packageInfo.versionName ?: "3.0"
+            packageInfo.versionName ?: "4.0.0"
         } catch (e: Exception) {
-            "3.0"
+            "4.0.0"
         }
     }
 
@@ -245,15 +245,16 @@ object GithubUpdateManager {
                     val localVersion = getInstalledVersion(context)
                     
                     val mockRelease = GitHubRelease(
-                        tagName = "v3.0",
-                        name = "DepthLens Intelligence Core v3.0",
-                        publishedAt = "June 5, 2026",
+                        tagName = "v3.0.2",
+                        name = "DepthLens Intelligence Core v3.0.2",
+                        publishedAt = "June 6, 2026",
                         body = "### What's New\n" +
-                                "- **Polished Polar Dawn Theme**: Beautiful light theme visual upgrade with increased contrast and high readability.\n" +
-                                "- **Compact Theme Selector**: Quick & responsive dialog that applies the new theme instantly.\n" +
-                                "- **Automated Update Checking**: Automatically monitors for new versions on startup with status markers in system controls.",
-                        apkUrl = "https://github.com/ashah331/DepthLens/releases/download/v3.0/app-release.apk",
-                        apkFileName = "DepthLens_v3.0_release.apk",
+                                "- **Offline Background Support**: Strategic calculations and analysis now continue seamlessly while the app is in the background.\n" +
+                                "- **Real-time Notifications**: Immediate local reminders and system updates once depth-level analyses are compiled.\n" +
+                                "- **Play Protect Compliance**: Removed obsolete self-installer packages and permissions to protect device safety and ensure 100% compliance.\n" +
+                                "- **Theme Improvements**: Polished polar dawn and deep navy palettes for superior text contrast and beautiful readability.",
+                        apkUrl = "https://github.com/madfordiamonds/DEPTHLENS/releases/download/v3.0.2/DEPTHLENS.apk",
+                        apkFileName = "DEPTHLENS.apk",
                         apkSize = 41943040L
                     )
                     
@@ -264,7 +265,7 @@ object GithubUpdateManager {
                     val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
                     prefs.edit().putLong(KEY_LAST_CHECK, now).apply()
 
-                    val isNew = isNewerVersion("v3.0", localVersion)
+                    val isNew = isNewerVersion("v3.0.2", localVersion)
                     onComplete(isNew, mockRelease)
                 }
             }
@@ -464,30 +465,20 @@ object GithubUpdateManager {
         }
 
         try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                if (!context.packageManager.canRequestPackageInstalls()) {
-                    Toast.makeText(context, "Soft install aborted. System security permission 'Install Unknown Apps' is required.", Toast.LENGTH_LONG).show()
-                    val intent = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES).apply {
-                        data = Uri.parse("package:${context.packageName}")
-                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    }
-                    context.startActivity(intent)
-                    return
-                }
-            }
-
-            val authority = "${context.packageName}.fileprovider"
-            val uri = FileProvider.getUriForFile(context, authority, file)
-
-            val installIntent = Intent(Intent.ACTION_VIEW).apply {
-                setDataAndType(uri, "application/vnd.android.package-archive")
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            // Play Protect Compliance Upgrade:
+            // Sideloaded / programmatic APK installation via package-archive packageManager flags
+            // are considered suspicious administrative routines and frequently blocked by Google Play Protect.
+            // Under Android security best practices, sideloaded applications must redirect the user to download 
+            // and install package updates through authorized, signed browsers (Chrome, Firefox, etc.).
+            val targetUrl = latestRelease.value?.apkUrl ?: "https://github.com/madfordiamonds/DEPTHLENS/releases/download/v3.0.2/DEPTHLENS.apk"
+            val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(targetUrl)).apply {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
-            context.startActivity(installIntent)
+            context.startActivity(browserIntent)
+            Toast.makeText(context, "Redirecting to system browser for safe, secure installation...", Toast.LENGTH_LONG).show()
         } catch (e: Exception) {
             e.printStackTrace()
-            Toast.makeText(context, "Failed launching package deployment: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
+            Toast.makeText(context, "Failed to launch browser: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
         }
     }
 }

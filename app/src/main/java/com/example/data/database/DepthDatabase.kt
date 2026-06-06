@@ -57,11 +57,27 @@ interface MemoryInsightDao {
     suspend fun deleteAllInsights()
 }
 
-@Database(entities = [SessionEntity::class, MessageEntity::class, MemoryInsight::class], version = 2, exportSchema = false)
+@Dao
+interface ArchivedInsightDao {
+    @Query("SELECT * FROM archived_insights ORDER BY timestamp DESC")
+    fun getAllArchivedInsightsFlow(): Flow<List<com.example.data.model.ArchivedInsightEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertArchivedInsight(insight: com.example.data.model.ArchivedInsightEntity)
+
+    @Query("DELETE FROM archived_insights WHERE id = :id")
+    suspend fun deleteArchivedInsight(id: String)
+
+    @Query("DELETE FROM archived_insights")
+    suspend fun deleteAllArchivedInsights()
+}
+
+@Database(entities = [SessionEntity::class, MessageEntity::class, MemoryInsight::class, com.example.data.model.ArchivedInsightEntity::class], version = 3, exportSchema = false)
 abstract class DepthDatabase : RoomDatabase() {
     abstract fun sessionDao(): SessionDao
     abstract fun messageDao(): MessageDao
     abstract fun memoryInsightDao(): MemoryInsightDao
+    abstract fun archivedInsightDao(): ArchivedInsightDao
 
     companion object {
         @Volatile
