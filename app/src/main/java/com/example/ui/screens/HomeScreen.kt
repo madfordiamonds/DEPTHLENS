@@ -43,6 +43,7 @@ import android.os.Bundle
 import android.content.pm.PackageManager
 import androidx.core.content.ContextCompat
 import java.util.Calendar
+import com.example.data.repository.ResponseParser
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -57,6 +58,10 @@ fun HomeScreen(
     onAddAttachment: (String) -> Unit = {},
     archivedInsights: List<com.example.data.model.ArchivedInsightEntity> = emptyList(),
     onDeleteArchivedInsight: (String) -> Unit = {},
+    activeMessages: List<com.example.data.model.MessageEntity> = emptyList(),
+    isLoading: Boolean = false,
+    onRetryLastAnalysis: (String) -> Unit = {},
+    onRegenerateLastAnalysis: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var rawText by remember { mutableStateOf("") }
@@ -189,7 +194,6 @@ fun HomeScreen(
                                         .weight(1f)
                                         .clickable {
                                             onModeSelected(mode)
-                                            onNavigateToChat()
                                         }
                                 ) {
                                     Column(
@@ -292,7 +296,6 @@ fun HomeScreen(
                                             .border(1.dp, BorderSubtle, shape = RoundedCornerShape(8.dp))
                                             .clickable {
                                                 onSessionSelected(session.id)
-                                                onNavigateToAnalysis()
                                             }
                                             .padding(10.dp),
                             verticalAlignment = Alignment.CenterVertically
@@ -610,6 +613,262 @@ fun HomeScreen(
                     }
                 }
             }
+
+            // ── Inline Analysis Results ──────────────────────────────────────
+            if (activeMessages.isNotEmpty() || isLoading) {
+                Spacer(modifier = Modifier.height(20.dp))
+
+                Text(
+                    text = "ANALYSIS",
+                    fontSize = 8.sp,
+                    letterSpacing = 1.2.sp,
+                    fontFamily = DMMonoFontFamily,
+                    fontWeight = FontWeight.Bold,
+                    color = TextMutedColor,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    activeMessages.forEach { message ->
+                        if (message.role == "user") {
+                            // User query bubble
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.End
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .background(
+                                            ElectricViolet.copy(alpha = 0.15f),
+                                            RoundedCornerShape(topStart = 14.dp, topEnd = 3.dp, bottomEnd = 14.dp, bottomStart = 14.dp)
+                                        )
+                                        .border(
+                                            1.dp,
+                                            ElectricViolet.copy(alpha = 0.3f),
+                                            RoundedCornerShape(topStart = 14.dp, topEnd = 3.dp, bottomEnd = 14.dp, bottomStart = 14.dp)
+                                        )
+                                        .padding(horizontal = 12.dp, vertical = 8.dp)
+                                ) {
+                                    Text(
+                                        text = message.text,
+                                        fontSize = 12.sp,
+                                        color = TextPrimaryColor,
+                                        fontFamily = InstrumentSansFontFamily
+                                    )
+                                }
+                            }
+                        } else {
+                            // AI response
+                            val parsedResponse = remember(message.text) {
+                                try { ResponseParser.parse(message.text) } catch (e: Exception) { null }
+                            }
+
+                            Column(modifier = Modifier.fillMaxWidth()) {
+                                // AI label
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.padding(bottom = 6.dp)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(6.dp)
+                                            .background(ElectricViolet, CircleShape)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = "DEPTHLENS" + (if ((parsedResponse?.depthLayers?.size ?: 0) > 0) " · ${parsedResponse!!.depthLayers.size} LAYERS" else ""),
+                                        fontSize = 8.sp,
+                                        color = ElectricViolet,
+                                        fontFamily = DMMonoFontFamily,
+                                        fontWeight = FontWeight.Bold,
+                                        letterSpacing = 1.sp
+                                    )
+                                }
+
+                                if (message.text.startsWith("Error:") || message.text.contains("Error invoking DepthLens")) {
+                                    // Error card
+                                    Card(
+                                        shape = RoundedCornerShape(12.dp),
+                                        colors = CardDefaults.cardColors(containerColor = Color(0xFF1A0A0A)),
+                                        border = BorderStroke(1.dp, Color(0xFFF44336).copy(alpha = 0.4f)),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Column(modifier = Modifier.padding(12.dp)) {
+                                            Text(
+                                                text = "Analysis failed",
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color(0xFFF44336),
+                                                fontFamily = InstrumentSansFontFamily
+                                            )
+                                            Spacer(modifier = Modifier.height(4.dp))
+                                            Text(
+                                                text = message.text,
+                                                fontSize = 10.sp,
+                                                color = TextSecondaryColor,
+                                                fontFamily = InstrumentSansFontFamily,
+                                                lineHeight = 14.sp
+                                            )
+                                            Spacer(modifier = Modifier.height(8.dp))
+                                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                TextButton(onClick = { onRetryLastAnalysis(message.id) }) {
+                                                    Text("Retry", fontSize = 11.sp, color = ElectricViolet)
+                                                }
+                                            }
+                                        }
+                                    }
+                                } else if (parsedResponse != null) {
+                                    Card(
+                                        shape = RoundedCornerShape(topStart = 3.dp, topEnd = 14.dp, bottomEnd = 14.dp, bottomStart = 14.dp),
+                                        colors = CardDefaults.cardColors(containerColor = Color(0xFF141420)),
+                                        border = BorderStroke(1.dp, Color(0x0FFFFFFF)),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Column(modifier = Modifier.padding(12.dp)) {
+                                            // Introduction
+                                            if (parsedResponse.introduction.isNotEmpty()) {
+                                                Text(
+                                                    text = parsedResponse.introduction,
+                                                    fontSize = 12.sp,
+                                                    color = TextSecondaryColor,
+                                                    lineHeight = 17.sp,
+                                                    fontFamily = InstrumentSansFontFamily,
+                                                    modifier = Modifier.padding(bottom = 10.dp)
+                                                )
+                                            }
+
+                                            // Depth layers
+                                            if (parsedResponse.depthLayers.isNotEmpty()) {
+                                                Text(
+                                                    text = "DEPTH LAYERS",
+                                                    fontSize = 7.5.sp,
+                                                    letterSpacing = 1.sp,
+                                                    fontFamily = DMMonoFontFamily,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = TextMutedColor,
+                                                    modifier = Modifier.padding(bottom = 6.dp)
+                                                )
+                                                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                                    parsedResponse.depthLayers.forEach { layer ->
+                                                        val layerColor = when (layer.layerNumber) {
+                                                            1 -> Layer1; 2 -> Layer2; 3 -> Layer3
+                                                            4 -> Layer4; 5 -> Layer5; 6 -> Layer6
+                                                            7 -> Layer7; 8 -> Layer8; 9 -> Layer9
+                                                            else -> Layer10
+                                                        }
+                                                        var layerExpanded by remember { mutableStateOf(false) }
+                                                        Column(
+                                                            modifier = Modifier
+                                                                .fillMaxWidth()
+                                                                .background(Surface3, RoundedCornerShape(6.dp))
+                                                                .border(1.dp, if (layerExpanded) layerColor.copy(alpha = 0.6f) else BorderSubtle, RoundedCornerShape(6.dp))
+                                                                .clickable { layerExpanded = !layerExpanded }
+                                                                .padding(8.dp)
+                                                        ) {
+                                                            Row(
+                                                                modifier = Modifier.fillMaxWidth(),
+                                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                                verticalAlignment = Alignment.CenterVertically
+                                                            ) {
+                                                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                                                    Box(modifier = Modifier.size(5.dp).background(layerColor, CircleShape))
+                                                                    Spacer(modifier = Modifier.width(6.dp))
+                                                                    Text(
+                                                                        text = "L${layer.layerNumber} · ${layer.layerName}",
+                                                                        fontSize = 9.5.sp,
+                                                                        fontWeight = FontWeight.Bold,
+                                                                        color = TextPrimaryColor,
+                                                                        fontFamily = DMMonoFontFamily
+                                                                    )
+                                                                }
+                                                                Icon(
+                                                                    imageVector = if (layerExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                                                                    contentDescription = null,
+                                                                    tint = TextMutedColor,
+                                                                    modifier = Modifier.size(12.dp)
+                                                                )
+                                                            }
+                                                            if (layerExpanded) {
+                                                                Spacer(modifier = Modifier.height(4.dp))
+                                                                Text(
+                                                                    text = layer.description,
+                                                                    fontSize = 11.sp,
+                                                                    color = TextSecondaryColor,
+                                                                    lineHeight = 15.sp,
+                                                                    fontFamily = InstrumentSansFontFamily
+                                                                )
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+
+                                            // Executive summary (conclusion-like)
+                                            if ((parsedResponse.executiveSummary ?: "").isNotEmpty()) {
+                                                Spacer(modifier = Modifier.height(10.dp))
+                                                Text(
+                                                    text = parsedResponse.executiveSummary!!,
+                                                    fontSize = 11.sp,
+                                                    color = TextSecondaryColor,
+                                                    lineHeight = 15.sp,
+                                                    fontFamily = InstrumentSansFontFamily
+                                                )
+                                            }
+                                        }
+                                    }
+                                } else {
+                                    // Plain text fallback
+                                    Card(
+                                        shape = RoundedCornerShape(topStart = 3.dp, topEnd = 14.dp, bottomEnd = 14.dp, bottomStart = 14.dp),
+                                        colors = CardDefaults.cardColors(containerColor = Color(0xFF141420)),
+                                        border = BorderStroke(1.dp, Color(0x0FFFFFFF)),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Text(
+                                            text = message.text,
+                                            fontSize = 12.sp,
+                                            color = TextSecondaryColor,
+                                            lineHeight = 17.sp,
+                                            fontFamily = InstrumentSansFontFamily,
+                                            modifier = Modifier.padding(12.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    if (isLoading && activeMessages.isNotEmpty()) {
+                        // Loading indicator
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(Color(0xFF141420), RoundedCornerShape(12.dp))
+                                .border(1.dp, Color(0x0FFFFFFF), RoundedCornerShape(12.dp))
+                                .padding(12.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(6.dp)
+                                    .background(ElectricViolet, CircleShape)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Analysing…",
+                                fontSize = 11.sp,
+                                color = TextMutedColor,
+                                fontFamily = DMMonoFontFamily
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+            }
         }
 
         // Home level Compose Box at bottom of screen
@@ -778,7 +1037,6 @@ fun HomeScreen(
                             val textToSend = rawText
                             rawText = ""
                             onSubmitQuery(textToSend)
-                            onNavigateToChat()
                         }
                     },
                     modifier = Modifier

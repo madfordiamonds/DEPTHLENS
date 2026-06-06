@@ -2175,18 +2175,6 @@ fun DashboardScreen(
                         onClick = { currentTab = "home" }
                     )
                     BottomTabItem(
-                        tabId = "chat",
-                        label = "Chat",
-                        isActive = currentTab == "chat",
-                        onClick = { currentTab = "chat" }
-                    )
-                    BottomTabItem(
-                        tabId = "analysis",
-                        label = "Analysis",
-                        isActive = currentTab == "analysis",
-                        onClick = { currentTab = "analysis" }
-                    )
-                    BottomTabItem(
                         tabId = "sessions",
                         label = "Sessions",
                         isActive = currentTab == "sessions",
@@ -2215,46 +2203,14 @@ fun DashboardScreen(
                             onModeSelected = { selectedMode = it },
                             onSessionSelected = { sessionId -> viewModel.selectSession(sessionId) },
                             onSubmitQuery = { text -> viewModel.sendQuery(text) },
-                            onNavigateToChat = { currentTab = "chat" },
-                            onNavigateToAnalysis = { currentTab = "analysis" },
+                            onNavigateToChat = { /* no-op: results shown on home */ },
+                            onNavigateToAnalysis = { /* no-op: removed */ },
                             archivedInsights = archivedInsights,
-                            onDeleteArchivedInsight = { id -> viewModel.deleteArchivedInsight(id) }
-                        )
-                    }
-                    "chat" -> {
-                        ChatScreen(
+                            onDeleteArchivedInsight = { id -> viewModel.deleteArchivedInsight(id) },
                             activeMessages = activeMessages,
-                            selectedMode = selectedMode,
-                            onModeChanged = { selectedMode = it },
                             isLoading = isLoading,
-                            attachedImageUri = attachedImageUri,
-                            isRecordingAudio = isRecordingAudio,
-                            recordingDuration = recordingDuration,
-                            onAddAttachment = { uri -> viewModel.setAttachment(uri) },
-                            onRemoveAttachment = { viewModel.clearAttachment() },
-                            onSubmitQuery = { text -> viewModel.sendQuery(text) },
-                            onToggleRecording = { toggleRecording() },
-                            onCancelRecording = {
-                                isRecordingAudio = false
-                                voiceRecorder.stopRecording()
-                            },
                             onRetryLastAnalysis = { msgId -> viewModel.retryLastAnalysis(msgId) },
-                            onRegenerateLastAnalysis = { msgId -> viewModel.regenerateLastAnalysis(msgId) },
-                            onReportBug = { showReportBugDialog = true },
-                            onDeleteMessage = { msgId -> viewModel.deleteMessage(msgId) },
-                            onCreateNewSession = { viewModel.createSession("") },
-                            onGoDeeper = { query -> viewModel.goDeeper(query) },
-                            onArchiveInsight = { query, intro, json ->
-                                viewModel.archiveInsight(activeSessionId ?: "", query, intro, json)
-                            }
-                        )
-                    }
-                    "analysis" -> {
-                        AnalysisScreen(
-                            activeMessages = activeMessages,
-                            selectedMode = selectedMode,
-                            onBackToHome = { currentTab = "home" },
-                            onSubmitQuery = { text -> viewModel.sendQuery(text) }
+                            onRegenerateLastAnalysis = { msgId -> viewModel.regenerateLastAnalysis(msgId) }
                         )
                     }
                     "sessions" -> {
@@ -2264,7 +2220,7 @@ fun DashboardScreen(
                             onSessionSelected = { sessionId -> viewModel.selectSession(sessionId) },
                             onCreateNewSession = { viewModel.createSession("") },
                             onDeleteSession = { sessionId -> viewModel.deleteSession(sessionId) },
-                            onNavigateToChat = { currentTab = "chat" },
+                            onNavigateToChat = { currentTab = "home" },
                             onTogglePinSession = { sessionId -> viewModel.togglePinSession(sessionId) }
                         )
                     }
