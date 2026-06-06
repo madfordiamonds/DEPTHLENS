@@ -123,7 +123,7 @@ class IntelligenceRepository(private val context: Context) {
             generationConfig = GenerationConfig(temperature = 0.5f)
         )
 
-        val modelsToTry = listOf("gemini-3.5-flash")
+        val modelsToTry = listOf("gemini-2.0-flash", "gemini-1.5-flash")
         var generatedTitle: String? = null
 
         for (modelName in modelsToTry) {
@@ -263,9 +263,19 @@ Executive summary explanation of what is actually happening. Frame it objectivel
 </confidence>
 
 <depth>
-Progressive layers analysis. Choose 3 active framework layers in this scenario from: Layer 1 Observable, Layer 2 Practical, Layer 3 Behavior, Layer 4 Emotional, Layer 5 Psychological, Layer 6 Strategic, Layer 7 Systems, Layer 8 Pattern, Layer 9 Root Cause, Layer 10 Truth.
-List each layer on its own line in this exact format (no bolding):
-Layer X - Name: Explanation in 2 short, mobile-optimized sentences.
+Progressive deep-dive analysis using ALL 10 layers of reality. Analyze through every layer for a complete picture:
+Layer 1 - Observable: What is visibly happening on the surface
+Layer 2 - Practical: Immediate practical impacts and constraints  
+Layer 3 - Behavioral: Patterns of action, habits, and conditioned responses
+Layer 4 - Emotional: Feelings, emotional triggers, and affective states
+Layer 5 - Psychological: Mental models, cognitive biases, defense mechanisms
+Layer 6 - Strategic: Incentives, power dynamics, and calculated positioning
+Layer 7 - Systems: Feedback loops, interdependencies, and emergent patterns
+Layer 8 - Pattern: Recurring themes across time, contexts, and relationships
+Layer 9 - Root Cause: The foundational driver beneath all layers
+Layer 10 - Truth: The deepest universal principle or law at work
+List EACH layer on its own line in this exact format (no bolding):
+Layer X - Name: Explanation in 2-3 mobile-optimized sentences covering this layer's insight.
 </depth>
 
 <root_cause>
@@ -301,11 +311,12 @@ Early Warning Signals: [2 indicators of progress or change]
 </memory_insight>
 
 <questions>
-[Generate 4-5 incredibly specific, deep follow-up questions tailored to this case. Each on a new line starting with a question mark '?']
+[Generate 5-7 powerfully specific follow-up questions that help users dig deeper toward the root of this specific situation. Each question should open a new dimension of understanding — psychological, systemic, historical, emotional, or strategic. Questions should progressively go deeper, from surface to root cause. Each on a new line starting with a question mark '?'.
 NEXT QUESTION UI RULE:
 - Suggested questions must never be displayed in a horizontal scrolling row. All suggested questions must be displayed vertically. Each question should occupy its own line or card.
 - Full question must be visible with no truncation, no horizontal scrolling, mobile-first layout, and maximum readability.
 - Render each question as an individual clickable card contextually. Cards will expand height dynamically based on length to wrap multiple lines smoothly.
+]
 </questions>
 
 <exploration>
@@ -349,7 +360,7 @@ Follow this format meticulously. Wrap each visual module within its respective t
 
         var modelText: String? = null
         var lastException: Exception? = null
-        val modelsToTry = listOf("gemini-3.5-flash", "gemini-2.5-flash")
+        val modelsToTry = listOf("gemini-2.0-flash", "gemini-1.5-flash", "gemini-2.5-flash")
 
         for (modelName in modelsToTry) {
             try {
@@ -519,7 +530,7 @@ Follow this format meticulously. Wrap each visual module within its respective t
         )
         
         try {
-            val response = apiService.generateContent("gemini-3.5-flash", apiKey, request)
+            val response = apiService.generateContent("gemini-2.0-flash", apiKey, request)
             response.candidates?.firstOrNull()?.content?.parts?.firstOrNull()?.text?.trim()
                 ?: "Unable to sync session context at this moment."
         } catch (e: Exception) {

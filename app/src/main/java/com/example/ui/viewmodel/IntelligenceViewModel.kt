@@ -26,6 +26,12 @@ class IntelligenceViewModel(application: Application) : AndroidViewModel(applica
     private val _activeSessionId = MutableStateFlow<String?>(null)
     val activeSessionId: StateFlow<String?> = _activeSessionId.asStateFlow()
 
+    // Selected analysis mode (synced from UI)
+    private val _selectedMode = MutableStateFlow("Root Cause")
+    val selectedMode: StateFlow<String> = _selectedMode.asStateFlow()
+
+    fun setSelectedMode(mode: String) { _selectedMode.value = mode }
+
     // Loading indicator dynamically mapped from the repository's background analyses set
     val isLoading: StateFlow<Boolean> = combine(
         _activeSessionId,
@@ -69,7 +75,7 @@ class IntelligenceViewModel(application: Application) : AndroidViewModel(applica
             val existing = repository.allSessionsFlow.firstOrNull() ?: emptyList()
             if (existing.isEmpty()) {
                 // Pre-seed a default session silently so workspace is ready
-                repository.createNewSession("Global Intelligence Feed")
+                repository.createNewSession(generateUniqueSessionName("Root Cause"))
             }
         }
     }
@@ -82,7 +88,7 @@ class IntelligenceViewModel(application: Application) : AndroidViewModel(applica
 
     fun createSession(title: String) {
         viewModelScope.launch {
-            val newSession = repository.createNewSession(title.ifBlank { "New Intelligence Thread" })
+            val newSession = repository.createNewSession(title.ifBlank { generateUniqueSessionName("Root Cause") })
             _activeSessionId.value = newSession.id
             clearAttachment()
         }
@@ -161,7 +167,7 @@ class IntelligenceViewModel(application: Application) : AndroidViewModel(applica
             try {
                 // Determine or create session if none active (e.g. from Home screen prompt)
                 val sessionId = _activeSessionId.value ?: run {
-                    val newSession = repository.createNewSession("Intelligence Diagnostic")
+                    val newSession = repository.createNewSession(generateUniqueSessionName(_selectedMode.value))
                     _activeSessionId.value = newSession.id
                     newSession.id
                 }
@@ -496,5 +502,53 @@ class IntelligenceViewModel(application: Application) : AndroidViewModel(applica
             
             onComplete(success)
         }
+    }
+
+    private fun generateUniqueSessionName(mode: String): String {
+        val topicsByMode = mapOf(
+            "Root Cause" to listOf(
+                "Origin Pattern Study", "Causal Chain Analysis", "Source Mapping Trace",
+                "Root Factor Probe", "Deep Cause Inquiry", "Foundation Analysis",
+                "Trigger Sequence Study", "Core Driver Audit", "Underlying Force Map"
+            ),
+            "Psychology" to listOf(
+                "Cognitive Pattern Scan", "Behavioral Motive Audit", "Mental Model Probe",
+                "Psychological Driver Study", "Belief System Map", "Emotional Trigger Trace",
+                "Bias Detection Study", "Subconscious Pattern Audit", "Identity Lens Analysis"
+            ),
+            "Systems" to listOf(
+                "Feedback Loop Scan", "System Dynamics Map", "Incentive Structure Audit",
+                "Network Effect Probe", "Systemic Leverage Study", "Loop Analysis Trace",
+                "Equilibrium Pattern Map", "Emergent Behavior Study", "System Blind Spot Audit"
+            ),
+            "Probability" to listOf(
+                "Outcome Probability Map", "Timeline Likelihood Study", "Risk Scenario Probe",
+                "Bayesian Path Analysis", "Probability Tree Audit", "Expected Value Trace",
+                "Uncertainty Field Scan", "Decision Probability Study", "Scenario Weight Map"
+            ),
+            "Business" to listOf(
+                "Strategic Position Audit", "Market Dynamic Study", "Growth Lever Map",
+                "Competitive Moat Analysis", "Revenue Model Probe", "Value Chain Scan",
+                "Business Model Trace", "Organizational Driver Study", "Opportunity Gap Map"
+            ),
+            "Relationships" to listOf(
+                "Interpersonal Dynamic Audit", "Attachment Pattern Study", "Bond Structure Map",
+                "Relationship Driver Probe", "Communication Pattern Scan", "Trust Fabric Analysis",
+                "Social Dynamic Trace", "Conflict Pattern Study", "Connection Depth Map"
+            ),
+            "Spiritual" to listOf(
+                "Purpose Alignment Probe", "Values Clarity Audit", "Inner Growth Map",
+                "Meaning Pattern Study", "Higher Principle Trace", "Spiritual Lens Analysis",
+                "Core Values Scan", "Life Purpose Map", "Growth Pathway Study"
+            ),
+            "Decision Making" to listOf(
+                "Decision Framework Audit", "Risk-Benefit Map", "Choice Architecture Study",
+                "Heuristic Bias Probe", "Trade-off Analysis Trace", "Strategic Choice Scan",
+                "Decision Quality Map", "Option Evaluation Study", "Choice Driver Audit"
+            )
+        )
+        val topics = topicsByMode[mode] ?: topicsByMode["Root Cause"]!!
+        val index = (System.currentTimeMillis() % topics.size).toInt()
+        return topics[index]
     }
 }

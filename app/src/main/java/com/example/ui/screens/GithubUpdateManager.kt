@@ -116,7 +116,7 @@ object GithubUpdateManager {
         
         return try {
             val packageInfo = context.packageManager.getPackageInfo(context.packageName, 0)
-            packageInfo.versionName ?: "4.0.0"
+            packageInfo.versionName ?: "4.0.1"
         } catch (e: Exception) {
             "4.0.0"
         }
@@ -245,15 +245,15 @@ object GithubUpdateManager {
                     val localVersion = getInstalledVersion(context)
                     
                     val mockRelease = GitHubRelease(
-                        tagName = "v4.0.0",
-                        name = "DepthLens v4.0.0 — Intelligence Evolution",
+                        tagName = "v4.0.1",
+                        name = "DepthLens v4.0.1 — Intelligence Evolution",
                         publishedAt = "June 6, 2026",
                         body = "### What's New\n" +
                                 "- **Offline Background Support**: Strategic calculations and analysis now continue seamlessly while the app is in the background.\n" +
                                 "- **Real-time Notifications**: Immediate local reminders and system updates once depth-level analyses are compiled.\n" +
                                 "- **Play Protect Compliance**: Removed obsolete self-installer packages and permissions to protect device safety and ensure 100% compliance.\n" +
                                 "- **Theme Improvements**: Polished polar dawn and deep navy palettes for superior text contrast and beautiful readability.",
-                        apkUrl = "https://github.com/guy-with-ideas-uncoded/DEPTHLENS/releases/download/v4.0.0/DEPTHLENS.apk",
+                        apkUrl = "https://github.com/guy-with-ideas-uncoded/DEPTHLENS/releases/download/v4.0.1/DEPTHLENS.apk",
                         apkFileName = "DEPTHLENS.apk",
                         apkSize = 41943040L
                     )
@@ -470,7 +470,7 @@ object GithubUpdateManager {
             // are considered suspicious administrative routines and frequently blocked by Google Play Protect.
             // Under Android security best practices, sideloaded applications must redirect the user to download 
             // and install package updates through authorized, signed browsers (Chrome, Firefox, etc.).
-            val targetUrl = latestRelease.value?.apkUrl ?: "https://github.com/guy-with-ideas-uncoded/DEPTHLENS/releases/download/v4.0.0/DEPTHLENS.apk"
+            val targetUrl = latestRelease.value?.apkUrl ?: "https://github.com/guy-with-ideas-uncoded/DEPTHLENS/releases/download/v4.0.1/DEPTHLENS.apk"
             val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(targetUrl)).apply {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }

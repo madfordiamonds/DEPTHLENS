@@ -202,46 +202,17 @@ fun SettingsScreen(
                                 unfocusedBorderColor = BorderSubtle
                             )
                         )
-                        OutlinedTextField(
-                            value = loginEmail,
-                            onValueChange = { loginEmail = it },
-                            label = { Text("your@email.com", fontSize = 11.sp) },
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedTextColor = TextPrimaryColor,
-                                unfocusedTextColor = TextPrimaryColor,
-                                focusedBorderColor = ElectricViolet,
-                                unfocusedBorderColor = BorderSubtle
-                            )
-                        )
-                        
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+
+                        Button(
+                            onClick = {
+                                onLoginAsGuest(loginName.ifBlank { "Explorer" })
+                            },
+                            enabled = loginName.isNotBlank(),
+                            colors = ButtonDefaults.buttonColors(containerColor = ElectricViolet),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.fillMaxWidth()
                         ) {
-                            Button(
-                                onClick = {
-                                    if (loginName.isNotBlank() && loginEmail.contains("@")) {
-                                        onLoginWithGoogle(loginEmail, loginName)
-                                    }
-                                },
-                                enabled = loginName.isNotBlank() && loginEmail.contains("@"),
-                                colors = ButtonDefaults.buttonColors(containerColor = ElectricViolet),
-                                shape = RoundedCornerShape(8.dp),
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Text("Google Sign-In", fontSize = 11.sp, color = Color.White)
-                            }
-                            
-                            OutlinedButton(
-                                onClick = {
-                                    onLoginAsGuest(loginName.ifBlank { "Guest Explorer" })
-                                },
-                                shape = RoundedCornerShape(8.dp),
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Text("Use Local Guest", fontSize = 11.sp, color = TextPrimaryColor)
-                            }
+                            Text("Start Exploring", fontSize = 11.sp, color = Color.White)
                         }
                     } else {
                         Row(
@@ -295,10 +266,8 @@ fun SettingsScreen(
             horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             val themes = listOf(
-                SettingsThemeItem("Void", Color(0xFF060609), Color(0xFF0D0D14), ElectricViolet, PremiumCyan),
                 SettingsThemeItem("Deep Sea", Color(0xFF0A1628), Color(0xFF0D1F3C), Color(0xFF3B82F6), PremiumCyan),
-                SettingsThemeItem("Polar Dawn", Color(0xFFF5F0FF), Color(0xFFEDE8FB), ElectricViolet, Color(0xFFA855F7)),
-                SettingsThemeItem("Ember", Color(0xFF110A0A), Color(0xFF1A0F0F), Color(0xFFFF5E8A), Color(0xFFFFAA40))
+                SettingsThemeItem("Polar Dawn", Color(0xFFF5F0FF), Color(0xFFEDE8FB), ElectricViolet, Color(0xFFA855F7))
             )
 
             themes.forEach { theme ->
@@ -320,7 +289,7 @@ fun SettingsScreen(
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .aspectRatio(1.2f)
+                            .height(48.dp)
                             .background(theme.bg, shape = RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp))
                             .padding(4.dp)
                     ) {
@@ -328,7 +297,7 @@ fun SettingsScreen(
                             modifier = Modifier
                                 .align(Alignment.BottomStart)
                                 .fillMaxWidth()
-                                .height(8.dp)
+                                .height(6.dp)
                                 .background(theme.surf)
                                 .padding(2.dp),
                             horizontalArrangement = Arrangement.spacedBy(1.5.dp)
@@ -743,7 +712,7 @@ fun SettingsScreen(
         InteractiveSettingsCard(
             icon = "✕",
             title = "About DepthLens",
-            subtitle = "View software license details and dynamic credits · v4.0.0",
+            subtitle = "View software license details and dynamic credits · v4.0.1",
             onClick = onShowAbout
         )
 

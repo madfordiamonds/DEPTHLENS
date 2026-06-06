@@ -14,6 +14,8 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material.icons.rounded.Stop
@@ -62,6 +64,8 @@ fun HomeScreen(
     isLoading: Boolean = false,
     onRetryLastAnalysis: (String) -> Unit = {},
     onRegenerateLastAnalysis: (String) -> Unit = {},
+    onOpenDrawer: () -> Unit = {},
+    onCreateNewSession: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var rawText by remember { mutableStateOf("") }
@@ -80,7 +84,7 @@ fun HomeScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(DeepMidnight) // Void/Dark base background Color
+            .background(DeepMidnight)
     ) {
         // Main scrollable content
         Column(
@@ -89,9 +93,9 @@ fun HomeScreen(
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp, vertical = 20.dp)
         ) {
-            Spacer(modifier = Modifier.height(24.dp)) // Safe draw offset
+            Spacer(modifier = Modifier.height(24.dp))
 
-            // Landing Top Row
+            // Landing Top Row — hamburger + greeting + new-chat pencil + avatar
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -99,32 +103,90 @@ fun HomeScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = greeting,
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontFamily = InstrumentSansFontFamily,
-                    fontSize = 15.sp,
-                    color = TextSecondaryColor
-                )
-
-                // Premium Gradient Avatar "A"
-                Box(
-                    modifier = Modifier
-                        .size(28.dp)
-                        .clip(CircleShape)
-                        .background(
-                            Brush.linearGradient(
-                                colors = listOf(ElectricViolet, PremiumCyan)
-                            )
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
+                // Left: hamburger + greeting
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    // Hamburger menu to open sidebar drawer
+                    Box(
+                        modifier = Modifier
+                            .size(28.dp)
+                            .clip(RoundedCornerShape(7.dp))
+                            .background(Surface2)
+                            .border(1.dp, BorderSubtle, RoundedCornerShape(7.dp))
+                            .clickable { onOpenDrawer() },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Menu,
+                            contentDescription = "Open sessions",
+                            tint = TextSecondaryColor,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(10.dp))
                     Text(
-                        text = "A",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White
+                        text = greeting,
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontFamily = InstrumentSansFontFamily,
+                        fontSize = 15.sp,
+                        color = TextSecondaryColor
                     )
+                }
+
+                // Right: new-chat pencil + avatar
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    // ✏️ Stylish new-chat pencil button
+                    Box(
+                        modifier = Modifier
+                            .size(28.dp)
+                            .clip(RoundedCornerShape(7.dp))
+                            .background(
+                                Brush.linearGradient(
+                                    colors = listOf(
+                                        ElectricViolet.copy(alpha = 0.18f),
+                                        PremiumCyan.copy(alpha = 0.10f)
+                                    )
+                                )
+                            )
+                            .border(
+                                width = 1.dp,
+                                brush = Brush.linearGradient(
+                                    colors = listOf(ElectricViolet, PremiumCyan.copy(alpha = 0.7f))
+                                ),
+                                shape = RoundedCornerShape(7.dp)
+                            )
+                            .clickable { onCreateNewSession() },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Edit,
+                            contentDescription = "New chat",
+                            tint = ElectricViolet,
+                            modifier = Modifier.size(14.dp)
+                        )
+                    }
+
+                    // Premium Gradient Avatar "A"
+                    Box(
+                        modifier = Modifier
+                            .size(28.dp)
+                            .clip(CircleShape)
+                            .background(
+                                Brush.linearGradient(
+                                    colors = listOf(ElectricViolet, PremiumCyan)
+                                )
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "A",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                    }
                 }
             }
 
@@ -153,12 +215,12 @@ fun HomeScreen(
                 )
             }
 
-            Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(10.dp))
 
-            // Quick Mode Selection Grid (2x2 Layout expanded to 8 elements matching bash.html guidelines)
+            // Quick Mode Selection Grid — minimized cards (reduced padding, tighter layout)
             Column(
                 modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
+                verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 val modesList = listOf(
                     Triple("Root Cause", "🔍", "Trace back to the origin of any situation"),
@@ -174,7 +236,7 @@ fun HomeScreen(
                 for (i in modesList.indices step 2) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         for (j in 0..1) {
                             if (i + j < modesList.size) {
@@ -182,9 +244,9 @@ fun HomeScreen(
                                 val isActive = mode == selectedMode
 
                                 Card(
-                                    shape = RoundedCornerShape(14.dp),
+                                    shape = RoundedCornerShape(12.dp),
                                     colors = CardDefaults.cardColors(
-                                        containerColor = if (isActive) Surface2 else Surface2
+                                        containerColor = Surface2
                                     ),
                                     border = BorderStroke(
                                         width = if (isActive) 1.5.dp else 1.dp,
@@ -192,17 +254,16 @@ fun HomeScreen(
                                     ),
                                     modifier = Modifier
                                         .weight(1f)
-                                        .clickable {
-                                            onModeSelected(mode)
-                                        }
+                                        .clickable { onModeSelected(mode) }
                                 ) {
                                     Column(
-                                        modifier = Modifier.padding(10.dp)
+                                        // Minimized padding for compact cards
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 5.dp)
                                     ) {
                                         Text(
                                             text = emoji,
                                             fontSize = 18.sp,
-                                            modifier = Modifier.padding(bottom = 4.dp)
+                                            modifier = Modifier.padding(bottom = 2.dp)
                                         )
                                         Text(
                                             text = mode,
@@ -210,404 +271,19 @@ fun HomeScreen(
                                             fontWeight = FontWeight.Bold,
                                             color = TextPrimaryColor,
                                             fontFamily = InstrumentSansFontFamily,
-                                            modifier = Modifier.padding(bottom = 2.dp)
+                                            modifier = Modifier.padding(bottom = 1.dp)
                                         )
                                         Text(
                                             text = desc,
                                             fontSize = 8.5.sp,
                                             fontFamily = InstrumentSansFontFamily,
                                             color = TextMutedColor,
-                                            lineHeight = 11.sp
+                                            lineHeight = 10.sp
                                         )
                                     }
                                 }
                             } else {
                                 Spacer(modifier = Modifier.weight(1f))
-                            }
-                        }
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(20.dp))
-
-            // Recent Analyses Section
-            Text(
-                text = "RECENT ANALYSES",
-                fontSize = 8.sp,
-                letterSpacing = 1.2.sp,
-                fontFamily = DMMonoFontFamily,
-                fontWeight = FontWeight.Bold,
-                color = TextMutedColor,
-                modifier = Modifier.padding(bottom = 8.dp)
-            )
-
-            if (sessions.isEmpty()) {
-                Surface(
-                    color = Surface2,
-                    shape = RoundedCornerShape(8.dp),
-                    border = BorderStroke(1.dp, BorderSubtle),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(
-                        text = "No recent analyses found.",
-                        fontSize = 10.sp,
-                        fontFamily = InstrumentSansFontFamily,
-                        color = TextMutedColor,
-                        modifier = Modifier.padding(16.dp),
-                        textAlign = TextAlign.Center
-                    )
-                }
-            } else {
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    sessions.take(3).forEach { session ->
-                        // Dynamically determine mode emoji
-                        val emoji = when {
-                            session.title.contains("psychology", true) -> "🧠"
-                            session.title.contains("systems", true) -> "🌐"
-                            session.title.contains("probabilit", true) -> "📈"
-                            session.title.contains("business", true) -> "💼"
-                            session.title.contains("relation", true) -> "⚓"
-                            session.title.contains("spiritual", true) -> "✨"
-                            session.title.contains("decision", true) -> "🎯"
-                            else -> "🔍"
-                        }
-
-                        // Determine label
-                        val modeLabel = when {
-                            session.title.contains("psychology", true) -> "Psychology"
-                            session.title.contains("systems", true) -> "Systems"
-                            session.title.contains("probabilit", true) -> "Probability"
-                            session.title.contains("business", true) -> "Business"
-                            session.title.contains("relation", true) -> "Relationships"
-                            session.title.contains("spiritual", true) -> "Spiritual"
-                            session.title.contains("decision", true) -> "Decision"
-                            else -> "Root Cause"
-                        }
-
-                        // Compact session row
-                        Row(
-                            modifier = Modifier
-                                            .fillMaxWidth()
-                                            .background(Surface2, shape = RoundedCornerShape(8.dp))
-                                            .border(1.dp, BorderSubtle, shape = RoundedCornerShape(8.dp))
-                                            .clickable {
-                                                onSessionSelected(session.id)
-                                            }
-                                            .padding(10.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            // Badge icon
-                            Box(
-                                modifier = Modifier
-                                    .size(30.dp)
-                                    .background(
-                                        ElectricViolet.copy(alpha = 0.1f),
-                                        shape = RoundedCornerShape(7.dp)
-                                    ),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(text = emoji, fontSize = 14.sp)
-                            }
-
-                            Spacer(modifier = Modifier.width(10.dp))
-
-                            // Conversation details
-                            Column(
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Text(
-                                    text = session.title.ifEmpty { "Untitled Diagnostic Study" },
-                                    fontSize = 10.5.sp,
-                                    color = TextPrimaryColor,
-                                    fontWeight = FontWeight.Medium,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                                Text(
-                                    text = "$modeLabel · Live profile · 10 Layers",
-                                    fontSize = 8.sp,
-                                    fontFamily = DMMonoFontFamily,
-                                    color = TextMutedColor
-                                )
-                            }
-
-                            Text(
-                                text = "›",
-                                fontSize = 14.sp,
-                                color = TextMutedColor,
-                                modifier = Modifier.padding(horizontal = 4.dp)
-                            )
-                        }
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // Archived Explorations Section
-            Text(
-                text = "ARCHIVED EXPLORATIONS",
-                fontSize = 8.sp,
-                letterSpacing = 1.2.sp,
-                fontFamily = DMMonoFontFamily,
-                fontWeight = FontWeight.Bold,
-                color = TextMutedColor,
-                modifier = Modifier.padding(bottom = 8.dp)
-            )
-
-            if (archivedInsights.isEmpty()) {
-                Surface(
-                    color = Surface2,
-                    shape = RoundedCornerShape(8.dp),
-                    border = BorderStroke(1.dp, BorderSubtle),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(
-                        text = "No archived deep-dive findings saved yet.",
-                        fontSize = 10.sp,
-                        fontFamily = InstrumentSansFontFamily,
-                        color = TextMutedColor,
-                        modifier = Modifier.padding(16.dp),
-                        textAlign = TextAlign.Center
-                    )
-                }
-            } else {
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    archivedInsights.forEach { insight ->
-                        var showDetailDialog by remember { mutableStateOf(false) }
-
-                        Surface(
-                            color = Surface2,
-                            shape = RoundedCornerShape(8.dp),
-                            border = BorderStroke(1.dp, BorderSubtle),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { showDetailDialog = true }
-                        ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 12.dp, vertical = 10.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.weight(1f)
-                                ) {
-                                    Text(
-                                        text = "🔓",
-                                        fontSize = 14.sp
-                                    )
-                                    Spacer(modifier = Modifier.width(10.dp))
-                                    Column {
-                                        Text(
-                                            text = insight.query,
-                                            fontSize = 11.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = TextPrimaryColor,
-                                            fontFamily = InstrumentSansFontFamily,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
-                                        Spacer(modifier = Modifier.height(2.dp))
-                                        val formattedDate = remember(insight.timestamp) {
-                                            java.text.DateFormat.getDateTimeInstance(
-                                                java.text.DateFormat.SHORT, 
-                                                java.text.DateFormat.SHORT
-                                            ).format(java.util.Date(insight.timestamp))
-                                        }
-                                        Text(
-                                            text = "Deep Scan · $formattedDate",
-                                            fontSize = 8.sp,
-                                            fontFamily = DMMonoFontFamily,
-                                            color = TextMutedColor
-                                        )
-                                    }
-                                }
-
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    IconButton(
-                                        onClick = { onDeleteArchivedInsight(insight.id) },
-                                        modifier = Modifier.size(24.dp)
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Delete,
-                                            contentDescription = "Delete Archived Insight",
-                                            tint = Color(0xFFF44336).copy(alpha = 0.7f),
-                                            modifier = Modifier.size(14.dp)
-                                        )
-                                    }
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text(
-                                        text = "›",
-                                        fontSize = 14.sp,
-                                        color = TextMutedColor
-                                    )
-                                }
-                            }
-                        }
-
-                        if (showDetailDialog) {
-                            val parsedDetails = remember(insight.jsonContent) {
-                                parseArchivedJson(insight.jsonContent)
-                            }
-                            
-                            Dialog(
-                                onDismissRequest = { showDetailDialog = false }
-                            ) {
-                                Surface(
-                                    color = Surface1,
-                                    shape = RoundedCornerShape(12.dp),
-                                    border = BorderStroke(1.dp, BorderSubtle),
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(vertical = 24.dp)
-                                ) {
-                                    Column(
-                                        modifier = Modifier
-                                            .padding(16.dp)
-                                            .verticalScroll(rememberScrollState())
-                                    ) {
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.SpaceBetween,
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Text(
-                                                text = "ARCHIVED EXPLORATION",
-                                                fontSize = 8.sp,
-                                                letterSpacing = 1.sp,
-                                                fontFamily = DMMonoFontFamily,
-                                                fontWeight = FontWeight.Bold,
-                                                color = ElectricViolet
-                                            )
-                                            IconButton(
-                                                onClick = { showDetailDialog = false },
-                                                modifier = Modifier.size(24.dp)
-                                            ) {
-                                                Icon(
-                                                    imageVector = Icons.Default.Close,
-                                                    contentDescription = "Close",
-                                                    tint = TextMutedColor,
-                                                    modifier = Modifier.size(16.dp)
-                                                )
-                                            }
-                                        }
-
-                                        Spacer(modifier = Modifier.height(10.dp))
-
-                                        Text(
-                                            text = insight.query,
-                                            fontSize = 14.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = TextPrimaryColor,
-                                            fontFamily = InstrumentSansFontFamily
-                                        )
-
-                                        Spacer(modifier = Modifier.height(6.dp))
-
-                                        if (parsedDetails.introduction.isNotEmpty()) {
-                                            Text(
-                                                text = parsedDetails.introduction,
-                                                fontSize = 11.sp,
-                                                color = TextSecondaryColor,
-                                                lineHeight = 15.sp,
-                                                fontFamily = InstrumentSansFontFamily,
-                                                modifier = Modifier.padding(bottom = 12.dp)
-                                            )
-                                        }
-
-                                        Text(
-                                            text = "DEEP SCAN LAYERS",
-                                            fontSize = 7.5.sp,
-                                            letterSpacing = 1.sp,
-                                            fontFamily = DMMonoFontFamily,
-                                            fontWeight = FontWeight.Bold,
-                                            color = TextMutedColor,
-                                            modifier = Modifier.padding(bottom = 6.dp)
-                                        )
-
-                                        Column(
-                                            verticalArrangement = Arrangement.spacedBy(6.dp),
-                                            modifier = Modifier.fillMaxWidth()
-                                        ) {
-                                            parsedDetails.depthLayers.forEach { layer ->
-                                                val layerColor = when (layer.layerNumber) {
-                                                    1 -> Layer1
-                                                    2 -> Layer2
-                                                    3 -> Layer3
-                                                    4 -> Layer4
-                                                    5 -> Layer5
-                                                    6 -> Layer6
-                                                    7 -> Layer7
-                                                    8 -> Layer8
-                                                    9 -> Layer9
-                                                    else -> Layer10
-                                                }
-
-                                                var isLayerExpanded by remember { mutableStateOf(false) }
-
-                                                Column(
-                                                    modifier = Modifier
-                                                        .fillMaxWidth()
-                                                        .background(Surface3, shape = RoundedCornerShape(6.dp))
-                                                        .border(
-                                                            1.dp,
-                                                            if (isLayerExpanded) layerColor.copy(alpha = 0.6f) else BorderSubtle,
-                                                            shape = RoundedCornerShape(6.dp)
-                                                        )
-                                                        .clickable { isLayerExpanded = !isLayerExpanded }
-                                                        .padding(8.dp)
-                                                ) {
-                                                    Row(
-                                                        modifier = Modifier.fillMaxWidth(),
-                                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                                        verticalAlignment = Alignment.CenterVertically
-                                                    ) {
-                                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                                            Box(modifier = Modifier.size(5.dp).background(layerColor, CircleShape))
-                                                            Spacer(modifier = Modifier.width(6.dp))
-                                                            Text(
-                                                                text = "L${layer.layerNumber} · ${layer.layerName}",
-                                                                fontSize = 9.5.sp,
-                                                                fontWeight = FontWeight.Bold,
-                                                                color = TextPrimaryColor,
-                                                                fontFamily = DMMonoFontFamily
-                                                            )
-                                                        }
-                                                        Icon(
-                                                            imageVector = if (isLayerExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                                                            contentDescription = null,
-                                                            tint = TextMutedColor,
-                                                            modifier = Modifier.size(12.dp)
-                                                        )
-                                                    }
-
-                                                    if (isLayerExpanded) {
-                                                        Spacer(modifier = Modifier.height(4.dp))
-                                                        Text(
-                                                            text = layer.description,
-                                                            fontSize = 11.sp,
-                                                            color = TextSecondaryColor,
-                                                            lineHeight = 15.sp,
-                                                            fontFamily = InstrumentSansFontFamily
-                                                        )
-                                                    }
-                                                }
-                                            }
-                                        }
-
-                                        Spacer(modifier = Modifier.height(12.dp))
-                                    }
-                                }
                             }
                         }
                     }
@@ -634,7 +310,6 @@ fun HomeScreen(
                 ) {
                     activeMessages.forEach { message ->
                         if (message.role == "user") {
-                            // User query bubble
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.End
@@ -661,22 +336,16 @@ fun HomeScreen(
                                 }
                             }
                         } else {
-                            // AI response
                             val parsedResponse = remember(message.text) {
                                 try { ResponseParser.parse(message.text) } catch (e: Exception) { null }
                             }
 
                             Column(modifier = Modifier.fillMaxWidth()) {
-                                // AI label
                                 Row(
                                     verticalAlignment = Alignment.CenterVertically,
                                     modifier = Modifier.padding(bottom = 6.dp)
                                 ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(6.dp)
-                                            .background(ElectricViolet, CircleShape)
-                                    )
+                                    Box(modifier = Modifier.size(6.dp).background(ElectricViolet, CircleShape))
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Text(
                                         text = "DEPTHLENS" + (if ((parsedResponse?.depthLayers?.size ?: 0) > 0) " · ${parsedResponse!!.depthLayers.size} LAYERS" else ""),
@@ -689,7 +358,6 @@ fun HomeScreen(
                                 }
 
                                 if (message.text.startsWith("Error:") || message.text.contains("Error invoking DepthLens")) {
-                                    // Error card
                                     Card(
                                         shape = RoundedCornerShape(12.dp),
                                         colors = CardDefaults.cardColors(containerColor = Color(0xFF1A0A0A)),
@@ -697,26 +365,12 @@ fun HomeScreen(
                                         modifier = Modifier.fillMaxWidth()
                                     ) {
                                         Column(modifier = Modifier.padding(12.dp)) {
-                                            Text(
-                                                text = "Analysis failed",
-                                                fontSize = 11.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                color = Color(0xFFF44336),
-                                                fontFamily = InstrumentSansFontFamily
-                                            )
+                                            Text("Analysis failed", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFFF44336), fontFamily = InstrumentSansFontFamily)
                                             Spacer(modifier = Modifier.height(4.dp))
-                                            Text(
-                                                text = message.text,
-                                                fontSize = 10.sp,
-                                                color = TextSecondaryColor,
-                                                fontFamily = InstrumentSansFontFamily,
-                                                lineHeight = 14.sp
-                                            )
+                                            Text(message.text, fontSize = 10.sp, color = TextSecondaryColor, fontFamily = InstrumentSansFontFamily, lineHeight = 14.sp)
                                             Spacer(modifier = Modifier.height(8.dp))
-                                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                                TextButton(onClick = { onRetryLastAnalysis(message.id) }) {
-                                                    Text("Retry", fontSize = 11.sp, color = ElectricViolet)
-                                                }
+                                            TextButton(onClick = { onRetryLastAnalysis(message.id) }) {
+                                                Text("Retry", fontSize = 11.sp, color = ElectricViolet)
                                             }
                                         }
                                     }
@@ -728,7 +382,6 @@ fun HomeScreen(
                                         modifier = Modifier.fillMaxWidth()
                                     ) {
                                         Column(modifier = Modifier.padding(12.dp)) {
-                                            // Introduction
                                             if (parsedResponse.introduction.isNotEmpty()) {
                                                 Text(
                                                     text = parsedResponse.introduction,
@@ -740,7 +393,6 @@ fun HomeScreen(
                                                 )
                                             }
 
-                                            // Depth layers
                                             if (parsedResponse.depthLayers.isNotEmpty()) {
                                                 Text(
                                                     text = "DEPTH LAYERS",
@@ -800,13 +452,32 @@ fun HomeScreen(
                                                                     lineHeight = 15.sp,
                                                                     fontFamily = InstrumentSansFontFamily
                                                                 )
+                                                                // Multi-level: sub-insights if available
+                                                                if (layer.description.length > 100) {
+                                                                    Spacer(modifier = Modifier.height(6.dp))
+                                                                    Row(
+                                                                        modifier = Modifier
+                                                                            .fillMaxWidth()
+                                                                            .background(layerColor.copy(alpha = 0.06f), RoundedCornerShape(5.dp))
+                                                                            .padding(6.dp),
+                                                                        verticalAlignment = Alignment.CenterVertically
+                                                                    ) {
+                                                                        Box(modifier = Modifier.size(3.dp).background(layerColor, CircleShape))
+                                                                        Spacer(modifier = Modifier.width(5.dp))
+                                                                        Text(
+                                                                            text = "Tap suggested questions below to explore this layer further",
+                                                                            fontSize = 8.sp,
+                                                                            color = layerColor.copy(alpha = 0.8f),
+                                                                            fontFamily = DMMonoFontFamily
+                                                                        )
+                                                                    }
+                                                                }
                                                             }
                                                         }
                                                     }
                                                 }
                                             }
 
-                                            // Executive summary (conclusion-like)
                                             if ((parsedResponse.executiveSummary ?: "").isNotEmpty()) {
                                                 Spacer(modifier = Modifier.height(10.dp))
                                                 Text(
@@ -817,10 +488,91 @@ fun HomeScreen(
                                                     fontFamily = InstrumentSansFontFamily
                                                 )
                                             }
+
+                                            // ── Suggested Questions (after analysis) ──────
+                                            if (parsedResponse.suggestedQuestions.isNotEmpty()) {
+                                                Spacer(modifier = Modifier.height(12.dp))
+                                                Text(
+                                                    text = "DIG DEEPER",
+                                                    fontSize = 7.5.sp,
+                                                    letterSpacing = 1.sp,
+                                                    fontFamily = DMMonoFontFamily,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = PremiumCyan,
+                                                    modifier = Modifier.padding(bottom = 6.dp)
+                                                )
+                                                Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                                                    parsedResponse.suggestedQuestions.forEach { q ->
+                                                        Row(
+                                                            modifier = Modifier
+                                                                .fillMaxWidth()
+                                                                .background(Surface3, RoundedCornerShape(8.dp))
+                                                                .border(1.dp, PremiumCyan.copy(alpha = 0.2f), RoundedCornerShape(8.dp))
+                                                                .clickable { onSubmitQuery(q) }
+                                                                .padding(horizontal = 10.dp, vertical = 8.dp),
+                                                            verticalAlignment = Alignment.CenterVertically
+                                                        ) {
+                                                            Box(
+                                                                modifier = Modifier
+                                                                    .size(18.dp)
+                                                                    .background(PremiumCyan.copy(alpha = 0.12f), CircleShape),
+                                                                contentAlignment = Alignment.Center
+                                                            ) {
+                                                                Text("?", fontSize = 9.sp, color = PremiumCyan, fontWeight = FontWeight.Bold)
+                                                            }
+                                                            Spacer(modifier = Modifier.width(8.dp))
+                                                            Text(
+                                                                text = q,
+                                                                fontSize = 10.5.sp,
+                                                                color = TextSecondaryColor,
+                                                                lineHeight = 14.sp,
+                                                                fontFamily = InstrumentSansFontFamily,
+                                                                modifier = Modifier.weight(1f)
+                                                            )
+                                                        }
+                                                    }
+                                                }
+                                            }
+
+                                            // ── Exploration paths ──────────────────────────
+                                            if (parsedResponse.explorationPaths.isNotEmpty()) {
+                                                Spacer(modifier = Modifier.height(10.dp))
+                                                Text(
+                                                    text = "EXPLORE FURTHER",
+                                                    fontSize = 7.5.sp,
+                                                    letterSpacing = 1.sp,
+                                                    fontFamily = DMMonoFontFamily,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = ElectricViolet,
+                                                    modifier = Modifier.padding(bottom = 5.dp)
+                                                )
+                                                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                                    parsedResponse.explorationPaths.forEach { path ->
+                                                        Row(
+                                                            modifier = Modifier
+                                                                .fillMaxWidth()
+                                                                .background(ElectricViolet.copy(alpha = 0.07f), RoundedCornerShape(7.dp))
+                                                                .border(1.dp, ElectricViolet.copy(alpha = 0.2f), RoundedCornerShape(7.dp))
+                                                                .clickable { onSubmitQuery("$path — explore this path specifically in reference to my situation.") }
+                                                                .padding(horizontal = 10.dp, vertical = 7.dp),
+                                                            verticalAlignment = Alignment.CenterVertically
+                                                        ) {
+                                                            Text("✓", fontSize = 10.sp, color = ElectricViolet)
+                                                            Spacer(modifier = Modifier.width(7.dp))
+                                                            Text(
+                                                                text = path,
+                                                                fontSize = 10.sp,
+                                                                color = TextSecondaryColor,
+                                                                fontFamily = InstrumentSansFontFamily,
+                                                                modifier = Modifier.weight(1f)
+                                                            )
+                                                        }
+                                                    }
+                                                }
+                                            }
                                         }
                                     }
                                 } else {
-                                    // Plain text fallback
                                     Card(
                                         shape = RoundedCornerShape(topStart = 3.dp, topEnd = 14.dp, bottomEnd = 14.dp, bottomStart = 14.dp),
                                         colors = CardDefaults.cardColors(containerColor = Color(0xFF141420)),
@@ -842,7 +594,6 @@ fun HomeScreen(
                     }
 
                     if (isLoading && activeMessages.isNotEmpty()) {
-                        // Loading indicator
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier
@@ -851,18 +602,9 @@ fun HomeScreen(
                                 .border(1.dp, Color(0x0FFFFFFF), RoundedCornerShape(12.dp))
                                 .padding(12.dp)
                         ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(6.dp)
-                                    .background(ElectricViolet, CircleShape)
-                            )
+                            Box(modifier = Modifier.size(6.dp).background(ElectricViolet, CircleShape))
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "Analysing…",
-                                fontSize = 11.sp,
-                                color = TextMutedColor,
-                                fontFamily = DMMonoFontFamily
-                            )
+                            Text("Analysing…", fontSize = 11.sp, color = TextMutedColor, fontFamily = DMMonoFontFamily)
                         }
                     }
                 }
@@ -887,7 +629,6 @@ fun HomeScreen(
                     .padding(horizontal = 8.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // (A) Modern + attachment button on the left
                 Box(
                     modifier = Modifier
                         .size(38.dp)
@@ -920,7 +661,6 @@ fun HomeScreen(
 
                 Spacer(modifier = Modifier.width(8.dp))
 
-                // (B) Input field
                 BasicTextField(
                     value = rawText,
                     onValueChange = { rawText = it },
@@ -947,7 +687,6 @@ fun HomeScreen(
 
                 Spacer(modifier = Modifier.width(6.dp))
 
-                // (C) Voice to Text button next to Send
                 val speechCtx = LocalContext.current
                 var isListening by remember { mutableStateOf(false) }
                 val speechRecognizer = remember {
@@ -975,12 +714,8 @@ fun HomeScreen(
                         override fun onEvent(eventType: Int, params: Bundle?) {}
                     }
                 }
-                LaunchedEffect(speechRecognizer) {
-                    speechRecognizer?.setRecognitionListener(recognitionListener)
-                }
-                DisposableEffect(Unit) {
-                    onDispose { speechRecognizer?.destroy() }
-                }
+                LaunchedEffect(speechRecognizer) { speechRecognizer?.setRecognitionListener(recognitionListener) }
+                DisposableEffect(Unit) { onDispose { speechRecognizer?.destroy() } }
                 val audioPermLauncher = rememberLauncherForActivityResult(
                     contract = ActivityResultContracts.RequestPermission()
                 ) { granted ->
@@ -996,12 +731,9 @@ fun HomeScreen(
                 IconButton(
                     onClick = {
                         if (isListening) {
-                            speechRecognizer?.stopListening()
-                            isListening = false
+                            speechRecognizer?.stopListening(); isListening = false
                         } else {
-                            val hasPerm = ContextCompat.checkSelfPermission(
-                                speechCtx, android.Manifest.permission.RECORD_AUDIO
-                            ) == PackageManager.PERMISSION_GRANTED
+                            val hasPerm = ContextCompat.checkSelfPermission(speechCtx, android.Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
                             if (hasPerm) {
                                 isListening = true
                                 val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
@@ -1015,10 +747,7 @@ fun HomeScreen(
                     },
                     modifier = Modifier
                         .size(36.dp)
-                        .background(
-                            if (isListening) ElectricViolet.copy(alpha = 0.25f) else Color.Transparent,
-                            RoundedCornerShape(10.dp)
-                        )
+                        .background(if (isListening) ElectricViolet.copy(alpha = 0.25f) else Color.Transparent, RoundedCornerShape(10.dp))
                 ) {
                     Icon(
                         imageVector = if (isListening) Icons.Rounded.Stop else Icons.Rounded.Mic,
@@ -1030,7 +759,6 @@ fun HomeScreen(
 
                 Spacer(modifier = Modifier.width(4.dp))
 
-                // (D) Send button
                 IconButton(
                     onClick = {
                         if (rawText.isNotBlank()) {
@@ -1039,17 +767,10 @@ fun HomeScreen(
                             onSubmitQuery(textToSend)
                         }
                     },
-                    modifier = Modifier
-                        .size(32.dp)
-                        .background(ElectricViolet, CircleShape),
+                    modifier = Modifier.size(32.dp).background(ElectricViolet, CircleShape),
                     colors = IconButtonDefaults.iconButtonColors(contentColor = Color.White)
                 ) {
-                    Text(
-                        text = "↑",
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White
-                    )
+                    Text("↑", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.White)
                 }
             }
         }
@@ -1062,57 +783,29 @@ fun HomeScreen(
         exit = androidx.compose.animation.fadeOut()
     ) {
         Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.6f))
-                .clickable { showAttachBottomSheet = false }
+            modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.6f)).clickable { showAttachBottomSheet = false }
         )
     }
 
     val attachPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
-    ) { uri ->
-        uri?.let { onAddAttachment(it.toString()) }
-    }
+    ) { uri -> uri?.let { onAddAttachment(it.toString()) } }
 
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.BottomCenter
-    ) {
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
         androidx.compose.animation.AnimatedVisibility(
             visible = showAttachBottomSheet,
             enter = androidx.compose.animation.slideInVertically(initialOffsetY = { it }),
             exit = androidx.compose.animation.slideOutVertically(targetOffsetY = { it })
         ) {
             Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .border(1.5.dp, BorderSubtle, RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
-                    .clickable(enabled = false) {},
+                modifier = Modifier.fillMaxWidth().border(1.5.dp, BorderSubtle, RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)).clickable(enabled = false) {},
                 shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
                 colors = CardDefaults.cardColors(containerColor = DeepMidnight)
             ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .navigationBarsPadding()
-                        .padding(vertical = 18.dp, horizontal = 24.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(40.dp, 4.dp)
-                            .background(BorderSubtle, CircleShape)
-                            .align(Alignment.CenterHorizontally)
-                    )
+                Column(modifier = Modifier.fillMaxWidth().navigationBarsPadding().padding(vertical = 18.dp, horizontal = 24.dp)) {
+                    Box(modifier = Modifier.size(40.dp, 4.dp).background(BorderSubtle, CircleShape).align(Alignment.CenterHorizontally))
                     Spacer(modifier = Modifier.height(16.dp))
-                    Text(
-                        text = "Add to Conversation",
-                        fontSize = 16.sp,
-                        fontFamily = InstrumentSansFontFamily,
-                        fontWeight = FontWeight.Bold,
-                        color = PremiumCyan,
-                        modifier = Modifier.padding(bottom = 12.dp)
-                    )
+                    Text("Add to Conversation", fontSize = 16.sp, fontFamily = InstrumentSansFontFamily, fontWeight = FontWeight.Bold, color = PremiumCyan, modifier = Modifier.padding(bottom = 12.dp))
                     val attachOptions = listOf(
                         Triple("Images", "🖼️", "image/*"),
                         Triple("Videos", "🎬", "video/*"),
@@ -1122,39 +815,32 @@ fun HomeScreen(
                     )
                     attachOptions.forEach { option ->
                         Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 6.dp)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(Surface3)
-                                .border(1.dp, BorderSubtle, RoundedCornerShape(12.dp))
-                                .clickable {
-                                    showAttachBottomSheet = false
-                                    attachPickerLauncher.launch(option.third)
-                                }
-                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp).clip(RoundedCornerShape(12.dp)).background(Surface3).border(1.dp, BorderSubtle, RoundedCornerShape(12.dp)).clickable { showAttachBottomSheet = false; attachPickerLauncher.launch(option.third) }.padding(horizontal = 16.dp, vertical = 12.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(14.dp)
                         ) {
                             Text(text = option.second, fontSize = 18.sp)
-                            Text(
-                                text = option.first,
-                                fontSize = 13.sp,
-                                color = TextPrimaryColor,
-                                fontFamily = InstrumentSansFontFamily,
-                                fontWeight = FontWeight.Bold
-                            )
+                            Text(text = option.first, fontSize = 13.sp, color = TextPrimaryColor, fontFamily = InstrumentSansFontFamily, fontWeight = FontWeight.Bold)
                         }
                     }
                     Spacer(modifier = Modifier.height(8.dp))
-                    TextButton(
-                        onClick = { showAttachBottomSheet = false },
-                        modifier = Modifier.align(Alignment.End)
-                    ) {
+                    TextButton(onClick = { showAttachBottomSheet = false }, modifier = Modifier.align(Alignment.End)) {
                         Text("Cancel", fontSize = 13.sp, color = ElectricViolet, fontWeight = FontWeight.Bold)
                     }
                 }
             }
         }
+    }
+}
+
+// Helper to parse archived JSON — kept for any legacy calls
+private data class ParsedArchivedDetails(val introduction: String = "", val depthLayers: List<com.example.data.model.DepthLayerInsight> = emptyList())
+
+private fun parseArchivedJson(jsonContent: String): ParsedArchivedDetails {
+    return try {
+        val parsed = ResponseParser.parse(jsonContent)
+        ParsedArchivedDetails(introduction = parsed.introduction, depthLayers = parsed.depthLayers)
+    } catch (e: Exception) {
+        ParsedArchivedDetails()
     }
 }

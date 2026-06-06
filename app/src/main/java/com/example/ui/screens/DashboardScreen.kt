@@ -366,7 +366,7 @@ fun DashboardScreen(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(
-                        text = "Initialize your system. Choose offline local-only guest mode or connect with secure cloud syncing via Google Firestore.",
+                        text = "Enter your name to personalize your DepthLens experience.",
                         fontSize = 12.sp,
                         color = TextSecondaryColor,
                         textAlign = TextAlign.Center,
@@ -386,51 +386,24 @@ fun DashboardScreen(
                             unfocusedBorderColor = BorderSubtle
                         )
                     )
-
-                    OutlinedTextField(
-                        value = onboardingEmail,
-                        onValueChange = { onboardingEmail = it },
-                        label = { Text("your@email.com (Required for Cloud)", fontSize = 11.sp) },
-                        placeholder = { Text("e.g. neo@matrix.com", fontSize = 11.sp) },
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedTextColor = TextPrimaryColor,
-                            unfocusedTextColor = TextPrimaryColor,
-                            focusedBorderColor = ElectricViolet,
-                            unfocusedBorderColor = BorderSubtle
-                        )
-                    )
                 }
             },
             confirmButton = {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.Center
                 ) {
                     Button(
                         onClick = {
-                            if (onboardingName.isNotBlank() && isEmailValid) {
-                                viewModel.loginWithGoogle(onboardingEmail, onboardingName)
-                                viewModel.setOnboardingCompleted(true)
-                            }
-                        },
-                        enabled = onboardingName.isNotBlank() && isEmailValid,
-                        colors = ButtonDefaults.buttonColors(containerColor = ElectricViolet, disabledContainerColor = RichNavy),
-                        shape = RoundedCornerShape(8.dp),
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text("Cloud Sync", fontSize = 11.sp, color = Color.White)
-                    }
-
-                    OutlinedButton(
-                        onClick = {
-                            viewModel.loginAsGuest(onboardingName.ifBlank { "Guest Explorer" })
+                            viewModel.loginAsGuest(onboardingName.ifBlank { "Explorer" })
                             viewModel.setOnboardingCompleted(true)
                         },
+                        enabled = onboardingName.isNotBlank(),
+                        colors = ButtonDefaults.buttonColors(containerColor = ElectricViolet, disabledContainerColor = RichNavy),
                         shape = RoundedCornerShape(8.dp),
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text("Local Guest", fontSize = 11.sp, color = TextPrimaryColor)
+                        Text("Start Exploring", fontSize = 11.sp, color = Color.White)
                     }
                 }
             },
@@ -1492,7 +1465,7 @@ fun DashboardScreen(
     // Beautiful Premium Sidebar Redesign completely disabled for Bottom Nav ONLY
     ModalNavigationDrawer(
         drawerState = drawerState,
-        gesturesEnabled = false,
+        gesturesEnabled = true,
         drawerContent = {
         ModalDrawerSheet(
                 drawerContainerColor = RichNavy,
@@ -1828,318 +1801,6 @@ fun DashboardScreen(
                         )
                     }
                 }
-
-                // SEC 4: Bottom alignment for Privacy & Memory configuration trigger (Stops visual memory clutter!)
-                HorizontalDivider(color = SurfaceCardColor)
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(DeepMidnight)
-                        .padding(14.dp)
-                ) {
-                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { viewModel.setSystemControlsExpanded(!isSystemControlsExpanded) }
-                                .padding(vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Default.Settings, contentDescription = null, tint = PremiumCyan, modifier = Modifier.size(16.dp))
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("💡 SYSTEM CONTROLS", fontSize = 11.sp, color = TextPrimaryColor, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
-                            }
-
-                            Icon(
-                                imageVector = if (isSystemControlsExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                                contentDescription = if (isSystemControlsExpanded) "Collapse" else "Expand",
-                                tint = PremiumCyan,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-
-                        AnimatedVisibility(
-                            visible = isSystemControlsExpanded,
-                            enter = expandVertically(animationSpec = tween(250)) + fadeIn(animationSpec = tween(250)),
-                            exit = shrinkVertically(animationSpec = tween(250)) + fadeOut(animationSpec = tween(250))
-                        ) {
-                            Column(
-                                verticalArrangement = Arrangement.spacedBy(6.dp),
-                                modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
-                            ) {
-                                // Collective Learning toggle row
-                                Card(
-                                    colors = CardDefaults.cardColors(containerColor = SurfaceCardColor),
-                                    shape = RoundedCornerShape(8.dp),
-                                    modifier = Modifier.fillMaxWidth().height(40.dp)
-                                ) {
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .fillMaxHeight()
-                                            .padding(horizontal = 10.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.SpaceBetween
-                                    ) {
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Icon(Icons.Default.Info, contentDescription = null, tint = PremiumCyan, modifier = Modifier.size(14.dp))
-                                            Spacer(modifier = Modifier.width(6.dp))
-                                            Text(
-                                                text = "Collective Learning",
-                                                fontSize = 12.sp,
-                                                fontWeight = FontWeight.SemiBold,
-                                                color = TextPrimaryColor
-                                            )
-                                        }
-                                        
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                        ) {
-                                            Text(
-                                                text = if (isCollectiveOptIn) "ON" else "OFF",
-                                                fontSize = 10.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                color = if (isCollectiveOptIn) SuccessColor else TextSecondaryColor
-                                            )
-                                            Switch(
-                                                checked = isCollectiveOptIn,
-                                                onCheckedChange = { viewModel.setCollectiveIntelligenceOptIn(it) },
-                                                colors = SwitchDefaults.colors(
-                                                    checkedThumbColor = SuccessColor,
-                                                    checkedTrackColor = SuccessColor.copy(alpha = 0.3f),
-                                                    uncheckedThumbColor = TextSecondaryColor,
-                                                    uncheckedTrackColor = SurfaceCardColor.copy(alpha = 0.5f)
-                                                ),
-                                                modifier = Modifier.scale(0.75f)
-                                            )
-                                        }
-                                    }
-                                }
-
-                                // Notifications toggle row
-                                Card(
-                                    colors = CardDefaults.cardColors(containerColor = SurfaceCardColor),
-                                    shape = RoundedCornerShape(8.dp),
-                                    modifier = Modifier.fillMaxWidth().height(40.dp)
-                                ) {
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .fillMaxHeight()
-                                            .padding(horizontal = 10.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.SpaceBetween
-                                    ) {
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Icon(Icons.Default.Notifications, contentDescription = null, tint = PremiumCyan, modifier = Modifier.size(14.dp))
-                                            Spacer(modifier = Modifier.width(6.dp))
-                                            Text(
-                                                text = "Notifications",
-                                                fontSize = 12.sp,
-                                                fontWeight = FontWeight.SemiBold,
-                                                color = TextPrimaryColor
-                                            )
-                                        }
-                                        
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                        ) {
-                                            Text(
-                                                text = if (notificationsEnabled) "ON" else "OFF",
-                                                fontSize = 10.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                color = if (notificationsEnabled) SuccessColor else TextSecondaryColor
-                                            )
-                                            Switch(
-                                                checked = notificationsEnabled,
-                                                onCheckedChange = { viewModel.setNotificationsEnabled(it) },
-                                                colors = SwitchDefaults.colors(
-                                                    checkedThumbColor = SuccessColor,
-                                                    checkedTrackColor = SuccessColor.copy(alpha = 0.3f),
-                                                    uncheckedThumbColor = TextSecondaryColor,
-                                                    uncheckedTrackColor = SurfaceCardColor.copy(alpha = 0.5f)
-                                                ),
-                                                modifier = Modifier.scale(0.75f)
-                                            )
-                                        }
-                                    }
-                                }
-
-                                // Appearance row
-                                Card(
-                                    colors = CardDefaults.cardColors(containerColor = SurfaceCardColor),
-                                    shape = RoundedCornerShape(8.dp),
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(40.dp)
-                                        .clickable {
-                                            coroutineScope.launch { drawerState.close() }
-                                            showThemeSelectorDialog = true
-                                        }
-                                ) {
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .fillMaxHeight()
-                                            .padding(horizontal = 10.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.SpaceBetween
-                                    ) {
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Icon(Icons.Default.Star, contentDescription = null, tint = SidebarIconColor, modifier = Modifier.size(14.dp))
-                                            Spacer(modifier = Modifier.width(6.dp))
-                                            Text(
-                                                text = "Appearance",
-                                                fontSize = 12.sp,
-                                                fontWeight = FontWeight.SemiBold,
-                                                color = SidebarTextColor
-                                            )
-                                        }
-                                        Text(
-                                            text = if (com.example.ui.theme.ThemeManager.isDarkTheme) "Deep Midnight" else "Polar Dawn",
-                                            fontSize = 11.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = ThemeNameColor,
-                                            fontFamily = FontFamily.Monospace,
-                                            modifier = Modifier.padding(end = 4.dp)
-                                        )
-                                    }
-                                }
-
-                                // Feedback button
-                                Button(
-                                    onClick = {
-                                        coroutineScope.launch { drawerState.close() }
-                                        showFeedbackDialog = true
-                                    },
-                                    colors = ButtonDefaults.buttonColors(containerColor = SurfaceCardColor),
-                                    shape = RoundedCornerShape(8.dp),
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(40.dp),
-                                    contentPadding = PaddingValues(10.dp, 4.dp)
-                                ) {
-                                    Icon(Icons.Default.Email, contentDescription = null, tint = SidebarIconColor, modifier = Modifier.size(14.dp))
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text(
-                                        text = "Feedback",
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = SidebarTextColor
-                                    )
-                                }
-
-                                // Report Bug button
-                                Button(
-                                    onClick = {
-                                        coroutineScope.launch { drawerState.close() }
-                                        showReportBugDialog = true
-                                    },
-                                    colors = ButtonDefaults.buttonColors(containerColor = SurfaceCardColor),
-                                    shape = RoundedCornerShape(8.dp),
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(40.dp),
-                                    contentPadding = PaddingValues(10.dp, 4.dp)
-                                ) {
-                                    Icon(Icons.Default.Warning, contentDescription = null, tint = SidebarIconColor, modifier = Modifier.size(14.dp))
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text(
-                                        text = "Report Bug",
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = SidebarTextColor
-                                    )
-                                }
-
-                                // Manage Memory & Privacy button
-                                Button(
-                                    onClick = {
-                                        coroutineScope.launch { drawerState.close() }
-                                        showMemoryDialog = true
-                                    },
-                                    colors = ButtonDefaults.buttonColors(containerColor = SurfaceCardColor),
-                                    shape = RoundedCornerShape(8.dp),
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(40.dp),
-                                    contentPadding = PaddingValues(10.dp, 4.dp)
-                                ) {
-                                    Icon(Icons.Default.Lock, contentDescription = null, tint = SidebarIconColor, modifier = Modifier.size(14.dp))
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text(
-                                        text = "Manage Memory & Privacy",
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = SidebarTextColor
-                                    )
-                                }
-
-                                val updateStatusText = remember(latestRelease) {
-                                    val curInst = GithubUpdateManager.getInstalledVersion(context)
-                                    val rel = latestRelease
-                                    if (rel != null && GithubUpdateManager.isNewerVersion(rel.tagName, curInst)) {
-                                        "Version $curInst\nUpdate available → ${rel.tagName}"
-                                    } else {
-                                        "Version $curInst\nLatest version installed"
-                                    }
-                                }
-
-                                // Check For Updates button
-                                Button(
-                                    onClick = {
-                                        coroutineScope.launch { drawerState.close() }
-                                        showUpdatesDialog = true
-                                    },
-                                    colors = ButtonDefaults.buttonColors(containerColor = SurfaceCardColor),
-                                    shape = RoundedCornerShape(8.dp),
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .heightIn(min = 40.dp),
-                                    contentPadding = PaddingValues(10.dp, 6.dp)
-                                ) {
-                                    Icon(Icons.Default.Refresh, contentDescription = null, tint = SidebarIconColor, modifier = Modifier.size(14.dp))
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text(
-                                        text = updateStatusText,
-                                        fontSize = 11.sp,
-                                        lineHeight = 14.sp,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = SidebarTextColor,
-                                        modifier = Modifier.weight(1f)
-                                    )
-                                }
-
-                                // About DepthLens button
-                                Button(
-                                    onClick = {
-                                        coroutineScope.launch { drawerState.close() }
-                                        showAboutDialog = true
-                                    },
-                                    colors = ButtonDefaults.buttonColors(containerColor = SurfaceCardColor),
-                                    shape = RoundedCornerShape(8.dp),
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(40.dp),
-                                    contentPadding = PaddingValues(10.dp, 4.dp)
-                                ) {
-                                    Icon(Icons.Default.Info, contentDescription = null, tint = SidebarIconColor, modifier = Modifier.size(14.dp))
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text(
-                                        text = "About DepthLens",
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = SidebarTextColor
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
             }
         }
     ) {
@@ -2200,7 +1861,7 @@ fun DashboardScreen(
                         HomeScreen(
                             sessions = sessions,
                             selectedMode = selectedMode,
-                            onModeSelected = { selectedMode = it },
+                            onModeSelected = { selectedMode = it; viewModel.setSelectedMode(it) },
                             onSessionSelected = { sessionId -> viewModel.selectSession(sessionId) },
                             onSubmitQuery = { text -> viewModel.sendQuery(text) },
                             onNavigateToChat = { /* no-op: results shown on home */ },
@@ -2210,7 +1871,9 @@ fun DashboardScreen(
                             activeMessages = activeMessages,
                             isLoading = isLoading,
                             onRetryLastAnalysis = { msgId -> viewModel.retryLastAnalysis(msgId) },
-                            onRegenerateLastAnalysis = { msgId -> viewModel.regenerateLastAnalysis(msgId) }
+                            onRegenerateLastAnalysis = { msgId -> viewModel.regenerateLastAnalysis(msgId) },
+                            onOpenDrawer = { coroutineScope.launch { drawerState.open() } },
+                            onCreateNewSession = { viewModel.createSession("") }
                         )
                     }
                     "sessions" -> {
