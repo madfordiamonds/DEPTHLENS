@@ -64,6 +64,11 @@ class MainActivity : ComponentActivity() {
     }
   }
 
+  override fun onResume() {
+    super.onResume()
+    GithubUpdateManager.checkAndResumeInstallation(this)
+  }
+
   override fun onNewIntent(intent: Intent) {
     super.onNewIntent(intent)
     val sessionId = intent.getStringExtra("SESSION_ID")

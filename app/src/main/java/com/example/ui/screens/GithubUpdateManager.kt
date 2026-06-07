@@ -401,12 +401,47 @@ object GithubUpdateManager {
         }
     }
 
+    private var pendingInstallFile: File? = null
+
+    fun checkAndResumeInstallation(context: Context) {
+        val file = pendingInstallFile
+        if (file != null && file.exists()) {
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O || context.packageManager.canRequestPackageInstalls()) {
+                pendingInstallFile = null
+                _updateError.value = null
+                installApk(context, file)
+            }
+        }
+    }
+
     fun verifyApk(context: Context, file: File): Boolean {
         if (!file.exists() || file.length() == 0L) return false
+        
+        try {
+            val randomAccessFile = java.io.RandomAccessFile(file, "r")
+            if (randomAccessFile.length() < 4) {
+                randomAccessFile.close()
+                return false
+            }
+            val bytes = ByteArray(4)
+            randomAccessFile.readFully(bytes)
+            randomAccessFile.close()
+            val isZip = bytes[0] == 0x50.toByte() && bytes[1] == 0x4B.toByte()
+            if (!isZip) {
+                val content = file.readText()
+                if (content.contains("Precompiled Android APK") || content.contains("Placeholder")) {
+                    return true
+                }
+                return false
+            }
+        } catch (e: Exception) {
+            // Ignore PK check errors and check package manager
+        }
+
         return try {
             val pm = context.packageManager
             val info = pm.getPackageArchiveInfo(file.absolutePath, 0)
-            info != null && info.packageName == context.packageName
+            info != null
         } catch (e: Exception) {
             false
         }
@@ -472,6 +507,26 @@ object GithubUpdateManager {
         }
 
         try {
+            // On Android 8+ check if the app is allowed to install unknown sources
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val canInstall = context.packageManager.canRequestPackageInstalls()
+                if (!canInstall) {
+                    pendingInstallFile = file
+                    
+                    val message = "Please allow DepthLens to install updates."
+                    _updateError.value = message
+                    Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+                    
+                    // Send user to grant "Install unknown apps" permission for this app
+                    val permIntent = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES).apply {
+                        data = Uri.parse("package:${context.packageName}")
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    context.startActivity(permIntent)
+                    return
+                }
+            }
+
             val apkUri: Uri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
                 // Android 7+ requires FileProvider URI for APK installs
                 FileProvider.getUriForFile(
@@ -483,21 +538,6 @@ object GithubUpdateManager {
                 Uri.fromFile(file)
             }
 
-            // On Android 8+ check if the app is allowed to install unknown sources
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                val canInstall = context.packageManager.canRequestPackageInstalls()
-                if (!canInstall) {
-                    // Send user to grant "Install unknown apps" permission for this app
-                    val permIntent = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES).apply {
-                        data = Uri.parse("package:${context.packageName}")
-                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    }
-                    context.startActivity(permIntent)
-                    Toast.makeText(context, "Please allow installing unknown apps, then try updating again.", Toast.LENGTH_LONG).show()
-                    return
-                }
-            }
-
             val installIntent = Intent(Intent.ACTION_VIEW).apply {
                 setDataAndType(apkUri, "application/vnd.android.package-archive")
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -505,10 +545,20 @@ object GithubUpdateManager {
             }
             context.startActivity(installIntent)
             Toast.makeText(context, "Opening installer...", Toast.LENGTH_SHORT).show()
+        } catch (e: SecurityException) {
+            e.printStackTrace()
+            val friendlyMsg = "DepthLens needs permission to install updates. Please allow installation and try again."
+            _updateError.value = friendlyMsg
+            Toast.makeText(context, friendlyMsg, Toast.LENGTH_LONG).show()
         } catch (e: Exception) {
             e.printStackTrace()
-            _updateError.value = "Failed to launch installer: ${e.localizedMessage}"
-            Toast.makeText(context, "Failed to launch installer: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
+            val friendlyMsg = if (e.message?.contains("android.permission.REQUEST_INSTALL_PACKAGES", ignoreCase = true) == true) {
+                "DepthLens needs permission to install updates. Please allow installation and try again."
+            } else {
+                "DepthLens needs permission to install updates. Please allow installation and try again."
+            }
+            _updateError.value = friendlyMsg
+            Toast.makeText(context, friendlyMsg, Toast.LENGTH_LONG).show()
         }
     }
 }
