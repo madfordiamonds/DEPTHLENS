@@ -116,7 +116,7 @@ object GithubUpdateManager {
         
         return try {
             val packageInfo = context.packageManager.getPackageInfo(context.packageName, 0)
-            packageInfo.versionName ?: "4.0.1"
+            packageInfo.versionName ?: "4.1.0"
         } catch (e: Exception) {
             "4.0.0"
         }
@@ -245,15 +245,22 @@ object GithubUpdateManager {
                     val localVersion = getInstalledVersion(context)
                     
                     val mockRelease = GitHubRelease(
-                        tagName = "v4.0.1",
-                        name = "DepthLens v4.0.1 — Intelligence Evolution",
-                        publishedAt = "June 6, 2026",
+                        tagName = "v4.1.0",
+                        name = "DepthLens v4.1.0 — Intelligence Refinement",
+                        publishedAt = "June 7, 2026",
                         body = "### What's New\n" +
-                                "- **Offline Background Support**: Strategic calculations and analysis now continue seamlessly while the app is in the background.\n" +
-                                "- **Real-time Notifications**: Immediate local reminders and system updates once depth-level analyses are compiled.\n" +
-                                "- **Play Protect Compliance**: Removed obsolete self-installer packages and permissions to protect device safety and ensure 100% compliance.\n" +
-                                "- **Theme Improvements**: Polished polar dawn and deep navy palettes for superior text contrast and beautiful readability.",
-                        apkUrl = "https://github.com/guy-with-ideas-uncoded/DEPTHLENS/releases/download/v4.0.1/DEPTHLENS.apk",
+                                "- **UI/UX and navigation experience refined**\n" +
+                                "- **Improved chat and analysis workflow**\n" +
+                                "- **Added question editing and text selection**\n" +
+                                "- **Added copy actions for analysis results**\n" +
+                                "- **Enhanced deep analysis and probability forecasting**\n" +
+                                "- **Improved future scenario predictions**\n" +
+                                "- **Redesigned attachment and voice input system**\n" +
+                                "- **Restored in-app update functionality**\n" +
+                                "- **Simplified Settings and removed developer-only tools**\n" +
+                                "- **Added GitHub repository link**\n" +
+                                "- **Performance improvements and bug fixes**",
+                        apkUrl = "https://github.com/guy-with-ideas-uncoded/DEPTHLENS/releases/download/v4.1.0/DEPTHLENS.apk",
                         apkFileName = "DEPTHLENS.apk",
                         apkSize = 41943040L
                     )
@@ -265,7 +272,7 @@ object GithubUpdateManager {
                     val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
                     prefs.edit().putLong(KEY_LAST_CHECK, now).apply()
 
-                    val isNew = isNewerVersion("v4.0.0", localVersion)
+                    val isNew = isNewerVersion("v4.1.0", localVersion)
                     onComplete(isNew, mockRelease)
                 }
             }

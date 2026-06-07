@@ -8,6 +8,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.animation.core.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material.icons.filled.Delete
@@ -15,8 +16,11 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material.icons.rounded.Stop
@@ -25,6 +29,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -36,6 +43,7 @@ import androidx.compose.ui.unit.sp
 import com.example.data.model.*
 import com.example.data.repository.ResponseParser
 import com.example.ui.theme.*
+import com.example.ui.components.ThreeDotThinkingIndicator
 import androidx.compose.ui.window.Dialog
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -71,20 +79,118 @@ fun HomeScreen(
     onRegenerateLastAnalysis: (String) -> Unit = {},
     onOpenDrawer: () -> Unit = {},
     onCreateNewSession: () -> Unit = {},
+    onDeleteMessage: (String) -> Unit = {},
+    isPrivacyModeEnabled: Boolean = false,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
+    val prefs = remember { context.getSharedPreferences("depthlens_prefs", android.content.Context.MODE_PRIVATE) }
+    var hasCompletedOnboarding by remember { mutableStateOf(prefs.getBoolean("has_completed_permission_onboarding", false)) }
+    
+    var showPermissionOnboardingDialog by remember { mutableStateOf(false) }
+    var showSystemSettingsPrompt by remember { mutableStateOf(false) }
+    var showUploadSecurityNotice by remember { mutableStateOf(false) }
+    var pendingPermissionAction by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(showUploadSecurityNotice) {
+        if (showUploadSecurityNotice) {
+            kotlinx.coroutines.delay(2500)
+            showUploadSecurityNotice = false
+        }
+    }
+
     var rawText by remember { mutableStateOf("") }
+    var isListening by remember { mutableStateOf(false) }
+
+    val speechRecognizer = remember {
+        try { SpeechRecognizer.createSpeechRecognizer(context) } catch (e: Exception) { null }
+    }
+
+    val recognitionListener = remember(speechRecognizer) {
+        object : RecognitionListener {
+            override fun onReadyForSpeech(params: Bundle?) {}
+            override fun onBeginningOfSpeech() {}
+            override fun onRmsChanged(rmsdB: Float) {}
+            override fun onBufferReceived(buffer: ByteArray?) {}
+            override fun onEndOfSpeech() { isListening = false }
+            override fun onError(error: Int) { isListening = false }
+            override fun onResults(results: Bundle?) {
+                val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                if (!matches.isNullOrEmpty()) {
+                    val spoken = matches[0]
+                    if (!spoken.isNullOrBlank()) {
+                        rawText = if (rawText.isEmpty()) spoken else "$rawText $spoken"
+                    }
+                }
+                isListening = false
+            }
+            override fun onPartialResults(partialResults: Bundle?) {}
+            override fun onEvent(eventType: Int, params: Bundle?) {}
+        }
+    }
+
+    LaunchedEffect(speechRecognizer) {
+        speechRecognizer?.setRecognitionListener(recognitionListener)
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            speechRecognizer?.destroy()
+        }
+    }
+
+    val audioPermLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted && speechRecognizer != null) {
+            isListening = true
+            val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            }
+            speechRecognizer.startListening(intent)
+        } else {
+            showSystemSettingsPrompt = true
+        }
+    }
+
     var showAttachBottomSheet by remember { mutableStateOf(false) }
+
+    val attachPermLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            showAttachBottomSheet = true
+        } else {
+            showSystemSettingsPrompt = true
+        }
+    }
     val currentHour = remember { Calendar.getInstance().get(Calendar.HOUR_OF_DAY) }
     
     val greeting = remember(currentHour) {
         when (currentHour) {
-            in 5..11 -> "Good morning,"
-            in 12..16 -> "Good afternoon,"
-            in 17..20 -> "Good evening,"
-            else -> "Good night,"
+            in 5..11 -> "GOOD MORNING"
+            in 12..16 -> "GOOD AFTERNOON"
+            in 17..20 -> "GOOD EVENING"
+            else -> "GOOD NIGHT"
         }
     }
+
+    var animateEntry by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        animateEntry = true
+    }
+    val slideOffset by androidx.compose.animation.core.animateDpAsState(
+        targetValue = if (animateEntry) 0.dp else 16.dp,
+        animationSpec = androidx.compose.animation.core.tween(durationMillis = 800, easing = androidx.compose.animation.core.EaseOutCubic),
+        label = "slide"
+    )
+    val opacity by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = if (animateEntry) 1f else 0f,
+        animationSpec = androidx.compose.animation.core.tween(durationMillis = 800),
+        label = "opacity"
+    )
+
+    var editingMessageId by remember { mutableStateOf<String?>(null) }
 
     Column(
         modifier = modifier
@@ -100,23 +206,24 @@ fun HomeScreen(
         ) {
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Landing Top Row — hamburger + greeting + new-chat pencil + avatar
-            Row(
+            // Symmetrical Sized Header Row
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(bottom = 12.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                    .padding(bottom = 20.dp),
+                contentAlignment = Alignment.Center
             ) {
-                // Left: hamburger + greeting
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    // Hamburger menu to open sidebar drawer
+                // Left aligned: Menu/Hamburger Button
+                Row(
+                    modifier = Modifier.align(Alignment.CenterStart),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     Box(
                         modifier = Modifier
-                            .size(28.dp)
-                            .clip(RoundedCornerShape(7.dp))
+                            .size(36.dp)
+                            .clip(RoundedCornerShape(10.dp))
                             .background(Surface2)
-                            .border(1.dp, BorderSubtle, RoundedCornerShape(7.dp))
+                            .border(1.dp, BorderSubtle, RoundedCornerShape(10.dp))
                             .clickable { onOpenDrawer() },
                         contentAlignment = Alignment.Center
                     ) {
@@ -124,98 +231,110 @@ fun HomeScreen(
                             imageVector = Icons.Default.Menu,
                             contentDescription = "Open sessions",
                             tint = TextSecondaryColor,
-                            modifier = Modifier.size(16.dp)
+                            modifier = Modifier.size(18.dp)
                         )
                     }
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Text(
-                        text = greeting,
-                        style = MaterialTheme.typography.bodyLarge,
-                        fontFamily = InstrumentSansFontFamily,
-                        fontSize = 15.sp,
-                        color = TextSecondaryColor
-                    )
                 }
 
-                // Right: new-chat pencil + avatar
+                // Center aligned: Mini Symmetrical DepthLens Logo (Increased and prominent - 250% larger)
+                Image(
+                    painter = painterResource(id = R.drawable.ic_depthlens_logo),
+                    contentDescription = "DepthLens",
+                    modifier = Modifier
+                        .height(90.dp)
+                        .padding(vertical = 4.dp),
+                    contentScale = androidx.compose.ui.layout.ContentScale.Fit
+                )
+
+                // Right aligned: Upgraded Glassmorphism New Chat button with soft Purple-Blue glow
                 Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    modifier = Modifier.align(Alignment.CenterEnd),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // ✏️ Stylish new-chat pencil button
                     Box(
                         modifier = Modifier
-                            .size(28.dp)
-                            .clip(RoundedCornerShape(7.dp))
+                            .size(46.dp)
+                            .clip(RoundedCornerShape(20.dp))
                             .background(
                                 Brush.linearGradient(
                                     colors = listOf(
-                                        ElectricViolet.copy(alpha = 0.18f),
-                                        PremiumCyan.copy(alpha = 0.10f)
+                                        ElectricViolet.copy(alpha = 0.22f),
+                                        PremiumCyan.copy(alpha = 0.12f)
                                     )
                                 )
                             )
                             .border(
-                                width = 1.dp,
+                                width = 1.5.dp,
                                 brush = Brush.linearGradient(
-                                    colors = listOf(ElectricViolet, PremiumCyan.copy(alpha = 0.7f))
+                                    colors = listOf(ElectricViolet, PremiumCyan.copy(alpha = 0.8f))
                                 ),
-                                shape = RoundedCornerShape(7.dp)
+                                shape = RoundedCornerShape(20.dp)
                             )
+                            .drawBehind {
+                                // Dynamic soft backing glow
+                                drawCircle(
+                                    color = ElectricViolet.copy(alpha = 0.25f),
+                                    radius = this.size.maxDimension * 0.7f,
+                                    center = Offset(this.size.width / 2, this.size.height / 2)
+                                )
+                            }
                             .clickable { onCreateNewSession() },
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = Icons.Default.Edit,
                             contentDescription = "New chat",
-                            tint = ElectricViolet,
-                            modifier = Modifier.size(14.dp)
-                        )
-                    }
-
-                    // Premium Gradient Avatar "A"
-                    Box(
-                        modifier = Modifier
-                            .size(28.dp)
-                            .clip(CircleShape)
-                            .background(
-                                Brush.linearGradient(
-                                    colors = listOf(ElectricViolet, PremiumCyan)
-                                )
-                            ),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "A",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White
+                            tint = PremiumCyan,
+                            modifier = Modifier.size(18.dp)
                         )
                     }
                 }
             }
 
-            // Landing Hero — DepthLens Logo instead of headline text
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 8.dp)
-            ) {
-                Image(
-                    painter = painterResource(id = R.drawable.ic_depthlens_logo),
-                    contentDescription = "DepthLens",
+            // Animated Center Greeting Hero (only shown if Chat Feed is empty)
+            if (activeMessages.isEmpty()) {
+                Column(
                     modifier = Modifier
-                        .height(52.dp)
-                        .padding(bottom = 6.dp)
-                )
-
-                Text(
-                    text = "Choose a mode or start typing — DepthLens will reveal what lies beneath.",
-                    fontFamily = InstrumentSansFontFamily,
-                    fontSize = 11.sp,
-                    color = Color.White,
-                    lineHeight = 16.sp
-                )
+                        .fillMaxWidth()
+                        .padding(vertical = 40.dp)
+                        .offset(y = slideOffset)
+                        .alpha(opacity),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Text(
+                        text = greeting,
+                        style = TextStyle(
+                            fontFamily = DMMonoFontFamily,
+                            fontSize = 48.sp,
+                            lineHeight = 54.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            letterSpacing = 4.sp,
+                            color = Color.White,
+                            shadow = androidx.compose.ui.graphics.Shadow(
+                                color = ElectricViolet.copy(alpha = 0.75f),
+                                offset = androidx.compose.ui.geometry.Offset(0f, 0f),
+                                blurRadius = 24f
+                            )
+                        ),
+                        textAlign = TextAlign.Center
+                    )
+                    
+                    Spacer(modifier = Modifier.height(14.dp))
+                    
+                    Text(
+                        text = "Choose a mode or start typing — DepthLens will reveal what lies beneath.",
+                        fontFamily = InstrumentSansFontFamily,
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.Medium,
+                        lineHeight = 30.sp,
+                        color = TextSecondaryColor.copy(alpha = 0.72f),
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier
+                            .fillMaxWidth(0.9f)
+                            .padding(horizontal = 8.dp)
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(10.dp))
@@ -268,7 +387,7 @@ fun HomeScreen(
                             Text("✦", fontSize = 8.sp, color = if (isMultiLayer) Color.White else ElectricViolet)
                             Text(
                                 text = "Multi-Layer",
-                                fontSize = 8.5.sp,
+                                fontSize = 13.sp,
                                 fontWeight = FontWeight.Bold,
                                 fontFamily = DMMonoFontFamily,
                                 color = if (isMultiLayer) Color.White else ElectricViolet
@@ -347,7 +466,7 @@ fun HomeScreen(
                                         )
                                         Text(
                                             text = mode,
-                                            fontSize = 10.sp,
+                                            fontSize = 14.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = TextPrimaryColor,
                                             fontFamily = InstrumentSansFontFamily,
@@ -355,10 +474,10 @@ fun HomeScreen(
                                         )
                                         Text(
                                             text = desc,
-                                            fontSize = 8.5.sp,
+                                            fontSize = 12.sp,
                                             fontFamily = InstrumentSansFontFamily,
                                             color = TextMutedColor,
-                                            lineHeight = 10.sp
+                                            lineHeight = 16.sp
                                         )
                                     }
                                 }
@@ -375,15 +494,45 @@ fun HomeScreen(
             if (activeMessages.isNotEmpty() || isLoading) {
                 Spacer(modifier = Modifier.height(20.dp))
 
-                Text(
-                    text = "ANALYSIS",
-                    fontSize = 8.sp,
-                    letterSpacing = 1.2.sp,
-                    fontFamily = DMMonoFontFamily,
-                    fontWeight = FontWeight.Bold,
-                    color = TextMutedColor,
-                    modifier = Modifier.padding(bottom = 8.dp)
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "ANALYSIS",
+                        fontSize = 8.sp,
+                        letterSpacing = 1.2.sp,
+                        fontFamily = DMMonoFontFamily,
+                        fontWeight = FontWeight.Bold,
+                        color = TextMutedColor
+                    )
+                    
+                    if (isPrivacyModeEnabled) {
+                         Row(
+                             horizontalArrangement = Arrangement.spacedBy(4.dp),
+                             verticalAlignment = Alignment.CenterVertically,
+                             modifier = Modifier
+                                 .background(Color(0xFF2C1010), RoundedCornerShape(4.dp))
+                                 .border(1.dp, Color(0xFFFF5252).copy(alpha = 0.4f), RoundedCornerShape(4.dp))
+                                 .padding(horizontal = 6.dp, vertical = 2.dp)
+                         ) {
+                             Icon(
+                                 imageVector = Icons.Default.Lock,
+                                 contentDescription = "Privacy Mode Active",
+                                 tint = Color(0xFFFF5252),
+                                 modifier = Modifier.size(10.dp)
+                             )
+                             Text(
+                                 text = "PRIVACY ACTIVE",
+                                 fontSize = 8.sp,
+                                 fontFamily = DMMonoFontFamily,
+                                 fontWeight = FontWeight.Bold,
+                                 color = Color(0xFFFF5252)
+                             )
+                         }
+                    }
+                }
 
                 Column(
                     verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -391,29 +540,83 @@ fun HomeScreen(
                 ) {
                     activeMessages.forEach { message ->
                         if (message.role == "user") {
-                            Row(
+                            Column(
                                 modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.End
+                                horizontalAlignment = Alignment.End
                             ) {
-                                Box(
-                                    modifier = Modifier
-                                        .background(
-                                            ElectricViolet.copy(alpha = 0.15f),
-                                            RoundedCornerShape(topStart = 14.dp, topEnd = 3.dp, bottomEnd = 14.dp, bottomStart = 14.dp)
-                                        )
-                                        .border(
-                                            1.dp,
-                                            ElectricViolet.copy(alpha = 0.3f),
-                                            RoundedCornerShape(topStart = 14.dp, topEnd = 3.dp, bottomEnd = 14.dp, bottomStart = 14.dp)
-                                        )
-                                        .padding(horizontal = 12.dp, vertical = 8.dp)
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.End
                                 ) {
-                                    Text(
-                                        text = message.text,
-                                        fontSize = 12.sp,
-                                        color = TextPrimaryColor,
-                                        fontFamily = InstrumentSansFontFamily
-                                    )
+                                    Box(
+                                        modifier = Modifier
+                                            .background(
+                                                ElectricViolet.copy(alpha = 0.15f),
+                                                RoundedCornerShape(topStart = 14.dp, topEnd = 3.dp, bottomEnd = 14.dp, bottomStart = 14.dp)
+                                            )
+                                            .border(
+                                                1.dp,
+                                                ElectricViolet.copy(alpha = 0.3f),
+                                                RoundedCornerShape(topStart = 14.dp, topEnd = 3.dp, bottomEnd = 14.dp, bottomStart = 14.dp)
+                                            )
+                                            .padding(horizontal = 12.dp, vertical = 8.dp)
+                                    ) {
+                                        Text(
+                                            text = message.text,
+                                            fontSize = 18.sp,
+                                            lineHeight = 25.sp,
+                                            color = TextPrimaryColor,
+                                            fontFamily = InstrumentSansFontFamily
+                                        )
+                                    }
+                                }
+                                
+                                // Subtle micro action buttons row
+                                Row(
+                                    modifier = Modifier.padding(top = 4.dp, bottom = 4.dp, end = 2.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    val uContext = LocalContext.current
+                                    val uClipboard = LocalClipboardManager.current
+                                    
+                                    Box(
+                                        modifier = Modifier
+                                            .size(20.dp)
+                                            .background(Surface2, RoundedCornerShape(4.dp))
+                                            .border(1.dp, BorderSubtle, RoundedCornerShape(4.dp))
+                                            .clickable {
+                                                uClipboard.setText(AnnotatedString(message.text))
+                                                android.widget.Toast.makeText(uContext, "Copied question", android.widget.Toast.LENGTH_SHORT).show()
+                                            },
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.ContentCopy,
+                                            contentDescription = "Copy message",
+                                            tint = TextMutedColor,
+                                            modifier = Modifier.size(10.dp)
+                                        )
+                                    }
+                                    
+                                    Box(
+                                        modifier = Modifier
+                                            .size(20.dp)
+                                            .background(Surface2, RoundedCornerShape(4.dp))
+                                            .border(1.dp, BorderSubtle, RoundedCornerShape(4.dp))
+                                            .clickable {
+                                                rawText = message.text
+                                                editingMessageId = message.id
+                                            },
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Edit,
+                                            contentDescription = "Edit message",
+                                            tint = TextMutedColor,
+                                            modifier = Modifier.size(10.dp)
+                                        )
+                                    }
                                 }
                             }
                         } else {
@@ -463,12 +666,14 @@ fun HomeScreen(
                                         modifier = Modifier.fillMaxWidth()
                                     ) {
                                         Column(modifier = Modifier.padding(12.dp)) {
-                                            if (parsedResponse.introduction.isNotEmpty()) {
+                                            SelectionContainer {
+                                                Column {
+                                                    if (parsedResponse.introduction.isNotEmpty()) {
                                                 Text(
                                                     text = parsedResponse.introduction,
-                                                    fontSize = 12.sp,
+                                                    fontSize = 18.sp,
                                                     color = TextSecondaryColor,
-                                                    lineHeight = 17.sp,
+                                                    lineHeight = 25.sp,
                                                     fontFamily = InstrumentSansFontFamily,
                                                     modifier = Modifier.padding(bottom = 10.dp)
                                                 )
@@ -477,7 +682,7 @@ fun HomeScreen(
                                             if (parsedResponse.depthLayers.isNotEmpty()) {
                                                 Text(
                                                     text = "DEPTH LAYERS",
-                                                    fontSize = 7.5.sp,
+                                                    fontSize = 11.sp,
                                                     letterSpacing = 1.sp,
                                                     fontFamily = DMMonoFontFamily,
                                                     fontWeight = FontWeight.Bold,
@@ -528,9 +733,9 @@ fun HomeScreen(
                                                                 Spacer(modifier = Modifier.height(4.dp))
                                                                 Text(
                                                                     text = layer.description,
-                                                                    fontSize = 11.sp,
+                                                                    fontSize = 16.sp,
                                                                     color = TextSecondaryColor,
-                                                                    lineHeight = 15.sp,
+                                                                    lineHeight = 22.sp,
                                                                     fontFamily = InstrumentSansFontFamily
                                                                 )
                                                                 // Multi-level: sub-insights if available
@@ -563,19 +768,238 @@ fun HomeScreen(
                                                 Spacer(modifier = Modifier.height(10.dp))
                                                 Text(
                                                     text = parsedResponse.executiveSummary!!,
-                                                    fontSize = 11.sp,
+                                                    fontSize = 16.sp,
                                                     color = TextSecondaryColor,
-                                                    lineHeight = 15.sp,
+                                                    lineHeight = 22.sp,
                                                     fontFamily = InstrumentSansFontFamily
                                                 )
                                             }
 
                                             // ── Suggested Questions (after analysis) ──────
-                                            if (parsedResponse.suggestedQuestions.isNotEmpty()) {
+                                                }
+                                            }
+
+                                            // ── Action Row (Copy and Share) ────────────────
+                                            val clipboardManager = LocalClipboardManager.current
+                                            var copied by remember { mutableStateOf(false) }
+
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(vertical = 12.dp),
+                                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                // Copy Button with glass style and violet borders
+                                                Box(
+                                                    modifier = Modifier
+                                                        .height(38.dp)
+                                                        .weight(1f)
+                                                        .clip(RoundedCornerShape(8.dp))
+                                                        .background(Surface2)
+                                                        .border(1.dp, ElectricViolet.copy(alpha = 0.4f), RoundedCornerShape(8.dp))
+                                                        .clickable {
+                                                            val cleanText = ResponseParser.getCopyableText(message.text)
+                                                            clipboardManager.setText(AnnotatedString(cleanText))
+                                                            copied = true
+                                                        },
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    Row(
+                                                        verticalAlignment = Alignment.CenterVertically,
+                                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                                    ) {
+                                                        Icon(
+                                                            imageVector = Icons.Default.ContentCopy,
+                                                            contentDescription = "Copy text",
+                                                            tint = if (copied) ElectricViolet else TextPrimaryColor,
+                                                            modifier = Modifier.size(16.dp)
+                                                        )
+                                                        Text(
+                                                            text = if (copied) "Copied!" else "Copy",
+                                                            fontFamily = InstrumentSansFontFamily,
+                                                            fontWeight = FontWeight.Medium,
+                                                            fontSize = 14.sp,
+                                                            color = if (copied) ElectricViolet else TextPrimaryColor
+                                                        )
+                                                    }
+                                                }
+
+                                                // Share Button
+                                                Box(
+                                                    modifier = Modifier
+                                                        .height(38.dp)
+                                                        .weight(1f)
+                                                        .clip(RoundedCornerShape(8.dp))
+                                                        .background(Surface2)
+                                                        .border(1.dp, ElectricViolet.copy(alpha = 0.4f), RoundedCornerShape(8.dp))
+                                                        .clickable {
+                                                            val cleanText = ResponseParser.getCopyableText(message.text)
+                                                            val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                                                                type = "text/plain"
+                                                                putExtra(Intent.EXTRA_TEXT, cleanText)
+                                                            }
+                                                            context.startActivity(Intent.createChooser(shareIntent, "Share Analysis"))
+                                                        },
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    Row(
+                                                        verticalAlignment = Alignment.CenterVertically,
+                                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                                    ) {
+                                                        Icon(
+                                                            imageVector = Icons.Default.Share,
+                                                            contentDescription = "Share",
+                                                            tint = TextPrimaryColor,
+                                                            modifier = Modifier.size(16.dp)
+                                                        )
+                                                        Text(
+                                                            text = "Share",
+                                                            fontFamily = InstrumentSansFontFamily,
+                                                            fontWeight = FontWeight.Medium,
+                                                            fontSize = 14.sp,
+                                                            color = TextPrimaryColor
+                                                        )
+                                                    }
+                                                }
+                                            }
+
+                                             // ── Dig Deeper Section ────────────────────────
+                                             val associatedUserQuery = remember(message.id, activeMessages) {
+                                                 activeMessages
+                                                     .subList(0, activeMessages.indexOfFirst { it.id == message.id }.coerceAtLeast(0))
+                                                     .findLast { it.role == "user" }?.text ?: ""
+                                             }
+
+                                             Spacer(modifier = Modifier.height(6.dp))
+                                             Text(
+                                                 text = "DIG DEEPER",
+                                                 fontSize = 11.sp,
+                                                 letterSpacing = 1.sp,
+                                                 fontFamily = DMMonoFontFamily,
+                                                 fontWeight = FontWeight.Bold,
+                                                 color = PremiumCyan,
+                                                 modifier = Modifier.padding(bottom = 6.dp)
+                                             )
+
+                                             Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                                                 val digDeeperPaths = remember(associatedUserQuery) {
+                                                     listOf(
+                                                         "Go Deeper" to ("Go Deeper on the previous analysis of '" + associatedUserQuery + "'. Reveal: assumptions, unconscious patterns, systemic forces, hidden incentives, and long-term trajectories. Provide genuinely new insights."),
+                                                         "Strategic Leverage Analysis" to ("Strategic Leverage Analysis on '" + associatedUserQuery + "'. Analyze: key leverage points to disrupt this pattern, strategic advantages, and overlooked growth options."),
+                                                         "Challenge Assumptions" to ("Challenge Assumptions on '" + associatedUserQuery + "'. Deconstruct the underlying systemic assumptions, cognitive distortions, and blind spot projections."),
+                                                         "Systems Feedback Analysis" to ("Systems Feedback Analysis on '" + associatedUserQuery + "'. Deconstruct the feedback loops, dependencies, power structures, lock-in behaviors, and stabilizing factors.")
+                                                     )
+                                                 }
+
+                                                 digDeeperPaths.forEach { (label, queryText) ->
+                                                     val associatedQuery = if (associatedUserQuery.isNotEmpty()) queryText else "$label on previous situation"
+                                                     Row(
+                                                         modifier = Modifier
+                                                             .fillMaxWidth()
+                                                             .background(Surface3, RoundedCornerShape(8.dp))
+                                                             .border(1.dp, PremiumCyan.copy(alpha = 0.2f), RoundedCornerShape(8.dp))
+                                                             .clickable { onSubmitQuery(associatedQuery) }
+                                                             .padding(horizontal = 10.dp, vertical = 8.dp),
+                                                         verticalAlignment = Alignment.CenterVertically
+                                                     ) {
+                                                         Box(
+                                                             modifier = Modifier
+                                                                 .size(18.dp)
+                                                                 .background(PremiumCyan.copy(alpha = 0.12f), CircleShape),
+                                                             contentAlignment = Alignment.Center
+                                                         ) {
+                                                             Text("?", fontSize = 9.sp, color = PremiumCyan, fontWeight = FontWeight.Bold)
+                                                         }
+                                                         Spacer(modifier = Modifier.width(8.dp))
+                                                         Text(
+                                                             text = label,
+                                                             fontSize = 16.sp,
+                                                             color = TextSecondaryColor,
+                                                             lineHeight = 22.sp,
+                                                             fontFamily = InstrumentSansFontFamily,
+                                                             modifier = Modifier.weight(1f)
+                                                         )
+                                                     }
+                                                 }
+
+                                                 // Additional dynamic suggested questions if present
+                                                 if (parsedResponse.suggestedQuestions.isNotEmpty()) {
+                                                     parsedResponse.suggestedQuestions.forEach { q ->
+                                                         Row(
+                                                             modifier = Modifier
+                                                                 .fillMaxWidth()
+                                                                 .background(Surface3, RoundedCornerShape(8.dp))
+                                                                 .border(1.dp, PremiumCyan.copy(alpha = 0.2f), RoundedCornerShape(8.dp))
+                                                                 .clickable { onSubmitQuery(q) }
+                                                                 .padding(horizontal = 10.dp, vertical = 8.dp),
+                                                             verticalAlignment = Alignment.CenterVertically
+                                                         ) {
+                                                             Box(
+                                                                 modifier = Modifier
+                                                                     .size(18.dp)
+                                                                     .background(PremiumCyan.copy(alpha = 0.12f), CircleShape),
+                                                                 contentAlignment = Alignment.Center
+                                                             ) {
+                                                                 Text("?", fontSize = 9.sp, color = PremiumCyan, fontWeight = FontWeight.Bold)
+                                                             }
+                                                             Spacer(modifier = Modifier.width(8.dp))
+                                                             Text(
+                                                                 text = q,
+                                                                 fontSize = 16.sp,
+                                                                 color = TextSecondaryColor,
+                                                                 lineHeight = 22.sp,
+                                                                 fontFamily = InstrumentSansFontFamily,
+                                                                 modifier = Modifier.weight(1f)
+                                                             )
+                                                         }
+                                                     }
+                                                 }
+                                             }
+
+                                             // ── Exploration paths ──────────────────────────
+                                             if (parsedResponse.explorationPaths.isNotEmpty()) {
+                                                 Spacer(modifier = Modifier.height(10.dp))
+                                                 Text(
+                                                     text = "EXPLORE FURTHER",
+                                                     fontSize = 11.sp,
+                                                     letterSpacing = 1.sp,
+                                                     fontFamily = DMMonoFontFamily,
+                                                     fontWeight = FontWeight.Bold,
+                                                     color = ElectricViolet,
+                                                     modifier = Modifier.padding(bottom = 5.dp)
+                                                 )
+                                                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                                     parsedResponse.explorationPaths.forEach { path ->
+                                                         Row(
+                                                             modifier = Modifier
+                                                                 .fillMaxWidth()
+                                                                 .background(ElectricViolet.copy(alpha = 0.07f), RoundedCornerShape(7.dp))
+                                                                 .border(1.dp, ElectricViolet.copy(alpha = 0.2f), RoundedCornerShape(7.dp))
+                                                                 .clickable { onSubmitQuery("$path — explore this path specifically in reference to my situation.") }
+                                                                 .padding(horizontal = 10.dp, vertical = 7.dp),
+                                                             verticalAlignment = Alignment.CenterVertically
+                                                         ) {
+                                                             Text("✓", fontSize = 14.sp, color = ElectricViolet)
+                                                             Spacer(modifier = Modifier.width(7.dp))
+                                                             Text(
+                                                                 text = path,
+                                                                 fontSize = 16.sp,
+                                                                 color = TextSecondaryColor,
+                                                                 lineHeight = 22.sp,
+                                                                 fontFamily = InstrumentSansFontFamily,
+                                                                 modifier = Modifier.weight(1f)
+                                                             )
+                                                         }
+                                                     }
+                                                 }
+                                             }
+
+                                             if (false && parsedResponse.suggestedQuestions.isNotEmpty()) {
                                                 Spacer(modifier = Modifier.height(12.dp))
                                                 Text(
                                                     text = "DIG DEEPER",
-                                                    fontSize = 7.5.sp,
+                                                    fontSize = 11.sp,
                                                     letterSpacing = 1.sp,
                                                     fontFamily = DMMonoFontFamily,
                                                     fontWeight = FontWeight.Bold,
@@ -604,9 +1028,9 @@ fun HomeScreen(
                                                             Spacer(modifier = Modifier.width(8.dp))
                                                             Text(
                                                                 text = q,
-                                                                fontSize = 10.5.sp,
+                                                                fontSize = 16.sp,
                                                                 color = TextSecondaryColor,
-                                                                lineHeight = 14.sp,
+                                                                lineHeight = 22.sp,
                                                                 fontFamily = InstrumentSansFontFamily,
                                                                 modifier = Modifier.weight(1f)
                                                             )
@@ -616,11 +1040,11 @@ fun HomeScreen(
                                             }
 
                                             // ── Exploration paths ──────────────────────────
-                                            if (parsedResponse.explorationPaths.isNotEmpty()) {
+                                            if (false && parsedResponse.explorationPaths.isNotEmpty()) {
                                                 Spacer(modifier = Modifier.height(10.dp))
                                                 Text(
                                                     text = "EXPLORE FURTHER",
-                                                    fontSize = 7.5.sp,
+                                                    fontSize = 11.sp,
                                                     letterSpacing = 1.sp,
                                                     fontFamily = DMMonoFontFamily,
                                                     fontWeight = FontWeight.Bold,
@@ -638,12 +1062,13 @@ fun HomeScreen(
                                                                 .padding(horizontal = 10.dp, vertical = 7.dp),
                                                             verticalAlignment = Alignment.CenterVertically
                                                         ) {
-                                                            Text("✓", fontSize = 10.sp, color = ElectricViolet)
+                                                            Text("✓", fontSize = 14.sp, color = ElectricViolet)
                                                             Spacer(modifier = Modifier.width(7.dp))
                                                             Text(
                                                                 text = path,
-                                                                fontSize = 10.sp,
+                                                                fontSize = 16.sp,
                                                                 color = TextSecondaryColor,
+                                                                lineHeight = 22.sp,
                                                                 fontFamily = InstrumentSansFontFamily,
                                                                 modifier = Modifier.weight(1f)
                                                             )
@@ -653,7 +1078,8 @@ fun HomeScreen(
                                             }
 
                                             // ── Copy Button ────────────────────────────────
-                                            val clipboardManager = LocalClipboardManager.current
+                                            if (false) {
+                                                val clipboardManager = LocalClipboardManager.current
                                             var copied by remember { mutableStateOf(false) }
                                             Spacer(modifier = Modifier.height(10.dp))
                                             Row(
@@ -681,12 +1107,13 @@ fun HomeScreen(
                                                         )
                                                         Text(
                                                             text = if (copied) "Copied!" else "Copy",
-                                                            fontSize = 8.5.sp,
+                                                            fontSize = 14.sp,
                                                             fontFamily = DMMonoFontFamily,
                                                             color = if (copied) ElectricViolet else TextMutedColor
                                                         )
                                                     }
                                                 }
+                                            }
                                             }
                                         }
                                     }
@@ -699,9 +1126,9 @@ fun HomeScreen(
                                     ) {
                                         Text(
                                             text = message.text,
-                                            fontSize = 12.sp,
+                                            fontSize = 18.sp,
                                             color = TextSecondaryColor,
-                                            lineHeight = 17.sp,
+                                            lineHeight = 25.sp,
                                             fontFamily = InstrumentSansFontFamily,
                                             modifier = Modifier.padding(12.dp)
                                         )
@@ -712,17 +1139,16 @@ fun HomeScreen(
                     }
 
                     if (isLoading && activeMessages.isNotEmpty()) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
+                        Box(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .background(Color(0xFF141420), RoundedCornerShape(12.dp))
                                 .border(1.dp, Color(0x0FFFFFFF), RoundedCornerShape(12.dp))
-                                .padding(12.dp)
+                                .padding(horizontal = 14.dp, vertical = 10.dp)
                         ) {
-                            Box(modifier = Modifier.size(6.dp).background(ElectricViolet, CircleShape))
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Analysing…", fontSize = 11.sp, color = TextMutedColor, fontFamily = DMMonoFontFamily)
+                            ThreeDotThinkingIndicator(
+                                text = "Analyzing..."
+                            )
                         }
                     }
                 }
@@ -739,14 +1165,77 @@ fun HomeScreen(
                 .border(BorderStroke(1.dp, BorderSubtle))
                 .padding(12.dp)
         ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(Surface2, shape = RoundedCornerShape(26.dp))
-                    .border(1.dp, BorderSubtle, shape = RoundedCornerShape(26.dp))
-                    .padding(horizontal = 8.dp, vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                if (showUploadSecurityNotice) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 8.dp)
+                            .background(Color(0xFF0F252C), RoundedCornerShape(12.dp))
+                            .border(1.2.dp, PremiumCyan.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(text = "🛡️", fontSize = 16.sp)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Isolated local sandbox active. Secure transit guaranteed.",
+                            fontSize = 14.sp,
+                            color = PremiumCyan,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = InstrumentSansFontFamily
+                        )
+                    }
+                }
+
+                if (editingMessageId != null) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 8.dp)
+                            .background(Color(0xFF141420), RoundedCornerShape(8.dp))
+                            .border(1.dp, ElectricViolet.copy(alpha = 0.3f), RoundedCornerShape(8.dp))
+                            .padding(horizontal = 10.dp, vertical = 6.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .size(6.dp)
+                                    .background(ElectricViolet, CircleShape)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "Editing Question",
+                                fontSize = 14.sp,
+                                color = ElectricViolet,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = DMMonoFontFamily
+                            )
+                        }
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Cancel edit",
+                            tint = TextMutedColor,
+                            modifier = Modifier
+                                .size(14.dp)
+                                .clickable {
+                                    editingMessageId = null
+                                    rawText = ""
+                                }
+                        )
+                    }
+                }
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(Surface2, shape = RoundedCornerShape(26.dp))
+                        .border(1.dp, BorderSubtle, shape = RoundedCornerShape(26.dp))
+                        .padding(horizontal = 8.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                 Box(
                     modifier = Modifier
                         .size(38.dp)
@@ -766,7 +1255,23 @@ fun HomeScreen(
                             ),
                             shape = RoundedCornerShape(12.dp)
                         )
-                        .clickable { showAttachBottomSheet = true },
+                        .clickable {
+                            val mediaPerm = if (android.os.Build.VERSION.SDK_INT >= 33) {
+                                android.Manifest.permission.READ_MEDIA_IMAGES
+                            } else {
+                                android.Manifest.permission.READ_EXTERNAL_STORAGE
+                            }
+                            val hasMediaPerm = ContextCompat.checkSelfPermission(context, mediaPerm) == PackageManager.PERMISSION_GRANTED
+                            
+                            pendingPermissionAction = "attach"
+                            if (!hasCompletedOnboarding) {
+                                showPermissionOnboardingDialog = true
+                            } else if (!hasMediaPerm) {
+                                showSystemSettingsPrompt = true
+                            } else {
+                                showAttachBottomSheet = true
+                            }
+                        },
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
@@ -779,72 +1284,63 @@ fun HomeScreen(
 
                 Spacer(modifier = Modifier.width(8.dp))
 
+                val speechCtx = context
+
+                val infiniteTransition = rememberInfiniteTransition(label = "pulse")
+                val pulseAlpha by infiniteTransition.animateFloat(
+                    initialValue = 0.3f,
+                    targetValue = 0.9f,
+                    animationSpec = infiniteRepeatable(
+                        animation = tween(durationMillis = 800, easing = LinearEasing),
+                        repeatMode = RepeatMode.Reverse
+                    ),
+                    label = "alpha"
+                )
+
                 BasicTextField(
                     value = rawText,
                     onValueChange = { rawText = it },
                     modifier = Modifier.weight(1f),
                     textStyle = TextStyle(
                         fontFamily = InstrumentSansFontFamily,
-                        fontSize = 11.5.sp,
+                        fontSize = 17.sp,
                         color = TextPrimaryColor,
                         fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
                     ),
                     decorationBox = { innerTextField ->
-                        if (rawText.isEmpty()) {
-                            Text(
-                                text = "Describe any situation, decision, or pattern…",
-                                fontFamily = InstrumentSansFontFamily,
-                                fontSize = 11.5.sp,
-                                color = TextMutedColor,
-                                fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
-                            )
+                        if (isListening) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(8.dp)
+                                        .clip(CircleShape)
+                                        .background(Color(0xFFFF3B30).copy(alpha = pulseAlpha))
+                                )
+                                Text(
+                                    text = "Secure Audio Stream Active…",
+                                    fontFamily = InstrumentSansFontFamily,
+                                    fontSize = 17.sp,
+                                    color = Color(0xFFFF3B30),
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        } else {
+                            if (rawText.isEmpty()) {
+                                Text(
+                                    text = "Describe any situation, decision, or pattern…",
+                                    fontFamily = InstrumentSansFontFamily,
+                                    fontSize = 17.sp,
+                                    color = TextMutedColor,
+                                    fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
+                                )
+                            }
+                            innerTextField()
                         }
-                        innerTextField()
                     }
                 )
-
-                Spacer(modifier = Modifier.width(6.dp))
-
-                val speechCtx = LocalContext.current
-                var isListening by remember { mutableStateOf(false) }
-                val speechRecognizer = remember {
-                    try { SpeechRecognizer.createSpeechRecognizer(speechCtx) } catch (e: Exception) { null }
-                }
-                val recognitionListener = remember(speechRecognizer) {
-                    object : RecognitionListener {
-                        override fun onReadyForSpeech(params: Bundle?) {}
-                        override fun onBeginningOfSpeech() {}
-                        override fun onRmsChanged(rmsdB: Float) {}
-                        override fun onBufferReceived(buffer: ByteArray?) {}
-                        override fun onEndOfSpeech() { isListening = false }
-                        override fun onError(error: Int) { isListening = false }
-                        override fun onResults(results: Bundle?) {
-                            val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                            if (!matches.isNullOrEmpty()) {
-                                val spoken = matches[0]
-                                if (!spoken.isNullOrBlank()) {
-                                    rawText = if (rawText.isEmpty()) spoken else "$rawText $spoken"
-                                }
-                            }
-                            isListening = false
-                        }
-                        override fun onPartialResults(partialResults: Bundle?) {}
-                        override fun onEvent(eventType: Int, params: Bundle?) {}
-                    }
-                }
-                LaunchedEffect(speechRecognizer) { speechRecognizer?.setRecognitionListener(recognitionListener) }
-                DisposableEffect(Unit) { onDispose { speechRecognizer?.destroy() } }
-                val audioPermLauncher = rememberLauncherForActivityResult(
-                    contract = ActivityResultContracts.RequestPermission()
-                ) { granted ->
-                    if (granted && speechRecognizer != null) {
-                        isListening = true
-                        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-                            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                        }
-                        speechRecognizer.startListening(intent)
-                    }
-                }
 
                 IconButton(
                     onClick = {
@@ -852,14 +1348,17 @@ fun HomeScreen(
                             speechRecognizer?.stopListening(); isListening = false
                         } else {
                             val hasPerm = ContextCompat.checkSelfPermission(speechCtx, android.Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
-                            if (hasPerm) {
+                            pendingPermissionAction = "mic"
+                            if (!hasCompletedOnboarding) {
+                                showPermissionOnboardingDialog = true
+                            } else if (!hasPerm) {
+                                audioPermLauncher.launch(android.Manifest.permission.RECORD_AUDIO)
+                            } else {
                                 isListening = true
                                 val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                                     putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
                                 }
                                 speechRecognizer?.startListening(intent)
-                            } else {
-                                audioPermLauncher.launch(android.Manifest.permission.RECORD_AUDIO)
                             }
                         }
                     },
@@ -882,6 +1381,17 @@ fun HomeScreen(
                         if (rawText.isNotBlank()) {
                             val textToSend = rawText
                             rawText = ""
+                            if (editingMessageId != null) {
+                                val editedId = editingMessageId!!
+                                val currentEdited = activeMessages.find { m -> m.id == editedId }
+                                if (currentEdited != null) {
+                                    val toDelete = activeMessages.filter { it.timestamp >= currentEdited.timestamp }
+                                    toDelete.forEach { msg ->
+                                        onDeleteMessage(msg.id)
+                                    }
+                                }
+                                editingMessageId = null
+                            }
                             onSubmitQuery(textToSend)
                         }
                     },
@@ -890,6 +1400,7 @@ fun HomeScreen(
                 ) {
                     Text("↑", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.White)
                 }
+            }
             }
         }
     }
@@ -907,7 +1418,12 @@ fun HomeScreen(
 
     val attachPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
-    ) { uri -> uri?.let { onAddAttachment(it.toString()) } }
+    ) { uri -> 
+        uri?.let { 
+            onAddAttachment(it.toString())
+            showUploadSecurityNotice = true
+        }
+    }
 
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
         androidx.compose.animation.AnimatedVisibility(
@@ -944,6 +1460,209 @@ fun HomeScreen(
                     Spacer(modifier = Modifier.height(8.dp))
                     TextButton(onClick = { showAttachBottomSheet = false }, modifier = Modifier.align(Alignment.End)) {
                         Text("Cancel", fontSize = 13.sp, color = ElectricViolet, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+    }
+
+    if (showPermissionOnboardingDialog) {
+        Dialog(onDismissRequest = { showPermissionOnboardingDialog = false }) {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .border(
+                        width = 1.5.dp,
+                        brush = Brush.linearGradient(
+                            colors = listOf(
+                                ElectricViolet.copy(alpha = 0.6f),
+                                PremiumCyan.copy(alpha = 0.4f)
+                            )
+                        ),
+                        shape = RoundedCornerShape(24.dp)
+                    ),
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.cardColors(containerColor = Color(0xEB0A0D14)) // Dark Glass Look
+            ) {
+                Column(
+                    modifier = Modifier.padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = "🛡️ Scan Setup",
+                        fontSize = 19.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = PremiumCyan,
+                        fontFamily = InstrumentSansFontFamily,
+                        textAlign = TextAlign.Center,
+                        letterSpacing = 0.3.sp
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Text(
+                        text = "To enable features like analyzing local documents/media and dictating voice queries, DepthLens requires standard physical permissions. Everything runs within an isolated high-security sandbox.",
+                        fontSize = 15.sp,
+                        lineHeight = 16.sp,
+                        color = TextSecondaryColor,
+                        fontFamily = InstrumentSansFontFamily,
+                        textAlign = TextAlign.Center
+                    )
+                    Spacer(modifier = Modifier.height(18.dp))
+                    
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(Surface2.copy(alpha = 0.6f))
+                            .border(1.dp, BorderSubtle, RoundedCornerShape(16.dp))
+                            .padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(PremiumCyan.copy(alpha = 0.1f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(text = "📁", fontSize = 18.sp)
+                        }
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column {
+                            Text("Secure Storage Scan", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = TextPrimaryColor, fontFamily = InstrumentSansFontFamily)
+                            Text("Allows attaching images, PDFs & voice memos.", fontSize = 14.sp, color = TextMutedColor, fontFamily = InstrumentSansFontFamily)
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(Surface2.copy(alpha = 0.6f))
+                            .border(1.dp, BorderSubtle, RoundedCornerShape(16.dp))
+                            .padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(ElectricViolet.copy(alpha = 0.1f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(text = "🎙️", fontSize = 18.sp)
+                        }
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column {
+                            Text("Mic & Voice Analytics", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = TextPrimaryColor, fontFamily = InstrumentSansFontFamily)
+                            Text("Allows dictating statements directly to AI.", fontSize = 14.sp, color = TextMutedColor, fontFamily = InstrumentSansFontFamily)
+                        }
+                    }
+                    
+                    Spacer(modifier = Modifier.height(20.dp))
+                    
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        TextButton(
+                            onClick = {
+                                showPermissionOnboardingDialog = false
+                                pendingPermissionAction = null
+                            },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("Not Now", color = TextSecondaryColor, fontWeight = FontWeight.Medium, fontFamily = InstrumentSansFontFamily)
+                        }
+                        
+                        Button(
+                            onClick = {
+                                prefs.edit().putBoolean("has_completed_permission_onboarding", true).apply()
+                                hasCompletedOnboarding = true
+                                showPermissionOnboardingDialog = false
+                                if (pendingPermissionAction == "mic") {
+                                    audioPermLauncher.launch(android.Manifest.permission.RECORD_AUDIO)
+                                } else {
+                                    val mediaPerm = if (android.os.Build.VERSION.SDK_INT >= 33) {
+                                        android.Manifest.permission.READ_MEDIA_IMAGES
+                                    } else {
+                                        android.Manifest.permission.READ_EXTERNAL_STORAGE
+                                    }
+                                    attachPermLauncher.launch(mediaPerm)
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = ElectricViolet),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("Allow", color = Color.White, fontWeight = FontWeight.Bold, fontFamily = InstrumentSansFontFamily)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if (showSystemSettingsPrompt) {
+        Dialog(onDismissRequest = { showSystemSettingsPrompt = false }) {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .border(width = 1.dp, brush = Brush.linearGradient(colors = listOf(ElectricViolet.copy(alpha = 0.5f), PremiumCyan.copy(alpha = 0.5f))), shape = RoundedCornerShape(24.dp)),
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.cardColors(containerColor = DeepMidnight)
+            ) {
+                Column(
+                    modifier = Modifier.padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = "🔒 Permissions Required",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = ErrorColor,
+                        fontFamily = InstrumentSansFontFamily,
+                        textAlign = TextAlign.Center
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        text = "Device storage or audio recording permissions have been restricted. To proceed with scanning or dictating context, please enable them in Android Settings.",
+                        fontSize = 12.sp,
+                        color = TextSecondaryColor,
+                        fontFamily = InstrumentSansFontFamily,
+                        textAlign = TextAlign.Center
+                    )
+                    Spacer(modifier = Modifier.height(24.dp))
+                    
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        TextButton(
+                            onClick = { showSystemSettingsPrompt = false },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("Cancel", color = TextSecondaryColor)
+                        }
+                        
+                        Button(
+                            onClick = {
+                                showSystemSettingsPrompt = false
+                                try {
+                                    val intent = Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                        data = android.net.Uri.parse("package:${context.packageName}")
+                                    }
+                                    context.startActivity(intent)
+                                } catch (e: Exception) {
+                                    e.printStackTrace()
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = ElectricViolet),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("Open Settings", color = Color.White, fontWeight = FontWeight.Bold)
+                        }
                     }
                 }
             }

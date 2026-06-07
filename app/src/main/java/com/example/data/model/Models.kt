@@ -42,6 +42,13 @@ data class ArchivedInsightEntity(
 )
 
 // UI and Business models below
+data class ProbabilityMetrics(
+    val confidence: Int = 78,
+    val likelihood: Int = 65,
+    val risk: Int = 42,
+    val opportunity: Int = 71
+)
+
 data class ParsedResponse(
     val introduction: String = "",
     val executiveSummary: String? = null,
@@ -51,7 +58,8 @@ data class ParsedResponse(
     val futureScenarios: List<FutureScenario> = emptyList(),
     val confidence: String? = null, // "Low" / "Medium" / "High"
     val suggestedQuestions: List<String> = emptyList(),
-    val explorationPaths: List<String> = emptyList()
+    val explorationPaths: List<String> = emptyList(),
+    val probabilityMetrics: ProbabilityMetrics? = null
 )
 
 data class DepthLayerInsight(

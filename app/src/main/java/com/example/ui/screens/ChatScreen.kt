@@ -38,6 +38,7 @@ import androidx.compose.ui.unit.sp
 import com.example.data.model.*
 import com.example.data.repository.ResponseParser
 import com.example.ui.theme.*
+import com.example.ui.components.ThreeDotThinkingIndicator
 import kotlinx.coroutines.launch
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -658,60 +659,12 @@ fun ChatScreen(
 
         // Streaming state / Typing Loader Animation matching bash.html guidelines
         if (isLoading) {
-            Row(
+            ThreeDotThinkingIndicator(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(6.dp)
-                        .background(PremiumCyan, CircleShape)
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    text = "Analyzing deeper…",
-                    fontSize = 8.sp,
-                    fontFamily = DMMonoFontFamily,
-                    color = PremiumCyan,
-                    letterSpacing = 1.sp
-                )
-
-                Spacer(modifier = Modifier.width(10.dp))
-
-                // Custom typing anim bounce spans
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    val infiniteTransition = rememberInfiniteTransition()
-                    val offsets = listOf(0, 1, 2).map { index ->
-                        infiniteTransition.animateFloat(
-                            initialValue = 0f,
-                            targetValue = -6f,
-                            animationSpec = infiniteRepeatable(
-                                animation = keyframes {
-                                    durationMillis = 1200
-                                    0.0f at (index * 200) with LinearEasing
-                                    -6.0f at (index * 200 + 300) with FastOutSlowInEasing
-                                    0.0f at (index * 200 + 600) with FastOutSlowInEasing
-                                },
-                                repeatMode = RepeatMode.Restart
-                            )
-                        )
-                    }
-
-                    for (o in offsets) {
-                        Box(
-                            modifier = Modifier
-                                .size(5.dp)
-                                .graphicsLayer { translationY = o.value }
-                                .background(ElectricViolet, CircleShape)
-                        )
-                    }
-                }
-            }
+                text = "Analyzing deeper…"
+            )
         }
 
         // Voice dictation recording pane or Compose bar at bottom

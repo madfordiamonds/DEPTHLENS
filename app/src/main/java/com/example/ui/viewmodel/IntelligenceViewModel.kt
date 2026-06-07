@@ -174,17 +174,65 @@ class IntelligenceViewModel(application: Application) : AndroidViewModel(applica
 
                 // Determine if this is the first user query in this conversation
                 val existingHistory = repository.getMessagesFlow(sessionId).firstOrNull() ?: emptyList()
-                val isFirstQuery = existingHistory.none { it.role == "user" }
+                val userMessages = existingHistory.filter { it.role == "user" }
+                val isFirstQuery = userMessages.isEmpty()
+                val isSecondQuery = userMessages.size == 1
+
+                val activeSession = repository.allSessionsFlow.firstOrNull()?.find { it.id == sessionId }
+                val currentTitle = activeSession?.title ?: ""
+                val isCurrentTitleVague = currentTitle.isEmpty() || 
+                        currentTitle.endsWith("Brief") || 
+                        currentTitle.endsWith("Analysis") || 
+                        currentTitle.endsWith("Study") || 
+                        currentTitle.endsWith("Inquiry") || 
+                        currentTitle.startsWith("Origin Pattern") || 
+                        currentTitle.startsWith("Causal Chain") || 
+                        currentTitle.startsWith("Source Mapping") || 
+                        currentTitle.startsWith("Root Factor") || 
+                        currentTitle.startsWith("Deep Cause") || 
+                        currentTitle.startsWith("Foundation Analysis") || 
+                        currentTitle.startsWith("Trigger Sequence") || 
+                        currentTitle.startsWith("Core Driver") || 
+                        currentTitle.startsWith("Underlying Force") ||
+                        currentTitle.startsWith("Cognitive Pattern") ||
+                        currentTitle.startsWith("Behavioral Motive") ||
+                        currentTitle.startsWith("Mental Model") ||
+                        currentTitle.startsWith("Psychological Driver") ||
+                        currentTitle.startsWith("Belief System") ||
+                        currentTitle.startsWith("Emotional Trigger") ||
+                        currentTitle.startsWith("Bias Detection") ||
+                        currentTitle.startsWith("Subconscious Pattern") ||
+                        currentTitle.startsWith("Identity Lens") ||
+                        currentTitle.startsWith("Feedback Loop") ||
+                        currentTitle.startsWith("System Dynamics") ||
+                        currentTitle.startsWith("Incentive Structure") ||
+                        currentTitle.startsWith("Network Effect") ||
+                        currentTitle.startsWith("Systemic Leverage") ||
+                        currentTitle.startsWith("Loop Analysis") ||
+                        currentTitle.startsWith("Equilibrium Pattern") ||
+                        currentTitle.startsWith("Emergent Behavior") ||
+                        currentTitle.startsWith("System Blind Spot") ||
+                        currentTitle.contains("Reality Intel") ||
+                        currentTitle.startsWith("New Session") ||
+                        currentTitle.startsWith("Untitled")
 
                 // 1. Insert user message to initiate continuity UI rendering
                 repository.insertUserMessage(sessionId, cleanQuery, attachedUri)
                 
                 // 2. Perform intelligence analysis call to external models in background (non-blocking)
                 repository.startBackgroundAnalysis(sessionId) {
-                    // Asynchronously generate an aesthetic title if first query
-                    if (isFirstQuery && cleanQuery.isNotEmpty()) {
+                    if (cleanQuery.isNotEmpty()) {
                         viewModelScope.launch {
-                            repository.generateTitleForSession(sessionId, cleanQuery)
+                            if (isFirstQuery) {
+                                if (isVagueOrShort(cleanQuery)) {
+                                    val tempTitle = getTemporaryTitleForMode(_selectedMode.value)
+                                    repository.updateSessionTitle(sessionId, tempTitle)
+                                } else {
+                                    repository.generateTitleForSession(sessionId, cleanQuery)
+                                }
+                            } else if (isSecondQuery && isCurrentTitleVague && !isVagueOrShort(cleanQuery)) {
+                                repository.generateTitleForSession(sessionId, cleanQuery)
+                            }
                         }
                     }
                 }
@@ -201,12 +249,20 @@ class IntelligenceViewModel(application: Application) : AndroidViewModel(applica
     private val _isCollectiveIntelligenceOptIn = MutableStateFlow(true)
     val isCollectiveIntelligenceOptIn: StateFlow<Boolean> = _isCollectiveIntelligenceOptIn.asStateFlow()
 
+    private val _isPrivacyModeEnabled = MutableStateFlow(prefs.getBoolean("privacy_mode_enabled", false))
+    val isPrivacyModeEnabled: StateFlow<Boolean> = _isPrivacyModeEnabled.asStateFlow()
+
     fun setMemoryEnabled(enabled: Boolean) {
         _isMemoryEnabled.value = enabled
     }
 
     fun setCollectiveIntelligenceOptIn(optIn: Boolean) {
         _isCollectiveIntelligenceOptIn.value = optIn
+    }
+
+    fun setPrivacyModeEnabled(enabled: Boolean) {
+        _isPrivacyModeEnabled.value = enabled
+        prefs.edit().putBoolean("privacy_mode_enabled", enabled).apply()
     }
 
     fun clearAllMemoryInsights() {
@@ -555,5 +611,29 @@ class IntelligenceViewModel(application: Application) : AndroidViewModel(applica
         val topics = topicsByMode[mode] ?: topicsByMode["Root Cause"]!!
         val index = (System.currentTimeMillis() % topics.size).toInt()
         return topics[index]
+    }
+
+    fun isVagueOrShort(query: String): Boolean {
+        val clean = query.trim().lowercase()
+        if (clean.isEmpty()) return true
+        if (clean.length <= 10) return true
+        val stopWords = setOf("hello", "hi", "test", "hey", "help", "start", "go", "query", "please", "analyse", "analyze", "depthlens", "anyone there", "ok", "yes", "no", "thanks", "thank you", "diagnostic", "assessment")
+        if (clean in stopWords) return true
+        val alphabetChars = clean.count { it.isLetter() }
+        if (alphabetChars < 4) return true
+        return false
+    }
+
+    fun getTemporaryTitleForMode(mode: String): String {
+        return when (mode) {
+            "Root Cause" -> "Root Cause Analysis Brief"
+            "Psychology" -> "Psychological Analysis Brief"
+            "Systems" -> "Systems Dynamics Analysis"
+            "Probability" -> "Probability Analysis Study"
+            "Business" -> "Business Strategy Study"
+            "Relationships" -> "Interpersonal Dynamic Inquiry"
+            "Spiritual" -> "Alignment Analysis Study"
+            else -> "Strategic Reality Analysis"
+        }
     }
 }

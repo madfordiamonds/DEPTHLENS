@@ -273,7 +273,7 @@ fun SessionsScreen(
                                 ) {
                                     Text(
                                         text = session.title,
-                                        fontSize = 11.5.sp,
+                                        fontSize = 17.sp,
                                         color = TextPrimaryColor,
                                         fontWeight = FontWeight.Bold,
                                         maxLines = 1,
@@ -282,7 +282,29 @@ fun SessionsScreen(
                                     )
                                 }
 
-                                Spacer(modifier = Modifier.height(2.dp))
+                                val modeBadge = getSessionModeBadge(session.title)
+                                if (modeBadge != null) {
+                                    Spacer(modifier = Modifier.height(3.dp))
+                                    Box(
+                                        modifier = Modifier
+                                            .background(
+                                                color = getBadgeColor(modeBadge).copy(alpha = 0.15f),
+                                                shape = RoundedCornerShape(4.dp)
+                                            )
+                                            .border(0.8.dp, getBadgeColor(modeBadge).copy(alpha = 0.4f), RoundedCornerShape(4.dp))
+                                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                                    ) {
+                                        Text(
+                                            text = modeBadge.uppercase(),
+                                            fontSize = 11.sp,
+                                            fontFamily = DMMonoFontFamily,
+                                            fontWeight = FontWeight.Bold,
+                                            color = getBadgeColor(modeBadge)
+                                        )
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.height(4.dp))
 
                                 // Render exact high fidelity 'Created' and 'Last opened' labels
                                 Row(
@@ -292,7 +314,7 @@ fun SessionsScreen(
                                 ) {
                                     Text(
                                         text = "Created: $createdDateStr",
-                                        fontSize = 8.5.sp,
+                                        fontSize = 12.sp,
                                         fontFamily = InstrumentSansFontFamily,
                                         color = TextSecondaryColor
                                     )
@@ -303,7 +325,7 @@ fun SessionsScreen(
                                     )
                                     Text(
                                         text = "Opened: $relativeOpened",
-                                        fontSize = 8.5.sp,
+                                        fontSize = 12.sp,
                                         fontFamily = DMMonoFontFamily,
                                         color = TextMutedColor
                                     )
@@ -333,7 +355,7 @@ fun SessionsScreen(
                 item {
                     Text(
                         text = "No matching analysis profiles found.",
-                        fontSize = 11.sp,
+                        fontSize = 15.sp,
                         fontFamily = InstrumentSansFontFamily,
                         color = TextMutedColor,
                         modifier = Modifier
@@ -356,5 +378,36 @@ fun formatRelativeTime(time: Long): String {
         diff < 3600_000 -> "${diff / 60_000}m ago"
         diff < 86400_000 -> "${diff / 3600_000}h ago"
         else -> SimpleDateFormat("MMM d, yyyy", Locale.getDefault()).format(Date(time))
+    }
+}
+
+fun getSessionModeBadge(title: String): String? {
+    val t = title.lowercase()
+    return when {
+        t.contains("root cause") || t.contains("origin pattern") || t.contains("causal chain") || t.contains("source mapping") || t.contains("root factor") || t.contains("deep cause") || t.contains("foundation analysis") || t.contains("trigger sequence") || t.contains("core driver") || t.contains("underlying force") || t.contains("reality intel") -> "Root Cause"
+        t.contains("psychology") || t.contains("cognitive pattern") || t.contains("behavioral motive") || t.contains("mental model") || t.contains("psychological driver") || t.contains("belief system") || t.contains("emotional trigger") || t.contains("bias detection") || t.contains("subconscious") || t.contains("identity lens") -> "Psychology"
+        t.contains("systems") || t.contains("feedback loop") || t.contains("systems study") || t.contains("system dynamics") || t.contains("incentive") || t.contains("network effect") || t.contains("systemic leverage") || t.contains("loop analysis") || t.contains("equilibrium map") || t.contains("emergent behavior") || t.contains("system blind spot") -> "Systems"
+        t.contains("probability") || t.contains("outcome") || t.contains("timeline") || t.contains("risk scenario") || t.contains("bayesian") || t.contains("expected value") || t.contains("uncertainty") || t.contains("decision probability") -> "Probability"
+        t.contains("business") || t.contains("strategic position") || t.contains("market dynamic") || t.contains("growth") || t.contains("moat") || t.contains("revenue") || t.contains("value chain") || t.contains("organizational") || t.contains("opportunity") -> "Business"
+        t.contains("relationship") || t.contains("interpersonal") || t.contains("attachment") || t.contains("bond structure") || t.contains("relationship driver") || t.contains("communication pattern") || t.contains("trust fabric") || t.contains("social dynamic") || t.contains("conflict") || t.contains("connection") -> "Relationships"
+        t.contains("spiritual") || t.contains("purpose alignment") || t.contains("values clarity") || t.contains("inner growth") || t.contains("meaning pattern") || t.contains("higher principle") || t.contains("life purpose") || t.contains("growth pathway") -> "Spiritual"
+        t.contains("decision making") || t.contains("decision framework") || t.contains("risk-benefit") || t.contains("choice architecture") || t.contains("heuristic") || t.contains("trade-off") || t.contains("decision quality") || t.contains("option evaluation") -> "Decision"
+        t.contains("multi-layer") || t.contains("reality architecture") || t.contains("multi-dimensional") || t.contains("full-spectrum") || t.contains("deep-layer") || t.contains("reality tunnel") || t.contains("ontological") || t.contains("consciousness") || t.contains("meta-pattern") || t.contains("invisible architecture") -> "Multi-Layer"
+        else -> null
+    }
+}
+
+fun getBadgeColor(mode: String): Color {
+    return when (mode) {
+        "Root Cause" -> ElectricViolet
+        "Psychology" -> Color(0xFFFF52AF) // Beautiful Pink
+        "Systems" -> PremiumCyan
+        "Probability" -> Color(0xFFFF9F0A) // Amber/Orange
+        "Business" -> Color(0xFF0A84FF) // Cobalt Blue
+        "Relationships" -> Color(0xFFFF453A) // Salmon/Red
+        "Spiritual" -> Color(0xFFFFD60A) // Gold Yellow
+        "Decision" -> Color(0xFF30D158) // Emerald Green
+        "Multi-Layer" -> Color(0xFFBF5AF2) // Magenta/Violet
+        else -> PremiumCyan
     }
 }

@@ -29,6 +29,7 @@ import androidx.compose.ui.unit.sp
 import com.example.data.model.MessageEntity
 import com.example.data.repository.ResponseParser
 import com.example.ui.theme.*
+import com.example.ui.components.ThreeDotThinkingIndicator
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.geometry.Offset
@@ -747,15 +748,21 @@ fun AnalysisScreen(
                                     color = if (isMicActive) ErrorColor else TextPrimaryColor,
                                     fontFamily = InstrumentSansFontFamily
                                 )
-                                Text(
-                                    text = if (isMicActive) "Pulsing audio stream active. Tap STOP to transcribe." 
-                                           else if (isVoiceAnalyzing) "Audio Analyzing... parsing phoneme vector matrices..." 
-                                           else if (transcribedTextMemo.isNotEmpty()) "Transcription ready for parsing"
-                                           else "Tap MIC to capture live vocal thought matrices directly",
-                                    fontSize = 8.5.sp,
-                                    color = TextMutedColor,
-                                    fontFamily = InstrumentSansFontFamily
-                                )
+                                if (isVoiceAnalyzing) {
+                                    ThreeDotThinkingIndicator(
+                                        modifier = Modifier.padding(top = 2.dp),
+                                        text = "Voice analyzing..."
+                                    )
+                                } else {
+                                    Text(
+                                        text = if (isMicActive) "Pulsing audio stream active. Tap STOP to transcribe." 
+                                               else if (transcribedTextMemo.isNotEmpty()) "Transcription ready for parsing"
+                                               else "Tap MIC to capture live vocal thought matrices directly",
+                                        fontSize = 8.5.sp,
+                                        color = TextMutedColor,
+                                        fontFamily = InstrumentSansFontFamily
+                                    )
+                                }
                             }
                         }
 

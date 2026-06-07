@@ -49,6 +49,7 @@ import com.example.R
 import com.example.data.model.*
 import com.example.data.repository.ResponseParser
 import com.example.ui.theme.*
+import com.example.ui.components.ThreeDotThinkingIndicator
 import com.example.ui.viewmodel.IntelligenceViewModel
 import kotlinx.coroutines.launch
 import java.util.Calendar
@@ -76,6 +77,7 @@ fun DashboardScreen(
     
     val isMemoryEnabled by viewModel.isMemoryEnabled.collectAsState()
     val isCollectiveOptIn by viewModel.isCollectiveIntelligenceOptIn.collectAsState()
+    val isPrivacyModeEnabled by viewModel.isPrivacyModeEnabled.collectAsState()
     val isSystemControlsExpanded by viewModel.isSystemControlsExpanded.collectAsState()
     val notificationsEnabled by viewModel.notificationsEnabled.collectAsState()
     val darkModeEnabled by viewModel.darkModeEnabled.collectAsState()
@@ -1873,7 +1875,9 @@ fun DashboardScreen(
                             onRetryLastAnalysis = { msgId -> viewModel.retryLastAnalysis(msgId) },
                             onRegenerateLastAnalysis = { msgId -> viewModel.regenerateLastAnalysis(msgId) },
                             onOpenDrawer = { coroutineScope.launch { drawerState.open() } },
-                            onCreateNewSession = { viewModel.createSession("") }
+                            onCreateNewSession = { viewModel.createSession("") },
+                            onDeleteMessage = { id -> viewModel.deleteMessage(id) },
+                            isPrivacyModeEnabled = isPrivacyModeEnabled
                         )
                     }
                     "sessions" -> {
@@ -1895,6 +1899,8 @@ fun DashboardScreen(
                             onNotificationsEnabledChanged = { viewModel.setNotificationsEnabled(it) },
                             isCollectiveOptIn = isCollectiveOptIn,
                             onCollectiveOptInChanged = { viewModel.setCollectiveIntelligenceOptIn(it) },
+                            isPrivacyModeEnabled = isPrivacyModeEnabled,
+                            onPrivacyModeEnabledChanged = { viewModel.setPrivacyModeEnabled(it) },
                             activeThemeName = activeThemeName,
                             onThemeSelected = { activeThemeName = it },
                             onShowMemoryDetails = { showMemoryDialog = true },
@@ -2653,6 +2659,83 @@ fun DepthLensDiagnosticCard(
                         color = TextPrimaryColor,
                         lineHeight = 18.sp
                     )
+                }
+            }
+        }
+
+        // Probability Matrix Engine Card layout
+        if (parsed.probabilityMetrics != null) {
+            Card(
+                shape = RoundedCornerShape(12.dp),
+                colors = CardDefaults.cardColors(containerColor = SurfaceCardColor),
+                border = BorderStroke(1.dp, RichNavy),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 5.dp)
+            ) {
+                Column(modifier = Modifier.padding(14.dp)) {
+                    Text(
+                        "PROBABILITY MATRIX ENGINE",
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = PremiumCyan,
+                        letterSpacing = 1.sp,
+                        fontFamily = FontFamily.Monospace
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    
+                    val metrics = parsed.probabilityMetrics!!
+                    val list = listOf(
+                        Triple("Confidence Level", metrics.confidence, ElectricViolet),
+                        Triple("Likelihood Index", metrics.likelihood, PremiumCyan),
+                        Triple("Risk Vector", metrics.risk, Color(0xFFFF5555)),
+                        Triple("Opportunity Delta", metrics.opportunity, Color(0xFF50E3C2))
+                    )
+                    
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        list.forEach { (label, value, tint) ->
+                            Column {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = label,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = TextSecondaryColor
+                                    )
+                                    Text(
+                                        text = "$value%",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = tint
+                                    )
+                                }
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(6.dp)
+                                        .clip(RoundedCornerShape(3.dp))
+                                        .background(Surface3)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth(value / 100f)
+                                            .fillMaxHeight()
+                                            .clip(RoundedCornerShape(3.dp))
+                                            .background(
+                                                Brush.horizontalGradient(
+                                                    colors = listOf(tint, tint.copy(alpha = 0.5f))
+                                                )
+                                            )
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -3656,24 +3739,10 @@ fun ConversationContinuityDashboard(
                     }
                 }
                 "Syncing" -> {
-                    Row(
+                    ThreeDotThinkingIndicator(
                         modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp),
-                        horizontalArrangement = Arrangement.Center,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        CircularProgressIndicator(
-                            color = PremiumCyan,
-                            modifier = Modifier.size(14.dp),
-                            strokeWidth = 2.dp
-                        )
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Text(
-                            "Synthesizing cognitive continuity tracking...",
-                            fontSize = 11.sp,
-                            color = PremiumCyan,
-                            style = androidx.compose.ui.text.TextStyle(fontStyle = FontStyle.Italic)
-                        )
-                    }
+                        text = "Synthesizing cognitive continuity tracking..."
+                    )
                 }
                 "Done" -> {
                     if (brief != null && expanded) {
@@ -4406,35 +4475,14 @@ fun InlineLoadingIndicator() {
         colors = CardDefaults.cardColors(containerColor = RichNavy.copy(alpha = 0.9f)),
         border = BorderStroke(1.dp, PremiumCyan.copy(alpha = 0.3f))
     ) {
-        Row(
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(14.dp),
-            verticalAlignment = Alignment.CenterVertically
+                .padding(horizontal = 16.dp, vertical = 12.dp)
         ) {
-            CircularProgressIndicator(
-                modifier = Modifier.size(16.dp),
-                color = PremiumCyan,
-                strokeWidth = 2.dp
+            ThreeDotThinkingIndicator(
+                text = "Thinking..."
             )
-            Spacer(modifier = Modifier.width(12.dp))
-            Column {
-                Text(
-                    text = "RUNNING RECONSTRUCTION...",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = TextPrimaryColor,
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = FontFamily.Monospace,
-                    letterSpacing = 1.2.sp
-                )
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = "Deconstructing inputs across progressive layers of reality...",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = TextSecondaryColor,
-                    fontSize = 10.sp
-                )
-            }
         }
     }
 }

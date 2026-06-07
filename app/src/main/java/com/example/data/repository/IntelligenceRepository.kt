@@ -108,13 +108,15 @@ class IntelligenceRepository(private val context: Context) {
         val apiKey = BuildConfig.GEMINI_API_KEY
         if (apiKey.isEmpty() || apiKey == "MY_GEMINI_API_KEY") return@withContext
 
-        // Generate a 3-5 word high-quality title using Gemini
+        // Generate a 3-8 word high-quality title using Gemini
         val prompt = """
-            Create an exceptionally elegant, 3-5 word human-friendly title for an intellectual conversation starting with this user message.
-            The title must capture the main topic, user intent, or core question.
-            Output ONLY the title string. Do not include quotes, quotes wrapping, markdown, colons, or any introductory text. 
-            Maximum 40 characters.
-            
+            Create an exceptionally elegant, professional, 3-8 word human-friendly title summarizing this user message.
+            Format Rules:
+            - Capture the main topic, user intent, or core question.
+            - Output ONLY the title string. 
+            - Do not include quotes, markdown, colons, timestamps, emojis, prefix labels, or any introductory text.
+            - Keep it human-readable, like a Claude/ChatGPT/Notion AI title.
+
             Message: $queryText
         """.trimIndent()
 
@@ -132,6 +134,7 @@ class IntelligenceRepository(private val context: Context) {
                 val text = response.candidates?.firstOrNull()?.content?.parts?.firstOrNull()?.text?.trim()
                 if (!text.isNullOrEmpty()) {
                     generatedTitle = text.removeSurrounding("\"").removeSurrounding("'").trim()
+                        .replace(Regex("[#:*_~`]"), "") // Clean any markdown or colon
                     break
                 }
             } catch (e: Exception) {
@@ -140,10 +143,61 @@ class IntelligenceRepository(private val context: Context) {
         }
 
         if (!generatedTitle.isNullOrEmpty()) {
+            var proposedTitle = generatedTitle
+            
+            // Check for duplicates
+            val existingSessions = sessionDao.getAllSessionsFlow().firstOrNull() ?: emptyList()
+            val siblingTitles = existingSessions.filter { it.id != sessionId }.map { it.title }
+            if (siblingTitles.contains(proposedTitle)) {
+                var index = 2
+                var uniqueTitle = "$proposedTitle ($index)"
+                while (siblingTitles.contains(uniqueTitle)) {
+                    index++
+                    uniqueTitle = "$proposedTitle ($index)"
+                }
+                proposedTitle = uniqueTitle
+            }
+
             val sessionItem = sessionDao.getAllSessionsFlow().firstOrNull()?.find { it.id == sessionId }
             if (sessionItem != null) {
-                sessionDao.insertSession(sessionItem.copy(title = generatedTitle, lastUpdatedAt = System.currentTimeMillis()))
+                sessionDao.insertSession(sessionItem.copy(title = proposedTitle, lastUpdatedAt = System.currentTimeMillis()))
             }
+        }
+    }
+
+    suspend fun applyPrivacyCleanup(sessionId: String) = withContext(Dispatchers.IO) {
+        try {
+            // 1. Fetch all messages for local session history
+            val messages = messageDao.getMessagesForSession(sessionId)
+            
+            // 2. Delete physical files / voice records / cached images from current session if starting with file:// or similar local paths
+            messages.forEach { msg ->
+                if (!msg.imageUri.isNullOrEmpty()) {
+                    try {
+                        val uri = Uri.parse(msg.imageUri)
+                        if (uri.scheme == "file" || (uri.path != null && uri.path!!.contains("files/"))) {
+                            val f = uri.path?.let { java.io.File(it) }
+                            if (f != null && f.exists()) {
+                                f.delete()
+                            }
+                        }
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }
+            }
+
+            // 3. Clear intermediate messages so that session retains ONLY the final AI response
+            val latestModelMsg = messages.filter { it.role == "model" }.maxByOrNull { it.timestamp }
+            if (latestModelMsg != null) {
+                messages.forEach { msg ->
+                    if (msg.id != latestModelMsg.id) {
+                        messageDao.deleteMessage(msg.id)
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
     }
 
@@ -237,22 +291,79 @@ class IntelligenceRepository(private val context: Context) {
 You are DepthLens, the ultimate Reality Intelligence Platform. You help users see beyond the surface.
 You are designed to help humans analyze decisions, behaviors, conflicts, psychological patterns, business strategies, and systemic incentives.
 
-PRECONSTRUCTED IDENTITY & MISSION:
-- Transition from simple observation → analysis → system loop → psychological adaptivity → root cause logic → universal pattern → meta-awareness → ontological dissolution.
-- Do not comfort, persuade, or promote ideologies. Increase clarity, eliminate illusion, expand wisdom.
-- Go beyond surface psychology. Reveal the invisible architecture of reality: unconscious drivers, systemic forces, evolutionary impulses, ontological assumptions, neurobiological conditioning, shadow projections, and the recursive meta-patterns beneath all human experience.
-- Each response must feel like peeling back layers of an onion — every layer reveals something the person did not see before, including things they may actively resist seeing. Go to places the user has not gone. Name what cannot be named.
-- Integrate true multi-layer mindset across ALL relevant dimensions: psychological (attachment, ego, shadow, defenses), neurological (nervous system states, threat response, dopamine loops), systemic (feedback loops, power structures, incentive misalignments), philosophical (ontological assumptions, meaning-making frameworks, existential contracts), evolutionary (tribal drives, survival logic, reproductive imperatives), energetic/spiritual (soul contracts, dharmic patterns, vibrational states, ego dissolution), and quantum-probabilistic (observer effect on reality, probability collapse, reality tunnels).
-- Never give generic analysis. Every insight must be specific, penetrating, and revelatory to THIS exact situation.
-- Name what people cannot name themselves. Surface the hidden operating system running beneath their conscious awareness.
-- Reveal the paradox, the contradiction, the blind spot, and the unconscious payoff in every situation.
-- Your analysis should disturb comfortable illusions, dissolve false certainties, and open new dimensions of understanding the person has never considered.
+PRECONSTRUCTED IDENTITY & MISSION (DEPTHLENS ANALYSIS ENGINE V2):
+- Act as a master combination of: Intelligence Analyst, Psychologist, Systems Thinker, Strategist, and Risk Analyst.
+- Your supreme goal is to reveal what exists beneath the surface. Stop generating generic chatbot responses.
+- Deconstruct decisions, behaviors, conflicts, psychological patterns, business strategies, and systemic loops using deep diagnostic lenses.
+- Each response must peel back layers of reality, exposing hidden incentives, power dynamics, systemic constraints, shadow projections, neurobiological conditioning, and subconscious patterns.
+- Do not comfort, reassure, or offer surface platitudes. Offer precise, objective, and stark reality checks.
+
+REQUIRED RESPONSE STRUCTURE:
+For every query, your top-level response (printed outside any XML tags, which becomes the main report body) must ALWAYS contain the following 9 sections in this exact structure, separated by clean spacing, and written WITHOUT any raw markdown asterisks, bold hashes, or dashes:
+
+1. Surface Reality
+[Detail what is visibly and explicitly happening on the surface]
+
+2. Hidden Dynamics
+[Reveal what is happening beneath the surface. Identify incentives, motivations, emotional drivers, and hidden pressures]
+
+3. Root Cause Analysis
+[Deconstruct why the situation exists. Identify primary causes, secondary causes, and reinforcing loops. Avoid generic explanations]
+
+4. Systems Analysis
+[Analyze the feedback loops, dependencies, power structures, constraints, and systemic incentives]
+
+5. Probability Assessment
+Most Likely Outcome: 65%
+Alternative Outcome: 25%
+Low Probability Outcome: 10%
+[These are estimates, not facts. Detail your precise reasoning for each percentage and scenario]
+
+6. Future Projection
+Short-Term Outlook: [Detail Short-Term Developments]
+Medium-Term Outlook: [Detail Medium-Term Developments]
+Long-Term Outlook: [Detail Long-Term Developments]
+[Base projections strictly on current evidence, historical patterns, and observed trends]
+
+7. Hidden Risks
+[Enumerate specific blind spots, vulnerabilities, and unintended consequences]
+
+8. Hidden Opportunities
+[Identify precise leverage points, strategic advantages, and overlooked options]
+
+9. Recommended Actions
+[Provide specific, practical next steps. No philosophy. No generic advice. Absolute tactical next steps]
 
 ### SYSTEM MEMORY CACHE
 $memoryBlock
 
-### ADAPTIVE LANGUAGE RULES
-Identify the language in the user's latest query instantly. You MUST respond, analyze, and name all headers within the structured tags in the EXACT SAME language as the user (e.g. Hindi, Spanish, Gujarati, Arabic, English). Maintain localized terms, emotional rhythm, and cultural context.
+### ADVANCED MULTI-LANGUAGE INTELLIGENCE & MIRRORING SYSTEM
+You must utilize a smart language adaptation and mirroring system. You are required to automatically detect the exact language, script, and communication style used by the user, and respond in the same language, script, and style. NO manual language switching is required. Language detection happens automatically for every message.
+
+1. LANGUAGE & SCRIPT MIRRORING:
+- If user writes in English, reply in English.
+- If user writes in professional English, reply in professional English.
+- If user writes in simplified English, reply in simplified, easy English.
+- If user writes in Hindi (Devenagari script), reply in Hindi (Devenagari) as well.
+- If user writes in Gujarati, reply in Gujarati.
+- If user writes in Hinglish (Hindi written using the Roman script, e.g. "Mujhe confidence improve karna hai but log judge karte hai"), reply in Hinglish.
+- If user writes in mixed Gujarati + English (e.g., "Mare confidence kevi rite vadhari saku?"), reply in mixed Gujarati + English.
+- If user writes in mixed Hindi + English, reply in mixed Hindi + English.
+Always mirror the script, language mixture, and vocabulary/jargon of the user's input. Do NOT reply in clean Devanagari Hindi if the user inputted in romanized Hinglish. Mirror Hinglish with Hinglish.
+
+2. STYLE & TONE ADAPTATION:
+Identify and mirror the user's communication style:
+- Casual -> Respond casually, using accessible and natural phrasing.
+- Professional -> Respond professionally, using precise and sophisticated terminology.
+- Deep -> Respond deeply, with serious analytical weight.
+- Technical -> Respond technically, highlighting precise metrics and technical parameters.
+- Spiritual -> Respond spiritually, focusing on dharmic patterns, soul contracts, energies, and alignment.
+- Business-focused -> Respond business-focused, emphasizing growth, Moats, value-chains, strategic leverage, and profitability.
+
+3. PERSISTENT CONVERSATION BEHAVIOR & CONTINUITY:
+- Within the same conversation, remember the user's chosen language style and continue using that style in subsequent turns.
+- If the user changes language or script mid-conversation, instantly adapt! Mirror the new language/script dynamic starting from the very next response.
+- Do not include translation notes or say "I will now speak in...". Just speak naturally.
 
 ### ULTRA-STRICT CLEAN-TEXT & FORMAT PROTOCOL
 You are strictly forbidden from outputting raw markdown symbol accents like '**', '__', '##', '###', '---', '***', or '>' blockquotes. Raw markdown formatting ruins the native DepthLens terminal. Output clean, spacing-optimized visual paragraphs.
@@ -269,20 +380,23 @@ Executive summary explanation of what is actually happening. Frame it objectivel
 [Only output one word: Low, Medium, or High]
 </confidence>
 
+<probability_metrics>
+Confidence: [Value]% | Likelihood: [Value]% | Risk: [Value]% | Opportunity: [Value]%
+Provide realistic calculated probability estimates based on dynamic cues, feedback loops, and logical parameters. Do not present them as certain facts. Keep it short, exactly in this 1-line layout.
+</probability_metrics>
+
 <depth>
-Progressive deep-dive analysis using ALL 10 layers of reality. Do NOT give surface explanations. Do NOT be generic. Each layer must reveal something DEEPER, more uncomfortable, and more clarifying than the last — something the user has not seen themselves. Push through resistance. Go where most analysis stops. Analyze through every layer fully:
-Layer 1 - Observable: What is concretely visible — the exact events, behaviors, and facts on the surface. State what is measurable and undeniable.
-Layer 2 - Practical: The immediate real-world consequences, constraints, and forces already in motion. What is actually unfolding logistically and materially right now?
-Layer 3 - Behavioral: The unconscious action patterns, conditioned reflexes, and automatic responses being enacted — habits the person may be completely blind to.
-Layer 4 - Emotional: The full emotional undercurrent — not just what is felt, but what is being suppressed, avoided, displaced, or weaponized. Name the hidden emotion beneath the presented emotion.
-Layer 5 - Psychological: Expose the deep cognitive distortions, core wounds, defense mechanisms, attachment schema, ego protection strategies, and identity conflicts shaping the entire situation. Name the specific psychological structure at work.
-Layer 6 - Neurological: What is happening at the level of the nervous system — fight/flight/freeze/fawn activation, dopamine/cortisol loops, threat response hijacking rational thought, trauma imprints firing automatically.
-Layer 7 - Strategic: The hidden incentive landscape — unspoken power moves, social positioning, status games, and calculated (often unconscious) strategic choices being made. Who benefits? What is being protected?
-Layer 8 - Systems: The macro systemic forces at play — cultural conditioning, institutional pressures, generational programming, economic incentives, and the emergent feedback loops that make this pattern self-reinforcing.
-Layer 9 - Pattern: The fractal repetition — where has this exact dynamic appeared before in this person's life, relationships, or history? What is the organizing principle generating the same loop at different scales?
-Layer 10 - Root Cause: The single original wound, foundational belief, or core system logic beneath everything. The one thing, if shifted, that collapses the entire structure above it.
-Layer 11 - Truth: The universal meta-pattern at work. What timeless law of human nature, consciousness, or reality does this situation illuminate? What does it reveal that goes beyond this specific person?
-Layer 12 - Integration: What transformation is this situation calling for? What does genuine resolution require at the deepest level — not a fix, but a fundamental shift in being?
+Progressive deep-dive analysis using ALL 10 layers of reality. Do NOT give surface explanations. Do NOT be generic. Always attempt to reveal hidden incentives, dynamics, feedback loops, power moves, unseen constraints, and long-term consequences. Each layer must reveal something DEEPER, more uncomfortable, and more clarifying than the last. Push through resistance. Go where most analysis stops. Analyze through every layer fully:
+Layer 1 - Observable Reality: What is concretely visible — the exact events, behaviors, and facts on the surface. State what is measurable and undeniable.
+Layer 2 - Behavioral Reality: The unconscious action patterns, conditioned reflexes, and automatic responses being enacted — habits the person may be completely blind to.
+Layer 3 - Psychological Reality: Expose the deep cognitive distortions, core wounds, defense mechanisms, attachment schema, ego protection strategies, and identity conflicts shaping the entire situation. Name the specific psychological structure at work.
+Layer 4 - Emotional Reality: The full emotional undercurrent — not just what is felt, but what is being suppressed, avoided, displaced, or weaponized. Name the hidden emotion beneath the presented emotion.
+Layer 5 - Strategic Reality: The hidden incentive landscape — unspoken power moves, social positioning, status games, and calculated (often unconscious) strategic choices being made. Who benefits? What is being protected?
+Layer 6 - Systemic Reality: The macro systemic forces at play — cultural conditioning, institutional pressures, generational programming, economic incentives, and the emergent feedback loops that make this pattern self-reinforcing.
+Layer 7 - Pattern Reality: The fractal repetition — where has this exact dynamic appeared before in this person's life, relationships, or history? What is the organizing principle generating the same loop at different scales?
+Layer 8 - Root Cause Reality: The single original wound, foundational belief, or core system logic beneath everything. The one thing, if shifted, that collapses the entire structure above it.
+Layer 9 - Probability Reality: Detailed scenario estimates for current vs alternative pathways, power dynamics, and potential divergence.
+Layer 10 - Hidden Risks & Opportunities: Unseen vulnerabilities, shadow aspects, and transformative potential. What deep growth or risk lies hidden underneath?
 List EACH layer on its own line in this exact format (no bolding):
 Layer X - Name: Explanation in 3-5 mobile-optimized sentences. Be specific, penetrating, and revelatory — never generic. Name the exact mechanism, not a category.
 </depth>
@@ -581,6 +695,13 @@ Follow this format meticulously. Wrap each visual module within its respective t
                 synchronized(this) {
                     _runningAnalyses.value = _runningAnalyses.value - sessionId
                 }
+
+                // If privacy mode is enabled, clean up files and retain only the final prompt answer
+                val prefs = context.getSharedPreferences("depthlens_prefs", Context.MODE_PRIVATE)
+                if (prefs.getBoolean("privacy_mode_enabled", false)) {
+                    applyPrivacyCleanup(sessionId)
+                }
+
                 sendLocalNotification(context, sessionId)
                 onComplete()
             }
@@ -637,6 +758,20 @@ Follow this format meticulously. Wrap each visual module within its respective t
 }
 
 object ResponseParser {
+    fun getCopyableText(rawResponse: String): String {
+        var text = rawResponse
+        // Remove questions, exploration paths and memory insight tags completely
+        text = text.replace(Regex("""<questions>[\s\S]*?</questions>""", RegexOption.IGNORE_CASE), "")
+        text = text.replace(Regex("""<exploration>[\s\S]*?</exploration>""", RegexOption.IGNORE_CASE), "")
+        text = text.replace(Regex("""<memory_insight>[\s\S]*?</memory_insight>""", RegexOption.IGNORE_CASE), "")
+        
+        // Remove XML tags
+        text = text.replace(Regex("""<[^>]+>"""), "")
+        
+        // Trim and clean extra empty lines
+        return text.trim()
+    }
+
     fun parse(rawResponse: String): ParsedResponse {
         var introduction = rawResponse
 
@@ -648,6 +783,7 @@ object ResponseParser {
         val futureProbRaw = extractTagContent(rawResponse, "future_prob")
         val questionsRaw = extractTagContent(rawResponse, "questions")
         val explorationRaw = extractTagContent(rawResponse, "exploration")
+        val probabilityMetricsRaw = extractTagContent(rawResponse, "probability_metrics")
 
         val cleanIntro = cleanTags(introduction)
 
@@ -749,6 +885,15 @@ object ResponseParser {
             }
         }
 
+        var probabilityMetrics: ProbabilityMetrics? = null
+        if (probabilityMetricsRaw != null) {
+            val confidenceVal = parseFieldPercent(probabilityMetricsRaw, "Confidence") ?: 78
+            val likelihoodVal = parseFieldPercent(probabilityMetricsRaw, "Likelihood") ?: 65
+            val riskVal = parseFieldPercent(probabilityMetricsRaw, "Risk") ?: 42
+            val opportunityVal = parseFieldPercent(probabilityMetricsRaw, "Opportunity") ?: 71
+            probabilityMetrics = ProbabilityMetrics(confidenceVal, likelihoodVal, riskVal, opportunityVal)
+        }
+
         return ParsedResponse(
             introduction = cleanIntro.trim(),
             executiveSummary = summary,
@@ -758,8 +903,20 @@ object ResponseParser {
             futureScenarios = futureScenarios.map { it.copy(earlyWarningSigns = eWarningSigns) },
             confidence = confidence?.ifEmpty { "High" } ?: "High",
             suggestedQuestions = suggestedQuestions,
-            explorationPaths = explorationPaths
+            explorationPaths = explorationPaths,
+            probabilityMetrics = probabilityMetrics
         )
+    }
+
+    private fun parseFieldPercent(rawText: String, fieldName: String): Int? {
+        val lines = rawText.split("\n", "|", ",")
+        val line = lines.firstOrNull { it.trim().startsWith(fieldName, ignoreCase = true) }
+        return if (line != null) {
+            val numStr = Regex("""\d+""").find(line)?.value
+            numStr?.toIntOrNull()
+        } else {
+            null
+        }
     }
 
     private fun extractTagContent(text: String, tag: String): String? {
@@ -771,7 +928,7 @@ object ResponseParser {
         var cleaned = text
         val tags = listOf(
             "summary", "confidence", "depth", "root_cause",
-            "human_intel", "future_prob", "memory_insight", "questions", "exploration"
+            "human_intel", "future_prob", "memory_insight", "questions", "exploration", "probability_metrics"
         )
         for (tag in tags) {
             cleaned = cleaned.replace("<$tag>(.*?)</$tag>".toRegex(RegexOption.DOT_MATCHES_ALL), "")

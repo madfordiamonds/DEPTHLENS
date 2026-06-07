@@ -35,6 +35,8 @@ fun SettingsScreen(
     onNotificationsEnabledChanged: (Boolean) -> Unit,
     isCollectiveOptIn: Boolean,
     onCollectiveOptInChanged: (Boolean) -> Unit,
+    isPrivacyModeEnabled: Boolean = false,
+    onPrivacyModeEnabledChanged: (Boolean) -> Unit = {},
     activeThemeName: String,
     onThemeSelected: (String) -> Unit,
     onShowMemoryDetails: () -> Unit,
@@ -72,14 +74,15 @@ fun SettingsScreen(
             text = "Settings",
             fontFamily = DMSerifDisplayFontFamily,
             fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
-            fontSize = 22.sp,
+            fontSize = 26.sp,
             color = TextPrimaryColor,
             modifier = Modifier.padding(bottom = 2.dp)
         )
 
         Text(
             text = "Configure your reality exploration preferences and session data",
-            fontSize = 11.sp,
+            fontSize = 14.sp,
+            lineHeight = 19.sp,
             fontFamily = InstrumentSansFontFamily,
             color = TextMutedColor,
             modifier = Modifier.padding(bottom = 20.dp)
@@ -381,6 +384,15 @@ fun SettingsScreen(
                 checked = isCollectiveOptIn,
                 onCheckedChange = onCollectiveOptInChanged
             )
+
+            SettingsRow(
+                icon = "🛡️",
+                title = "Advanced Privacy Mode",
+                subtitle = "Auto-deletes files/recordings and retains final answers",
+                iconBg = Color(0x20FF3B30),
+                checked = isPrivacyModeEnabled,
+                onCheckedChange = onPrivacyModeEnabledChanged
+            )
         }
 
         // --- SECTION: DATA ---
@@ -528,17 +540,17 @@ fun SettingsScreen(
                     Column {
                         Text(
                             text = "Check for Updates",
-                            fontSize = 13.sp,
+                            fontSize = 16.sp,
                             fontFamily = InstrumentSansFontFamily,
                             fontWeight = FontWeight.Bold,
                             color = TextPrimaryColor
                         )
                         Text(
                             text = "Keep DepthLens up to date with the latest improvements and fixes.",
-                            fontSize = 10.sp,
+                            fontSize = 14.sp,
                             fontFamily = InstrumentSansFontFamily,
                             color = TextMutedColor,
-                            lineHeight = 13.sp
+                            lineHeight = 18.sp
                         )
                     }
                 }
@@ -712,9 +724,83 @@ fun SettingsScreen(
         InteractiveSettingsCard(
             icon = "✕",
             title = "About DepthLens",
-            subtitle = "View software license details and dynamic credits · v4.0.1",
+            subtitle = "View software license details and dynamic credits · v4.1.0",
             onClick = onShowAbout
         )
+
+        Spacer(modifier = Modifier.height(20.dp))
+
+        // --- SECTION: OPEN SOURCE ---
+        Text(
+            text = "OPEN SOURCE",
+            fontSize = 8.sp,
+            letterSpacing = 1.3.sp,
+            fontFamily = DMMonoFontFamily,
+            fontWeight = FontWeight.Bold,
+            color = TextMutedColor,
+            modifier = Modifier.padding(bottom = 8.dp)
+        )
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(Surface2, shape = RoundedCornerShape(8.dp))
+                .border(1.dp, BorderSubtle, shape = RoundedCornerShape(8.dp))
+                .clickable {
+                    val intent = android.content.Intent(
+                        android.content.Intent.ACTION_VIEW,
+                        android.net.Uri.parse("https://github.com/guy-with-ideas-uncoded/DEPTHLENS")
+                    )
+                    context.startActivity(intent)
+                }
+                .padding(12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                modifier = Modifier.weight(1f)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(28.dp)
+                        .background(Surface3, shape = RoundedCornerShape(6.dp)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        painter = androidx.compose.ui.res.painterResource(id = com.example.R.drawable.ic_github),
+                        contentDescription = "GitHub repository link",
+                        modifier = Modifier.size(16.dp),
+                        tint = TextPrimaryColor
+                    )
+                }
+
+                Column {
+                    Text(
+                        text = "guy-with-ideas-uncoded",
+                        fontSize = 16.sp,
+                        color = TextPrimaryColor,
+                        fontFamily = InstrumentSansFontFamily,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "DEPTHLENS Open Source Repository",
+                        fontSize = 14.sp,
+                        color = TextMutedColor,
+                        fontFamily = InstrumentSansFontFamily,
+                        lineHeight = 18.sp
+                    )
+                }
+            }
+
+            Text(
+                text = "↗",
+                fontSize = 19.sp,
+                color = TextMutedColor,
+                fontFamily = InstrumentSansFontFamily
+            )
+        }
 
         Spacer(modifier = Modifier.height(24.dp))
     }
@@ -754,24 +840,24 @@ fun InteractiveSettingsCard(
             Column {
                 Text(
                     text = title,
-                    fontSize = 11.sp,
+                    fontSize = 16.sp,
                     color = TextPrimaryColor,
                     fontFamily = InstrumentSansFontFamily,
                     fontWeight = FontWeight.Bold
                 )
                 Text(
                     text = subtitle,
-                    fontSize = 9.sp,
+                    fontSize = 14.sp,
                     color = TextMutedColor,
                     fontFamily = InstrumentSansFontFamily,
-                    lineHeight = 12.sp
+                    lineHeight = 18.sp
                 )
             }
         }
 
         Text(
             text = "›",
-            fontSize = 14.sp,
+            fontSize = 19.sp,
             color = TextMutedColor
         )
     }
@@ -812,17 +898,17 @@ fun SettingsRow(
             Column {
                 Text(
                     text = title,
-                    fontSize = 11.sp,
+                    fontSize = 16.sp,
                     color = TextPrimaryColor,
                     fontFamily = InstrumentSansFontFamily,
                     fontWeight = FontWeight.Bold
                 )
                 Text(
                     text = subtitle,
-                    fontSize = 9.sp,
+                    fontSize = 14.sp,
                     color = TextMutedColor,
                     fontFamily = InstrumentSansFontFamily,
-                    lineHeight = 12.sp
+                    lineHeight = 18.sp
                 )
             }
         }

@@ -14,8 +14,8 @@ android {
     applicationId = "com.aistudio.depthlens.omg"
     minSdk = 24
     targetSdk = 36
-    versionCode = 4011
-    versionName = "4.0.1.a"
+    versionCode = 4100
+    versionName = "4.1.0"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
