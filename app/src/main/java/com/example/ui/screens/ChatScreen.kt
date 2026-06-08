@@ -6,45 +6,43 @@ import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Create
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Share
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.rounded.Add
-import androidx.compose.material.icons.rounded.Mic
-import androidx.compose.material.icons.rounded.Stop
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.data.model.*
+import com.example.data.model.MessageEntity
 import com.example.data.repository.ResponseParser
 import com.example.ui.theme.*
 import com.example.ui.components.ThreeDotThinkingIndicator
 import com.example.ui.components.IntelligenceOSVisualizer
-import kotlinx.coroutines.launch
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.window.Dialog
 import android.speech.SpeechRecognizer
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
@@ -53,1263 +51,1783 @@ import android.content.Context
 import android.os.Bundle
 import android.content.pm.PackageManager
 import androidx.core.content.ContextCompat
-import coil.compose.AsyncImage
-import androidx.compose.ui.platform.LocalClipboardManager
-import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.platform.LocalContext
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 
-
-// Strips raw markdown symbols that Compose Text() cannot render
-private fun stripMarkdown(text: String): String {
-    return text
-        .replace(Regex("""\*\*(.+?)\*\*"""), "$1")   // **bold** -> bold
-        .replace(Regex("""\*(.+?)\*"""), "$1")         // *italic* -> italic
-        .replace(Regex("""__(.+?)__"""), "$1")         // __bold__
-        .replace(Regex("""_(.+?)_"""), "$1")           // _italic_
-        .replace(Regex("""^#{1,6}\s""", RegexOption.MULTILINE), "") // ## headers
-        .replace(Regex("""^>\s""", RegexOption.MULTILINE), "")      // > blockquotes
-        .replace(Regex("""^[-*+]\s""", RegexOption.MULTILINE), "• ") // bullet lists -> •
-        .replace("---", "")
-        .replace("***", "")
-}
-
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun ChatScreen(
+fun AnalysisScreen(
     activeMessages: List<MessageEntity>,
     selectedMode: String,
-    onModeChanged: (String) -> Unit,
-    isLoading: Boolean,
-    attachedImageUri: String?,
-    isRecordingAudio: Boolean,
-    recordingDuration: Int,
-    onAddAttachment: (String) -> Unit,
-    onRemoveAttachment: () -> Unit,
-    onSubmitQuery: (String) -> Unit,
-    onToggleRecording: () -> Unit,
-    onCancelRecording: () -> Unit,
-    onRetryLastAnalysis: (String) -> Unit,
-    onRegenerateLastAnalysis: (String) -> Unit,
-    onReportBug: () -> Unit,
-    onDeleteMessage: (String) -> Unit,
-    onCreateNewSession: () -> Unit,
-    onGoDeeper: (String) -> Unit = {},
-    onArchiveInsight: (String, String, String) -> Unit = { _, _, _ -> },
+    onBackToHome: () -> Unit,
+    onSubmitQuery: (String) -> Unit = {},
+    deepDiveInsights: Map<String, String> = emptyMap(),
+    isDeepDiveLoading: Map<String, Boolean> = emptyMap(),
+    onGenerateDeepDive: (String, String) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier
 ) {
-    val listState = rememberLazyListState()
-    var inputQueryText by remember { mutableStateOf("") }
-    var showPlusBottomSheet by remember { mutableStateOf(false) }
     val coroutineScope = rememberCoroutineScope()
+    val context = LocalContext.current
+    
+    var isRealityLensEnabled by remember { mutableStateOf(false) }
+    val infiniteTransition = rememberInfiniteTransition(label = "reality_lens_waves")
+    val pulsePhase by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(6000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "pulse_phase"
+    )
+    // Find the latest model/AI message that contains diagnostic results
+    val latestAiMessage = remember(activeMessages) {
+        activeMessages.lastOrNull { it.role == "model" && !it.text.startsWith("Error:") }
+    }
 
-    // Scroll to bottom when messages list size change
-    LaunchedEffect(activeMessages.size, isLoading) {
-        if (activeMessages.isNotEmpty()) {
-            listState.animateScrollToItem(activeMessages.size - 1)
+    val latestUserMessage = remember(activeMessages) {
+        activeMessages.lastOrNull { it.role == "user" }
+    }
+
+    val parsedResponse = remember(latestAiMessage?.text) {
+        if (latestAiMessage != null) {
+            ResponseParser.parse(latestAiMessage.text)
+        } else {
+            null
         }
     }
 
-    Box(
+    val hasReportTags = remember(latestAiMessage?.text) {
+        latestAiMessage?.text?.let {
+            it.contains("<summary>") || it.contains("<depth>") || it.contains("<root_cause>") || it.contains("<future_pathways>")
+        } == true
+    }
+
+    // Keep track of which cards are expanded
+    val expandedStates = remember { mutableStateMapOf<Int, Boolean>() }
+
+    val scrollState = rememberScrollState()
+
+    // Scroll to top immediately when a brand-new AI message arrives (new id).
+    // This handles the moment the model starts responding.
+    LaunchedEffect(latestAiMessage?.id) {
+        if (latestAiMessage != null) {
+            scrollState.scrollTo(0)
+        }
+    }
+
+    // Scroll to top when streaming finishes.
+    // Strategy: wait until text has stopped changing for 1200 ms (streaming done),
+    // then snap to top so the user reads from the beginning.
+    // We do NOT scroll on every text change — that would interrupt the user mid-read
+    // during streaming by constantly resetting their scroll position.
+    val currentText = latestAiMessage?.text
+    LaunchedEffect(currentText) {
+        if (latestAiMessage != null && currentText != null) {
+            val textAtLaunch = currentText
+            delay(1200L)
+            // Only scroll if text hasn't changed in 1200ms (streaming has stopped)
+            if (latestAiMessage.text == textAtLaunch) {
+                scrollState.animateScrollTo(0)
+            }
+        }
+    }
+
+    // Standard 10 Reality Layers definition with colors and specific default definitions
+    val standardLayers = remember {
+        listOf(
+            LayerDefinition(1, "Observable Reality", Layer1, "Surface events, objective metrics, and immediate sensory data."),
+            LayerDefinition(2, "Behavioral Reality", Layer2, "Consistent patterns of action, communication styles, and habit loops."),
+            LayerDefinition(3, "Psychological Reality", Layer3, "Individual beliefs, defense mechanisms, cognitive biases, and internal narratives."),
+            LayerDefinition(4, "Emotional Reality", Layer4, "Underlying feelings, affective drives, insecurities, and sub-conscious state dynamics."),
+            LayerDefinition(5, "Social Reality", Layer5, "Interpersonal communication channels, cultural rules, dynamic peer pressure mechanics."),
+            LayerDefinition(6, "Strategic Reality", Layer6, "Conscious intent, tactical utility, negotiation dynamics, and resource allocations."),
+            LayerDefinition(7, "Systemic Reality", Layer7, "Feedback loops, environmental limits, structural layouts, and flow dynamics."),
+            LayerDefinition(8, "Pattern Reality", Layer8, "Historical frequencies, cyclic re-occurrences, and probabilistic repetitions."),
+            LayerDefinition(9, "Root Cause Reality", Layer9, "Competing incentive models, design flaws, or ontological assumptions generating the situation."),
+            LayerDefinition(10, "Absolute Reality", Layer10, "Core existential truths, natural laws, and non-dual realities behind all constructs.")
+        )
+    }
+
+    Column(
         modifier = modifier
             .fillMaxSize()
             .background(DeepMidnight)
     ) {
-        Column(
-            modifier = Modifier.fillMaxSize()
-        ) {
-        // Chat Toolbar: Minimalist layout matching bash.html instructions (no clutter)
+        // Redesigned Topbar Bar
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .background(Surface1)
                 .border(1.dp, BorderSubtle)
-                .padding(vertical = 10.dp, horizontal = 16.dp),
+                .padding(vertical = 12.dp, horizontal = 16.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                modifier = Modifier
+                    .clip(RoundedCornerShape(4.dp))
+                    .clickable { onBackToHome() }
+                    .padding(4.dp)
             ) {
-                // High-fidelity active badge icon
-                Box(
-                    modifier = Modifier
-                        .size(24.dp)
-                        .background(Color(0x2E7E65FF), shape = RoundedCornerShape(6.dp))
-                        .border(1.dp, BorderActive, shape = RoundedCornerShape(6.dp)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "✦",
-                        fontSize = 11.sp,
-                        color = ElectricViolet,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-
+                Icon(
+                    imageVector = Icons.Default.ArrowBack,
+                    contentDescription = "Back",
+                    tint = TextSecondaryColor,
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
                 Text(
-                    text = "DEPTHLENS CONTEXT",
-                    fontSize = 10.sp,
-                    letterSpacing = 1.2.sp,
-                    color = TextPrimaryColor,
+                    text = "SESSIONS",
+                    fontSize = 9.sp,
                     fontFamily = DMMonoFontFamily,
+                    letterSpacing = 1.sp,
+                    color = TextSecondaryColor,
                     fontWeight = FontWeight.Bold
                 )
             }
 
+            Text(
+                text = "REALITY DETECTOR",
+                fontSize = 11.sp,
+                letterSpacing = 1.2.sp,
+                fontFamily = DMMonoFontFamily,
+                fontWeight = FontWeight.Bold,
+                color = ElectricViolet
+            )
+
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                // Glassy selected lens mode pill
-                Box(
+                Icon(
+                    imageVector = Icons.Default.Share,
+                    contentDescription = "Share",
+                    tint = TextMutedColor,
                     modifier = Modifier
-                        .background(Color(0x2E7E65FF), shape = RoundedCornerShape(20.dp))
-                        .border(1.dp, BorderActive, shape = RoundedCornerShape(20.dp))
-                        .padding(horizontal = 10.dp, vertical = 3.dp)
-                ) {
-                    Text(
-                        text = selectedMode.uppercase(),
-                        fontSize = 8.5.sp,
-                        color = ElectricViolet,
-                        fontFamily = DMMonoFontFamily,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-
-                // New Analysis launcher trigger
-                IconButton(
-                    onClick = onCreateNewSession,
-                    modifier = Modifier.size(28.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Create,
-                        contentDescription = "New Thread",
-                        tint = PremiumCyan,
-                        modifier = Modifier.size(15.dp)
-                    )
-                }
+                        .size(16.dp)
+                        .clickable { /* Share placeholder */ }
+                )
+                Icon(
+                    imageVector = Icons.Default.MoreVert,
+                    contentDescription = "Menu",
+                    tint = TextMutedColor,
+                    modifier = Modifier.size(16.dp)
+                )
             }
         }
 
-        // Active Messages Feed List
-        Box(
+        Column(
             modifier = Modifier
                 .weight(1f)
-                .fillMaxWidth()
-        ) {
-            if (activeMessages.isEmpty()) {
-                // Interactive empty viewport instructing users to run tests
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(32.dp),
-                    verticalArrangement = Arrangement.Center,
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(56.dp)
-                            .background(Color(0x1A7E65FF), CircleShape)
-                            .border(1.2.dp, ElectricViolet.copy(alpha = 0.5f), CircleShape),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text("🧠", fontSize = 24.sp)
+                .drawBehind {
+                    if (isRealityLensEnabled) {
+                        // Draw subtle background grid of dots
+                        val gridGap = 24.dp.toPx()
+                        val cols = (size.width / gridGap).toInt()
+                        val rows = (size.height / gridGap).toInt()
+                        for (c in 0..cols) {
+                            for (r in 0..rows) {
+                                val x = c * gridGap
+                                val y = r * gridGap
+                                drawCircle(
+                                    color = PremiumCyan.copy(alpha = 0.05f),
+                                    radius = 1.dp.toPx(),
+                                    center = Offset(x, y)
+                                )
+                            }
+                        }
+
+                        // Draw animated interactive node-linking lines
+                        val nodeA = Offset(size.width * 0.12f, size.height * 0.15f)
+                        val nodeB = Offset(size.width * 0.45f, size.height * 0.35f)
+                        val nodeC = Offset(size.width * 0.78f, size.height * 0.22f)
+                        val nodeD = Offset(size.width * 0.28f, size.height * 0.65f)
+                        val nodeE = Offset(size.width * 0.82f, size.height * 0.52f)
+                        val nodeF = Offset(size.width * 0.52f, size.height * 0.85f)
+                        
+                        val nodes = listOf(nodeA, nodeB, nodeC, nodeD, nodeE, nodeF)
+                        val links = listOf(
+                            nodeA to nodeB,
+                            nodeB to nodeC,
+                            nodeC to nodeE,
+                            nodeB to nodeD,
+                            nodeD to nodeF,
+                            nodeE to nodeF,
+                            nodeD to nodeE
+                        )
+
+                        // Draw lines with soft glow
+                        links.forEach { link ->
+                            drawLine(
+                                color = PremiumCyan.copy(alpha = 0.12f),
+                                start = link.first,
+                                end = link.second,
+                                strokeWidth = 1.dp.toPx()
+                            )
+                        }
+
+                        // Draw pulsating node waves
+                        nodes.forEach { node ->
+                            drawCircle(
+                                color = PremiumCyan.copy(alpha = 0.08f * (1f - pulsePhase)),
+                                radius = (15.dp.toPx() * pulsePhase),
+                                center = node,
+                                style = Stroke(width = 1.dp.toPx())
+                            )
+                            drawCircle(
+                                color = PremiumCyan.copy(alpha = 0.25f),
+                                radius = 3.dp.toPx(),
+                                center = node
+                            )
+                        }
                     }
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    Text(
-                        text = "Active Intelligence Node",
-                        fontFamily = DMSerifDisplayFontFamily,
-                        fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
-                        fontSize = 18.sp,
-                        color = TextPrimaryColor,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.padding(bottom = 6.dp)
-                    )
-
-                    Text(
-                        text = "Select a specific mode or start submitting queries in the panel below — DepthLens will unfold multi-dimensional layer reports.",
-                        fontFamily = InstrumentSansFontFamily,
-                        fontSize = 11.sp,
-                        color = TextMutedColor,
-                        lineHeight = 16.sp,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.widthIn(max = 240.dp)
-                    )
                 }
-            } else {
-                androidx.compose.foundation.text.selection.SelectionContainer {
-                    LazyColumn(
-                        state = listState,
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(16.dp, 12.dp, 16.dp, 16.dp),
-                        verticalArrangement = Arrangement.spacedBy(14.dp)
+                .verticalScroll(scrollState)
+                .padding(16.dp)
+        ) {
+            // Dashboard header
+            val queryText = latestUserMessage?.text ?: "All Layers Active Simulator"
+
+            if (parsedResponse == null || !hasReportTags) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 12.dp)
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
-                        items(activeMessages) { message ->
-                            if (message.role == "user") {
-                                // High fidelity User Bubble
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(containerColor = Surface2),
+                            border = BorderStroke(1.dp, BorderSubtle),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Text(
+                                    text = "⚡ ADAPTIVE COGNITIVE MATRIX ACTIVE",
+                                    fontSize = 11.sp,
+                                    fontFamily = DMMonoFontFamily,
+                                    fontWeight = FontWeight.Bold,
+                                    color = ElectricViolet
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    text = "DepthLens has adapted its response scope to conversational depth. To mapping system parameters, causal loops, and probability matrices, request an investigation in the Chat tab.",
+                                    fontSize = 11.sp,
+                                    lineHeight = 16.sp,
+                                    color = TextSecondaryColor,
+                                    fontFamily = InstrumentSansFontFamily
+                                )
+                            }
+                        }
+
+                        if (latestAiMessage != null) {
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = CardDefaults.cardColors(containerColor = SurfaceCardColor),
+                                border = BorderStroke(1.dp, CardBorderColor),
+                                shape = RoundedCornerShape(topStart = 3.dp, topEnd = 12.dp, bottomEnd = 12.dp, bottomStart = 12.dp)
+                            ) {
+                                Column(modifier = Modifier.padding(14.dp)) {
+                                    Text(
+                                        text = "CONVERSATIONAL ANALYSIS PROFILE",
+                                        fontSize = 8.sp,
+                                        fontFamily = DMMonoFontFamily,
+                                        color = TextMutedColor,
+                                        letterSpacing = 1.sp
+                                    )
+                                    Spacer(modifier = Modifier.height(6.dp))
+                                    Text(
+                                        text = latestAiMessage.text,
+                                        fontSize = 14.sp,
+                                        lineHeight = 20.sp,
+                                        color = TextPrimaryColor,
+                                        fontFamily = InstrumentSansFontFamily
+                                    )
+                                }
+                            }
+                        }
+
+                        Text(
+                            text = "SUGGESTED DEEP-DIVE ANALYSIS DIRECTIVES",
+                            fontSize = 8.sp,
+                            fontFamily = DMMonoFontFamily,
+                            color = TextMutedColor,
+                            letterSpacing = 1.sp,
+                            modifier = Modifier.align(Alignment.Start).padding(top = 8.dp)
+                        )
+
+                        val suggestions = listOf(
+                            "Analyze this situation in depth using reality intelligence." to "⚡ FULL INVESTIGATION",
+                            "Deconstruct the root cause and psychological layers of this topic." to "🔍 ROOT CAUSE ANALYZER",
+                            "Forecast future probability branches and strategic risks for this plan." to "🔮 STRATEGIC OUTLOOK"
+                        )
+
+                        suggestions.forEach { (promptDef, actionTitle) ->
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { onSubmitQuery(promptDef) },
+                                colors = CardDefaults.cardColors(containerColor = Surface2),
+                                border = BorderStroke(1.dp, BorderSubtle),
+                                shape = RoundedCornerShape(10.dp)
+                            ) {
                                 Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.End
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
                                 ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .widthIn(max = 270.dp)
-                                            .background(
-                                                Color(0x2E7E65FF),
-                                                shape = RoundedCornerShape(
-                                                    topStart = 14.dp,
-                                                    topEnd = 14.dp,
-                                                    bottomEnd = 3.dp,
-                                                    bottomStart = 14.dp
-                                                )
-                                            )
-                                            .border(
-                                                1.dp,
-                                                BorderActive,
-                                                shape = RoundedCornerShape(
-                                                    topStart = 14.dp,
-                                                    topEnd = 14.dp,
-                                                    bottomEnd = 3.dp,
-                                                    bottomStart = 14.dp
-                                                )
-                                            )
-                                            .padding(10.dp, 12.dp)
-                                    ) {
+                                    Column(modifier = Modifier.weight(1f)) {
                                         Text(
-                                            text = message.text,
-                                            fontSize = 11.5.sp,
-                                            color = TextPrimaryColor,
+                                            text = actionTitle,
+                                            fontSize = 9.sp,
+                                            fontFamily = DMMonoFontFamily,
+                                            fontWeight = FontWeight.Bold,
+                                            color = ElectricViolet
+                                        )
+                                        Spacer(modifier = Modifier.height(2.dp))
+                                        Text(
+                                            text = "\"$promptDef\"",
+                                            fontSize = 11.sp,
                                             fontFamily = InstrumentSansFontFamily,
-                                            lineHeight = 15.5.sp
+                                            color = TextPrimaryColor
                                         )
                                     }
-                                }
-                            } else {
-                                // High fidelity AI Bubble with Embed Insights and Diagnostics
-                                if (message.text.startsWith("Error:") || message.text.contains("Error invoking DepthLens")) {
-                                    Column(modifier = Modifier.fillMaxWidth()) {
-                                        DisplayAIHeader(layersCount = 0)
-                                        Box(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .background(Surface2, shape = RoundedCornerShape(topStart = 3.dp, topEnd = 14.dp, bottomEnd = 14.dp, bottomStart = 14.dp))
-                                                .border(1.dp, ErrorColor.copy(alpha = 0.4f), shape = RoundedCornerShape(topStart = 3.dp, topEnd = 14.dp, bottomEnd = 14.dp, bottomStart = 14.dp))
-                                                .padding(12.dp)
-                                        ) {
-                                            Column {
-                                                Text(
-                                                    text = "Analysis Interrupted",
-                                                    fontSize = 12.sp,
-                                                    fontWeight = FontWeight.Bold,
-                                                    color = ErrorColor,
-                                                    fontFamily = InstrumentSansFontFamily,
-                                                    modifier = Modifier.padding(bottom = 4.dp)
-                                                )
-                                                Text(
-                                                    text = message.text,
-                                                    fontSize = 10.5.sp,
-                                                    color = TextSecondaryColor,
-                                                    lineHeight = 14.sp,
-                                                    fontFamily = InstrumentSansFontFamily,
-                                                    modifier = Modifier.padding(bottom = 12.dp)
-                                                )
-                                                Row(
-                                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                                ) {
-                                                    Button(
-                                                        onClick = { onRetryLastAnalysis(message.id) },
-                                                        colors = ButtonDefaults.buttonColors(containerColor = ElectricViolet),
-                                                        shape = RoundedCornerShape(8.dp),
-                                                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-                                                        modifier = Modifier.height(28.dp)
-                                                    ) {
-                                                        Text("Retry Analysis", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                                                    }
-
-                                                    OutlinedButton(
-                                                        onClick = { onDeleteMessage(message.id) },
-                                                        shape = RoundedCornerShape(8.dp),
-                                                        colors = ButtonDefaults.outlinedButtonColors(contentColor = TextSecondaryColor),
-                                                        border = BorderStroke(1.dp, BorderSubtle),
-                                                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-                                                        modifier = Modifier.height(28.dp)
-                                                    ) {
-                                                        Text("Dismiss", fontSize = 9.sp)
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                } else {
-                                    val parsed = remember(message.text) { ResponseParser.parse(message.text) }
-                                    Column(modifier = Modifier.fillMaxWidth()) {
-                                        DisplayAIHeader(layersCount = parsed.depthLayers.size)
-
-                                        // Comprehensive Premium chat bubble card contents
-                                        Card(
-                                            shape = RoundedCornerShape(topStart = 3.dp, topEnd = 14.dp, bottomEnd = 14.dp, bottomStart = 14.dp),
-                                            colors = CardDefaults.cardColors(containerColor = Surface2),
-                                            border = BorderStroke(1.dp, BorderSubtle),
-                                            modifier = Modifier.fillMaxWidth()
-                                        ) {
-                                            Column(modifier = Modifier.padding(12.dp)) {
-                                                // Redesigned Future Intelligence Visual Dashboard (Summarizes BEFORE detailed explanations)
-                                                IntelligenceOSVisualizer(
-                                                    parsed = parsed,
-                                                    rawText = message.text,
-                                                    onSubmitQuery = onSubmitQuery
-                                                )
-                                                Spacer(modifier = Modifier.height(16.dp))
-                                                // Introduction Summary Text
-                                                if (parsed.introduction.isNotEmpty()) {
-                                                    Text(
-                                                        text = stripMarkdown(parsed.introduction),
-                                                        fontSize = 12.sp,
-                                                        color = TextPrimaryColor,
-                                                        lineHeight = 17.sp,
-                                                        fontFamily = InstrumentSansFontFamily,
-                                                        modifier = Modifier.padding(bottom = 12.dp)
-                                                    )
-                                                }
-
-                                                // Executive Summary blockquote
-                                                parsed.executiveSummary?.let { summary ->
-                                                    Box(
-                                                        modifier = Modifier
-                                                            .fillMaxWidth()
-                                                            .padding(bottom = 12.dp)
-                                                            .drawBehind {
-                                                                val strokeWidth = 2.dp.toPx()
-                                                                drawLine(
-                                                                    color = ElectricViolet,
-                                                                    start = androidx.compose.ui.geometry.Offset(0f, 0f),
-                                                                    end = androidx.compose.ui.geometry.Offset(0f, size.height),
-                                                                    strokeWidth = strokeWidth
-                                                                )
-                                                            }
-                                                            .padding(start = 12.dp, top = 4.dp, bottom = 4.dp)
-                                                    ) {
-                                                        Text(
-                                                            text = stripMarkdown(summary),
-                                                            fontSize = 11.sp,
-                                                            fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
-                                                            color = TextSecondaryColor,
-                                                            lineHeight = 16.sp,
-                                                            fontFamily = InstrumentSansFontFamily
-                                                        )
-                                                    }
-
-                                                    // Chat Inline Probability Assessment
-                                                    parsed.probabilityAssessment?.let { pa ->
-                                                        val color = when {
-                                                            pa.likelihood >= 70 -> SuccessColor
-                                                            pa.likelihood >= 40 -> WarningColor
-                                                            else -> ErrorColor
-                                                        }
-                                                        Column(
-                                                            modifier = Modifier
-                                                                .fillMaxWidth()
-                                                                .padding(bottom = 12.dp)
-                                                                .background(color.copy(alpha = 0.05f), RoundedCornerShape(8.dp))
-                                                                .border(1.dp, color.copy(alpha = 0.2f), RoundedCornerShape(8.dp))
-                                                                .padding(10.dp)
-                                                        ) {
-                                                            Row(
-                                                                modifier = Modifier.fillMaxWidth(),
-                                                                horizontalArrangement = Arrangement.SpaceBetween,
-                                                                verticalAlignment = Alignment.CenterVertically
-                                                            ) {
-                                                                Text(
-                                                                    text = "PROBABILITY LIKELIHOOD",
-                                                                    fontSize = 7.5.sp,
-                                                                    letterSpacing = 1.sp,
-                                                                    fontFamily = DMMonoFontFamily,
-                                                                    fontWeight = FontWeight.Bold,
-                                                                    color = color
-                                                                )
-                                                                Text(
-                                                                    text = "${pa.confidence} CONFIDENCE",
-                                                                    fontSize = 7.5.sp,
-                                                                    fontFamily = DMMonoFontFamily,
-                                                                    fontWeight = FontWeight.Bold,
-                                                                    color = color
-                                                                )
-                                                            }
-                                                            Spacer(modifier = Modifier.height(6.dp))
-                                                            Row(
-                                                                modifier = Modifier.fillMaxWidth(),
-                                                                horizontalArrangement = Arrangement.SpaceBetween,
-                                                                verticalAlignment = Alignment.CenterVertically
-                                                            ) {
-                                                                Text("Likelihood Estimate", fontSize = 11.sp, color = TextSecondaryColor, fontFamily = InstrumentSansFontFamily)
-                                                                Text("${pa.likelihood}%", fontSize = 13.sp, fontWeight = FontWeight.Black, color = color, fontFamily = InstrumentSansFontFamily)
-                                                            }
-                                                            Spacer(modifier = Modifier.height(4.dp))
-                                                            LinearProgressIndicator(
-                                                                progress = { pa.likelihood / 100f },
-                                                                modifier = Modifier
-                                                                    .fillMaxWidth()
-                                                                    .height(4.dp)
-                                                                    .clip(RoundedCornerShape(2.dp)),
-                                                                color = color,
-                                                                trackColor = Surface3
-                                                            )
-                                                        }
-                                                    }
-                                                                                            // Inline Reality Layer summary panel
-                                                if (parsed.depthLayers.isNotEmpty()) {
-                                                    var wasArchived by remember { mutableStateOf(false) }
-                                                    Row(
-                                                        modifier = Modifier
-                                                            .fillMaxWidth()
-                                                            .padding(bottom = 6.dp),
-                                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                                        verticalAlignment = Alignment.CenterVertically
-                                                    ) {
-                                                        Text(
-                                                            text = "ACTIVE REALITY LAYERS",
-                                                            fontSize = 7.5.sp,
-                                                            letterSpacing = 1.sp,
-                                                            fontFamily = DMMonoFontFamily,
-                                                            fontWeight = FontWeight.Bold,
-                                                            color = TextMutedColor
-                                                        )
-
-                                                        Button(
-                                                            onClick = {
-                                                                val precedingUserMessageIdx = activeMessages.indexOfFirst { it.id == message.id } - 1
-                                                                val query = if (precedingUserMessageIdx >= 0 && activeMessages[precedingUserMessageIdx].role == "user") {
-                                                                    activeMessages[precedingUserMessageIdx].text
-                                                                } else {
-                                                                    "Deep-Lens Scanned Exploration"
-                                                                }
-                                                                onArchiveInsight(query, parsed.introduction, parsed.toJsonString(query))
-                                                                wasArchived = true
-                                                            },
-                                                            enabled = !wasArchived,
-                                                            colors = ButtonDefaults.buttonColors(
-                                                                containerColor = if (wasArchived) Color.Transparent else ElectricViolet.copy(alpha = 0.15f),
-                                                                contentColor = if (wasArchived) SuccessColor else ElectricViolet,
-                                                                disabledContainerColor = Color.Transparent,
-                                                                disabledContentColor = SuccessColor
-                                                            ),
-                                                            border = BorderStroke(1.dp, if (wasArchived) SuccessColor.copy(alpha = 0.4f) else ElectricViolet.copy(alpha = 0.4f)),
-                                                            shape = RoundedCornerShape(12.dp),
-                                                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
-                                                            modifier = Modifier.height(20.dp)
-                                                        ) {
-                                                            Text(
-                                                                text = if (wasArchived) "✓ ARCHIVED" else "📥 ARCHIVE INSIGHT",
-                                                                fontSize = 7.5.sp,
-                                                                fontFamily = DMMonoFontFamily,
-                                                                fontWeight = FontWeight.Bold
-                                                            )
-                                                        }
-                                                    }
-
-                                                    Column(
-                                                        verticalArrangement = Arrangement.spacedBy(4.dp),
-                                                        modifier = Modifier
-                                                            .fillMaxWidth()
-                                                            .padding(bottom = 12.dp)
-                                                    ) {
-                                                        parsed.depthLayers.forEach { layer ->
-                                                            // Match standard layer colors
-                                                            val layerColor = when (layer.layerNumber) {
-                                                                1 -> Layer1
-                                                                2 -> Layer2
-                                                                3 -> Layer3
-                                                                4 -> Layer4
-                                                                5 -> Layer5
-                                                                6 -> Layer6
-                                                                7 -> Layer7
-                                                                8 -> Layer8
-                                                                9 -> Layer9
-                                                                else -> Layer10
-                                                            }
-
-                                                            var expandedInsightLocal by remember { mutableStateOf(false) }
-
-                                                            Column(
-                                                                modifier = Modifier
-                                                                    .fillMaxWidth()
-                                                                    .background(Surface3, shape = RoundedCornerShape(6.dp))
-                                                                    .border(
-                                                                        1.dp,
-                                                                        if (expandedInsightLocal) layerColor.copy(alpha = 0.6f) else BorderSubtle,
-                                                                        shape = RoundedCornerShape(6.dp)
-                                                                    )
-                                                                    .clickable { expandedInsightLocal = !expandedInsightLocal }
-                                                                    .padding(8.dp)
-                                                            ) {
-                                                                Row(
-                                                                    modifier = Modifier.fillMaxWidth(),
-                                                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                                                    verticalAlignment = Alignment.CenterVertically
-                                                                ) {
-                                                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                                                        Box(modifier = Modifier.size(5.dp).background(layerColor, CircleShape))
-                                                                        Spacer(modifier = Modifier.width(6.dp))
-                                                                        Text(
-                                                                            text = "L${layer.layerNumber} · ${layer.layerName}",
-                                                                            fontSize = 9.5.sp,
-                                                                            fontWeight = FontWeight.Bold,
-                                                                            color = TextPrimaryColor,
-                                                                            fontFamily = DMMonoFontFamily
-                                                                        )
-                                                                    }
-                                                                    Icon(
-                                                                        imageVector = if (expandedInsightLocal) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                                                                        contentDescription = null,
-                                                                        tint = TextMutedColor,
-                                                                        modifier = Modifier.size(12.dp)
-                                                                    )
-                                                                }
-
-                                                                if (expandedInsightLocal) {
-                                                                    Spacer(modifier = Modifier.height(4.dp))
-                                                                    Text(
-                                                                        text = stripMarkdown(layer.description),
-                                                                        fontSize = 11.sp,
-                                                                        color = TextSecondaryColor,
-                                                                        lineHeight = 15.sp,
-                                                                        fontFamily = InstrumentSansFontFamily
-                                                                    )
-                                                                }
-                                                            }
-                                                        }
-                                                    }
-                                                }
-
-                                                // Root Cause Report Card
-                                                parsed.rootCauseReport?.let { rc ->
-                                                    Box(
-                                                        modifier = Modifier
-                                                            .fillMaxWidth()
-                                                            .background(Color(0x0F7E65FF), shape = RoundedCornerShape(8.dp))
-                                                            .border(1.dp, Color(0x337E65FF), shape = RoundedCornerShape(8.dp))
-                                                            .padding(10.dp)
-                                                            .padding(bottom = 8.dp)
-                                                    ) {
-                                                        Column {
-                                                            Text(
-                                                                text = "ROOT CAUSE FORMULATION",
-                                                                fontSize = 7.5.sp,
-                                                                fontFamily = DMMonoFontFamily,
-                                                                fontWeight = FontWeight.Bold,
-                                                                color = ElectricViolet,
-                                                                modifier = Modifier.padding(bottom = 6.dp)
-                                                            )
-
-                                                            Text(
-                                                                text = "Symptom: ${stripMarkdown(rc.symptom)}",
-                                                                fontSize = 10.sp,
-                                                                color = TextPrimaryColor,
-                                                                fontFamily = InstrumentSansFontFamily,
-                                                                lineHeight = 13.sp
-                                                            )
-                                                            Spacer(modifier = Modifier.height(4.dp))
-                                                            Text(
-                                                                text = "Incentive: ${stripMarkdown(rc.immediateCause)}",
-                                                                fontSize = 10.sp,
-                                                                color = TextSecondaryColor,
-                                                                fontFamily = InstrumentSansFontFamily,
-                                                                lineHeight = 13.sp
-                                                            )
-                                                        }
-                                                    }
-                                                }
-
-
-                                                // ── Copy & Share bar ──────────────────────────────────
-                                                val copyShareClipboard = LocalClipboardManager.current
-                                                val copyShareContext = LocalContext.current
-                                                var copyShareCopied by remember { mutableStateOf(false) }
-                                                val copyableText = remember(message.text) {
-                                                    com.example.data.repository.ResponseParser.getCopyableText(message.text)
-                                                }
-
-                                                Row(
-                                                    modifier = Modifier
-                                                        .fillMaxWidth()
-                                                        .padding(bottom = 10.dp),
-                                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                                ) {
-                                                    // COPY button
-                                                    Button(
-                                                        onClick = {
-                                                            copyShareClipboard.setText(AnnotatedString(copyableText))
-                                                            copyShareCopied = true
-                                                        },
-                                                        colors = ButtonDefaults.buttonColors(
-                                                            containerColor = if (copyShareCopied) SuccessColor.copy(alpha = 0.15f) else Surface3
-                                                        ),
-                                                        border = BorderStroke(1.dp, if (copyShareCopied) SuccessColor.copy(alpha = 0.6f) else BorderSubtle),
-                                                        shape = RoundedCornerShape(8.dp),
-                                                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
-                                                        modifier = Modifier.weight(1f)
-                                                    ) {
-                                                        Row(
-                                                            verticalAlignment = Alignment.CenterVertically,
-                                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                                        ) {
-                                                            Icon(
-                                                                imageVector = Icons.Default.ContentCopy,
-                                                                contentDescription = "Copy",
-                                                                tint = if (copyShareCopied) SuccessColor else TextSecondaryColor,
-                                                                modifier = Modifier.size(13.dp)
-                                                            )
-                                                            Text(
-                                                                text = if (copyShareCopied) "Copied!" else "Copy Analysis",
-                                                                fontSize = 10.sp,
-                                                                fontFamily = DMMonoFontFamily,
-                                                                fontWeight = FontWeight.Bold,
-                                                                color = if (copyShareCopied) SuccessColor else TextSecondaryColor
-                                                            )
-                                                        }
-                                                    }
-
-                                                    // SHARE button
-                                                    Button(
-                                                        onClick = {
-                                                            val shareIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
-                                                                type = "text/plain"
-                                                                putExtra(android.content.Intent.EXTRA_SUBJECT, "DepthLens Analysis")
-                                                                putExtra(android.content.Intent.EXTRA_TEXT, copyableText)
-                                                            }
-                                                            copyShareContext.startActivity(
-                                                                android.content.Intent.createChooser(shareIntent, "Share Analysis")
-                                                            )
-                                                        },
-                                                        colors = ButtonDefaults.buttonColors(
-                                                            containerColor = ElectricViolet.copy(alpha = 0.12f)
-                                                        ),
-                                                        border = BorderStroke(1.dp, ElectricViolet.copy(alpha = 0.4f)),
-                                                        shape = RoundedCornerShape(8.dp),
-                                                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
-                                                        modifier = Modifier.weight(1f)
-                                                    ) {
-                                                        Row(
-                                                            verticalAlignment = Alignment.CenterVertically,
-                                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                                        ) {
-                                                            Icon(
-                                                                imageVector = Icons.Default.Share,
-                                                                contentDescription = "Share",
-                                                                tint = ElectricViolet,
-                                                                modifier = Modifier.size(13.dp)
-                                                            )
-                                                            Text(
-                                                                text = "Share",
-                                                                fontSize = 10.sp,
-                                                                fontFamily = DMMonoFontFamily,
-                                                                fontWeight = FontWeight.Bold,
-                                                                color = ElectricViolet
-                                                            )
-                                                        }
-                                                    }
-                                                }
-
-                                                Spacer(modifier = Modifier.height(6.dp))
-
-                                                // Regenerate / Action footer row
-                                                Row(
-                                                    modifier = Modifier.fillMaxWidth(),
-                                                    horizontalArrangement = Arrangement.End,
-                                                    verticalAlignment = Alignment.CenterVertically
-                                                ) {
-                                                    val precedingUserMessageIdx = activeMessages.indexOfFirst { it.id == message.id } - 1
-                                                    val associatedUserQuery = if (precedingUserMessageIdx >= 0 && activeMessages[precedingUserMessageIdx].role == "user") {
-                                                        activeMessages[precedingUserMessageIdx].text
-                                                    } else {
-                                                        ""
-                                                    }
-
-                                                    if (associatedUserQuery.isNotBlank()) {
-                                                        Button(
-                                                            onClick = { onGoDeeper(associatedUserQuery) },
-                                                            colors = ButtonDefaults.buttonColors(
-                                                                containerColor = Color.Transparent,
-                                                                contentColor = PremiumCyan
-                                                            ),
-                                                            border = BorderStroke(1.dp, PremiumCyan.copy(alpha = 0.5f)),
-                                                            shape = RoundedCornerShape(20.dp),
-                                                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
-                                                            modifier = Modifier
-                                                                .height(24.dp)
-                                                                .padding(end = 8.dp)
-                                                        ) {
-                                                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                                                Box(
-                                                                    modifier = Modifier
-                                                                        .size(4.dp)
-                                                                        .background(PremiumCyan, CircleShape)
-                                                                )
-                                                                Spacer(modifier = Modifier.width(4.dp))
-                                                                Text(
-                                                                    text = "GO DEEPER",
-                                                                    fontSize = 7.5.sp,
-                                                                    fontFamily = DMMonoFontFamily,
-                                                                    fontWeight = FontWeight.Bold,
-                                                                    letterSpacing = 0.5.sp
-                                                                )
-                                                            }
-                                                        }
-                                                    }
-
-                                                    IconButton(
-                                                        onClick = { onRegenerateLastAnalysis(message.id) },
-                                                        modifier = Modifier.size(24.dp)
-                                                    ) {
-                                                        Icon(
-                                                            imageVector = Icons.Default.Refresh,
-                                                            contentDescription = "Regenerate",
-                                                            tint = TextMutedColor,
-                                                            modifier = Modifier.size(14.dp)
-                                                        )
-                                                    }
-
-                                                    Spacer(modifier = Modifier.width(6.dp))
-
-                                                    // Copy button
-                                                    val clipboardManager = LocalClipboardManager.current
-                                                    var copied by remember { mutableStateOf(false) }
-                                                    Box(
-                                                        modifier = androidx.compose.ui.Modifier
-                                                            .clip(androidx.compose.foundation.shape.RoundedCornerShape(7.dp))
-                                                            .background(if (copied) ElectricViolet.copy(alpha = 0.18f) else Surface3)
-                                                            .border(1.dp, if (copied) ElectricViolet.copy(alpha = 0.6f) else BorderSubtle, androidx.compose.foundation.shape.RoundedCornerShape(7.dp))
-                                                            .clickable {
-                                                                clipboardManager.setText(AnnotatedString(message.text))
-                                                                copied = true
-                                                            }
-                                                            .padding(horizontal = 8.dp, vertical = 4.dp),
-                                                        contentAlignment = androidx.compose.ui.Alignment.Center
-                                                    ) {
-                                                        Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                                            Icon(
-                                                                imageVector = Icons.Default.ContentCopy,
-                                                                contentDescription = "Copy analysis",
-                                                                tint = if (copied) ElectricViolet else TextMutedColor,
-                                                                modifier = androidx.compose.ui.Modifier.size(10.dp)
-                                                            )
-                                                            Text(
-                                                                text = if (copied) "Copied!" else "Copy",
-                                                                fontSize = 8.sp,
-                                                                fontFamily = DMMonoFontFamily,
-                                                                color = if (copied) ElectricViolet else TextMutedColor
-                                                            )
-                                                        }
-                                                    }
-
-                                                    Spacer(modifier = Modifier.width(6.dp))
-
-                                                    IconButton(
-                                                        onClick = { onDeleteMessage(message.id) },
-                                                        modifier = Modifier.size(24.dp)
-                                                    ) {
-                                                        Icon(
-                                                            imageVector = Icons.Default.Delete,
-                                                            contentDescription = "Delete",
-                                                            tint = TextMutedColor,
-                                                            modifier = Modifier.size(14.dp)
-                                                        )
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
+                                    Text(
+                                        text = "→",
+                                        fontSize = 18.sp,
+                                        fontFamily = DMMonoFontFamily,
+                                        color = TextMutedColor,
+                                        fontWeight = FontWeight.Bold
+                                    )
                                 }
                             }
                         }
                     }
                 }
+                return@Column
             }
-        }
 
-        // Streaming state / Typing Loader Animation matching bash.html guidelines
-        if (isLoading) {
-            ThreeDotThinkingIndicator(
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                text = "Analyzing deeper…"
-            )
-        }
-
-        // Voice dictation recording pane or Compose bar at bottom
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(Surface1)
-                .border(BorderStroke(1.dp, BorderSubtle))
-                .padding(10.dp)
-        ) {
-            Column {
-                // 1. Lens mode chips row
-                val inlineModes = listOf("Root Cause", "Psychology", "Systems", "Probability", "Business", "Relationships", "Spiritual", "Decision Making")
-                Row(
+                    .padding(bottom = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState())
-                        .padding(bottom = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(5.dp)
-                ) {
-                    inlineModes.forEach { mode ->
-                        val isSelectedChip = mode == selectedMode
-                        Box(
-                            modifier = Modifier
-                                .background(
-                                    color = if (isSelectedChip) Color(0x2E7E65FF) else Color.Transparent,
-                                    shape = RoundedCornerShape(20.dp)
-                                )
-                                .border(
-                                    width = 1.dp,
-                                    color = if (isSelectedChip) ElectricViolet else BorderSubtle,
-                                    shape = RoundedCornerShape(20.dp)
-                                )
-                                .clickable { onModeChanged(mode) }
-                                .padding(horizontal = 9.dp, vertical = 4.dp)
-                        ) {
-                            Text(
-                                text = mode,
-                                fontSize = 8.sp,
-                                letterSpacing = 0.08.sp,
-                                fontFamily = DMMonoFontFamily,
-                                color = if (isSelectedChip) ElectricViolet else TextSecondaryColor
-                            )
-                        }
-                    }
-                }
-
-                // 2. Premium file attachment preview above the input field
-                attachedImageUri?.let { uri ->
-                    val fileNameAndExt = remember(uri) {
-                        try {
-                            val decoded = java.net.URLDecoder.decode(uri, "UTF-8")
-                            val last = decoded.split("/").lastOrNull() ?: "file"
-                            val cleanName = if (last.contains("?")) last.substringBefore("?") else last
-                            val ext = cleanName.substringAfterLast(".", "").lowercase()
-                            Pair(cleanName, ext)
-                        } catch (e: Exception) {
-                            Pair("attachment.file", "")
-                        }
-                    }
-                    val (fileName, fileExt) = fileNameAndExt
-
-                    val isImage = fileExt in listOf("jpg", "jpeg", "png", "webp", "gif") || uri.contains("image")
-                    val isVideo = fileExt in listOf("mp4", "mov", "webm") || uri.contains("video")
-                    val isAudio = fileExt in listOf("mp3", "wav", "m4a") || uri.contains("audio")
-                    val isPdf = fileExt == "pdf" || uri.contains("pdf")
-
-                    val previewIcon = when {
-                        isPdf -> "📄"
-                        isVideo -> "🎥"
-                        isAudio -> "🎵"
-                        else -> "📁"
-                    }
-
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(bottom = 8.dp)
-                            .background(Surface3, shape = RoundedCornerShape(12.dp))
-                            .border(1.dp, BorderSubtle, shape = RoundedCornerShape(12.dp))
-                            .padding(8.6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            if (isImage) {
-                                AsyncImage(
-                                    model = uri,
-                                    contentDescription = "Image preview",
-                                    modifier = Modifier
-                                        .size(40.dp)
-                                        .clip(RoundedCornerShape(8.dp))
-                                        .border(1.dp, BorderSubtle, RoundedCornerShape(8.dp)),
-                                    contentScale = androidx.compose.ui.layout.ContentScale.Crop
-                                )
-                            } else {
-                                Box(
-                                    modifier = Modifier
-                                        .size(40.dp)
-                                        .background(ElectricViolet.copy(alpha = 0.12f), shape = RoundedCornerShape(8.dp))
-                                        .border(1.dp, ElectricViolet.copy(alpha = 0.3f), shape = RoundedCornerShape(8.dp)),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(previewIcon, fontSize = 16.sp)
-                                }
-                            }
-
-                            Column {
-                                Text(
-                                    text = fileName.take(24) + (if (fileName.length > 24) "..." else ""),
-                                    fontSize = 11.5.sp,
-                                    fontFamily = InstrumentSansFontFamily,
-                                    fontWeight = FontWeight.Bold,
-                                    color = TextPrimaryColor,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                                Text(
-                                    text = when {
-                                        isImage -> "Image Source Added"
-                                        isPdf -> "PDF Document Source Added"
-                                        isAudio -> "Audio Recording Source Added"
-                                        isVideo -> "Video Media Source Added"
-                                        else -> "System File Source Added"
-                                    },
-                                    fontSize = 8.5.sp,
-                                    fontFamily = InstrumentSansFontFamily,
-                                    color = TextMutedColor
-                                )
-                            }
-                        }
-
-                        IconButton(
-                            onClick = onRemoveAttachment,
-                            modifier = Modifier
-                                .size(28.dp)
-                                .background(ErrorColor.copy(alpha = 0.1f), CircleShape)
-                        ) {
-                            Text("✕", fontSize = 10.sp, color = ErrorColor, fontWeight = FontWeight.Bold)
-                        }
-                    }
-                }
-
-                // 3. New Refactored Input Bar Layout:
-                // [ + ] [ Input Field ...................... ] [ Voice-to-Text ] [ Send ]
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(Surface2, shape = RoundedCornerShape(28.dp))
-                        .border(1.dp, BorderSubtle, shape = RoundedCornerShape(28.dp))
-                        .padding(horizontal = 8.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    // (A) Modern attachment/add button on the left
-                    Box(
-                        modifier = Modifier
-                            .size(38.dp)
-                            .background(
-                                brush = androidx.compose.ui.graphics.Brush.linearGradient(
-                                    colors = listOf(
-                                        ElectricViolet.copy(alpha = 0.22f),
-                                        PremiumCyan.copy(alpha = 0.10f)
-                                    )
-                                ),
-                                shape = RoundedCornerShape(12.dp)
-                            )
-                            .border(
-                                width = 1.2.dp,
-                                brush = androidx.compose.ui.graphics.Brush.linearGradient(
-                                    colors = listOf(ElectricViolet, PremiumCyan.copy(alpha = 0.7f))
-                                ),
-                                shape = RoundedCornerShape(12.dp)
-                            )
-                            .clickable { showPlusBottomSheet = true },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.Add,
-                            contentDescription = "Attach files",
-                            tint = ElectricViolet,
-                            modifier = Modifier.size(20.dp)
+                        .size(8.dp)
+                        .background(
+                            if (latestAiMessage != null) SuccessColor else TextMutedColor,
+                            CircleShape
                         )
-                    }
-
-                    Spacer(modifier = Modifier.width(8.dp))
-
-                    // (B) Message Input Field
-                    BasicTextField(
-                        value = inputQueryText,
-                        onValueChange = { inputQueryText = it },
-                        modifier = Modifier
-                            .weight(1f)
-                            .padding(horizontal = 6.dp),
-                        textStyle = TextStyle(
-                            fontFamily = InstrumentSansFontFamily,
-                            fontSize = 11.5.sp,
-                            color = TextPrimaryColor
-                        ),
-                        decorationBox = { innerTextField ->
-                            if (inputQueryText.isEmpty()) {
-                                Text(
-                                    text = "Ask anything deeper…",
-                                    fontFamily = InstrumentSansFontFamily,
-                                    fontSize = 11.sp,
-                                    color = TextMutedColor
-                                )
-                            }
-                            innerTextField()
-                        }
-                    )
-
-                    Spacer(modifier = Modifier.width(8.dp))
-
-                    // (C) Voice to Text button immediately before Send
-                    val speechContext = LocalContext.current
-                    var isListeningForSpeech by remember { mutableStateOf(false) }
-                    val speechRecognizer = remember {
-                        try { SpeechRecognizer.createSpeechRecognizer(speechContext) } catch (e: Exception) { null }
-                    }
-
-                    val recognitionListener = remember(speechRecognizer) {
-                        object : RecognitionListener {
-                            override fun onReadyForSpeech(params: Bundle?) {}
-                            override fun onBeginningOfSpeech() {}
-                            override fun onRmsChanged(rmsdB: Float) {}
-                            override fun onBufferReceived(buffer: ByteArray?) {}
-                            override fun onEndOfSpeech() {
-                                isListeningForSpeech = false
-                            }
-                            override fun onError(error: Int) {
-                                isListeningForSpeech = false
-                            }
-                            override fun onResults(results: Bundle?) {
-                                val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                                if (!matches.isNullOrEmpty()) {
-                                    val spokenText = matches[0]
-                                    if (!spokenText.isNullOrBlank()) {
-                                        inputQueryText = if (inputQueryText.isEmpty()) spokenText else "$inputQueryText $spokenText"
-                                    }
-                                }
-                                isListeningForSpeech = false
-                            }
-                            override fun onPartialResults(partialResults: Bundle?) {}
-                            override fun onEvent(eventType: Int, params: Bundle?) {}
-                        }
-                    }
-
-                    LaunchedEffect(speechRecognizer) {
-                        speechRecognizer?.setRecognitionListener(recognitionListener)
-                    }
-
-                    DisposableEffect(Unit) {
-                        onDispose {
-                            speechRecognizer?.destroy()
-                        }
-                    }
-
-                    val audioPermissionLauncher = rememberLauncherForActivityResult(
-                        contract = ActivityResultContracts.RequestPermission()
-                    ) { isGranted ->
-                        if (isGranted && speechRecognizer != null) {
-                            isListeningForSpeech = true
-                            val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-                                putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                            }
-                            speechRecognizer.startListening(intent)
-                        }
-                    }
-
-                    IconButton(
-                        onClick = {
-                            if (isListeningForSpeech) {
-                                speechRecognizer?.stopListening()
-                                isListeningForSpeech = false
-                            } else {
-                                val hasPermission = ContextCompat.checkSelfPermission(
-                                    speechContext,
-                                    android.Manifest.permission.RECORD_AUDIO
-                                ) == PackageManager.PERMISSION_GRANTED
-
-                                if (hasPermission) {
-                                    isListeningForSpeech = true
-                                    val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-                                        putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                                    }
-                                    speechRecognizer?.startListening(intent)
-                                } else {
-                                    audioPermissionLauncher.launch(android.Manifest.permission.RECORD_AUDIO)
-                                }
-                            }
-                        },
-                        modifier = Modifier
-                            .size(36.dp)
-                            .background(
-                                if (isListeningForSpeech) ElectricViolet.copy(alpha = 0.25f) else Color.Transparent,
-                                RoundedCornerShape(10.dp)
-                            )
-                    ) {
-                        Icon(
-                            imageVector = if (isListeningForSpeech) Icons.Rounded.Stop else Icons.Rounded.Mic,
-                            contentDescription = if (isListeningForSpeech) "Stop listening" else "Voice to text",
-                            tint = if (isListeningForSpeech) ErrorColor else TextSecondaryColor,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.width(8.dp))
-
-                    // (D) Send button
-                    IconButton(
-                        onClick = {
-                            if (inputQueryText.isNotBlank() || attachedImageUri != null) {
-                                val dispatchText = inputQueryText
-                                inputQueryText = ""
-                                onSubmitQuery(dispatchText)
-                            }
-                        },
-                        modifier = Modifier
-                            .size(36.dp)
-                            .background(ElectricViolet, CircleShape),
-                        enabled = inputQueryText.isNotBlank() || attachedImageUri != null,
-                        colors = IconButtonDefaults.iconButtonColors(contentColor = Color.White)
-                    ) {
-                        Text(
-                            text = "↑",
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White,
-                            textAlign = TextAlign.Center
-                        )
-                    }
-                }
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = if (latestAiMessage != null) "ACTIVE CONVERSATION PROFILE" else "REALITY MATRIX MODE",
+                    fontSize = 8.sp,
+                    letterSpacing = 1.5.sp,
+                    fontFamily = DMMonoFontFamily,
+                    fontWeight = FontWeight.Bold,
+                    color = if (latestAiMessage != null) SuccessColor else TextMutedColor
+                )
             }
-        }
-    } // Column ends here
 
-    // (E) Bottom Sheet Design
-    androidx.compose.animation.AnimatedVisibility(
-        visible = showPlusBottomSheet,
-        enter = fadeIn(),
-        exit = fadeOut()
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.6f))
-                .clickable { showPlusBottomSheet = false }
-        )
-    }
+            Text(
+                text = "\"$queryText\"",
+                fontFamily = DMSerifDisplayFontFamily,
+                fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+                fontSize = 17.sp,
+                lineHeight = 22.sp,
+                color = TextPrimaryColor,
+                modifier = Modifier.padding(bottom = 6.dp)
+            )
 
-    val pickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
-    ) { uri ->
-        uri?.let {
-            onAddAttachment(it.toString())
-        }
-    }
+            Text(
+                text = if (latestAiMessage != null) {
+                    "$selectedMode · Diagnostic Study · ${parsedResponse?.depthLayers?.size ?: 0} Active Lenses"
+                } else {
+                    "Simulated Offline Framework · 10 Active Diagnostic Lenses"
+                },
+                fontSize = 8.5.sp,
+                fontFamily = DMMonoFontFamily,
+                color = TextMutedColor,
+                letterSpacing = 0.5.sp,
+                modifier = Modifier.padding(bottom = 12.dp)
+            )
 
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.BottomCenter
-    ) {
-        androidx.compose.animation.AnimatedVisibility(
-            visible = showPlusBottomSheet,
-            enter = slideInVertically(initialOffsetY = { it }),
-            exit = slideOutVertically(targetOffsetY = { it })
-        ) {
+            // High-Tech Reality Lens Toggle Card
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .border(1.5.dp, BorderSubtle, RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
-                    .clickable(enabled = false) {},
-                shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
-                colors = CardDefaults.cardColors(containerColor = DeepMidnight)
+                    .padding(bottom = 16.dp),
+                shape = RoundedCornerShape(10.dp),
+                colors = CardDefaults.cardColors(containerColor = Surface2),
+                border = BorderStroke(1.dp, if (isRealityLensEnabled) PremiumCyan else BorderSubtle)
             ) {
-                Column(
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .navigationBarsPadding()
-                        .padding(vertical = 18.dp, horizontal = 24.dp)
+                        .padding(horizontal = 14.dp, vertical = 10.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Bottom Sheet Drag Handle
-                    Box(
-                        modifier = Modifier
-                            .size(40.dp, 4.dp)
-                            .background(BorderSubtle, CircleShape)
-                            .align(Alignment.CenterHorizontally)
-                    )
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    Text(
-                        text = "Add to Conversation",
-                        fontSize = 16.sp,
-                        fontFamily = InstrumentSansFontFamily,
-                        fontWeight = FontWeight.Bold,
-                        color = PremiumCyan,
-                        modifier = Modifier.padding(bottom = 12.dp)
-                    )
-
-                    val selectOptions = listOf(
-                        Triple("Images", "🖼️", "image/*"),
-                        Triple("Videos", "🎬", "video/*"),
-                        Triple("Audio Files", "🎧", "audio/*"),
-                        Triple("PDF Documents", "📑", "application/pdf"),
-                        Triple("Any File", "🗂️", "*/*")
-                    )
-
-                    selectOptions.forEach { option ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 6.dp)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(Surface3)
-                                .border(1.dp, BorderSubtle, RoundedCornerShape(12.dp))
-                                .clickable {
-                                    showPlusBottomSheet = false
-                                    pickerLauncher.launch(option.third)
-                                }
-                                .padding(horizontal = 16.dp, vertical = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(14.dp)
-                        ) {
-                            Text(text = option.second, fontSize = 18.sp)
+                    Row(
+                        modifier = Modifier.weight(1f),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = if (isRealityLensEnabled) "🟢" else "⚫",
+                            fontSize = 11.sp
+                        )
+                        Column {
                             Text(
-                                text = option.first,
-                                fontSize = 13.sp,
-                                color = TextPrimaryColor,
+                                text = "SYSTEMIC REALITY LENS OVERLAY",
+                                fontSize = 9.sp,
+                                fontFamily = DMMonoFontFamily,
+                                fontWeight = FontWeight.Bold,
+                                color = if (isRealityLensEnabled) PremiumCyan else TextPrimaryColor,
+                                letterSpacing = 0.5.sp
+                            )
+                            Text(
+                                text = "Overlay dynamic relational causal nodes and links on analysis output.",
+                                fontSize = 8.5.sp,
                                 fontFamily = InstrumentSansFontFamily,
+                                color = TextMutedColor
+                            )
+                        }
+                    }
+                    Switch(
+                        checked = isRealityLensEnabled,
+                        onCheckedChange = { isRealityLensEnabled = it },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = PremiumCyan,
+                            checkedTrackColor = PremiumCyan.copy(alpha = 0.3f),
+                            uncheckedThumbColor = TextMutedColor,
+                            uncheckedTrackColor = Surface3
+                        ),
+                        modifier = Modifier.scale(0.82f)
+                    )
+                }
+            }
+
+            if (parsedResponse != null) {
+                IntelligenceOSVisualizer(
+                    parsed = parsedResponse,
+                    rawText = latestAiMessage?.text ?: "",
+                    onSubmitQuery = onSubmitQuery
+                )
+                Spacer(modifier = Modifier.height(20.dp))
+            }
+
+            // Reality Layer Card Grid Stack
+            Text(
+                text = "REALITY INTELLIGENCE DASHBOARD",
+                fontSize = 8.5.sp,
+                letterSpacing = 1.3.sp,
+                fontFamily = DMMonoFontFamily,
+                fontWeight = FontWeight.Bold,
+                color = TextMutedColor,
+                modifier = Modifier.padding(bottom = 10.dp)
+            )
+
+            Column(
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                standardLayers.forEach { layerDef ->
+                    val parsedMatch = parsedResponse?.depthLayers?.find { it.layerNumber == layerDef.num }
+                    val isLiveActive = parsedMatch != null
+                    val isExpanded = expandedStates[layerDef.num] == true
+
+                    // Setup custom Card background & glow styling matching bash.html guidelines
+                    val cardBorder = if (isLiveActive) BorderActive else BorderSubtle
+
+                    Card(
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = Surface2
+                        ),
+                        border = BorderStroke(
+                            width = if (isExpanded) 1.5.dp else 1.dp,
+                            color = if (isExpanded) ElectricViolet else cardBorder
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                expandedStates[layerDef.num] = !isExpanded
+                            }
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(12.dp)
+                        ) {
+                            // Card Header
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text(
+                                        text = String.format("%02d", layerDef.num),
+                                        fontSize = 10.sp,
+                                        fontFamily = DMMonoFontFamily,
+                                        color = if (isLiveActive) TextPrimaryColor else TextMutedColor,
+                                        modifier = Modifier.width(22.dp),
+                                        fontWeight = FontWeight.Bold
+                                    )
+
+                                    Box(
+                                        modifier = Modifier
+                                            .size(7.dp)
+                                            .background(
+                                                color = layerDef.accentColor,
+                                                shape = CircleShape
+                                            )
+                                    )
+
+                                    Spacer(modifier = Modifier.width(10.dp))
+
+                                    Text(
+                                        text = layerDef.name,
+                                        fontSize = 11.5.sp,
+                                        color = TextPrimaryColor,
+                                        fontWeight = FontWeight.SemiBold,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    // 5 Strength Pips indicator
+                                    Row(
+                                        horizontalArrangement = Arrangement.spacedBy(2.dp)
+                                    ) {
+                                        val strength = if (isLiveActive) {
+                                            when (layerDef.num) {
+                                                9 -> 5
+                                                6, 7, 10 -> 4
+                                                else -> 3
+                                            }
+                                        } else {
+                                            // Non-active display default pips
+                                            when (layerDef.num) {
+                                                1 -> 4
+                                                2 -> 3
+                                                else -> 2
+                                            }
+                                        }
+
+                                        for (pipIdx in 1..5) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(5.dp)
+                                                    .background(
+                                                        color = if (pipIdx <= strength) layerDef.accentColor else Surface4,
+                                                        shape = RoundedCornerShape(1.5.dp)
+                                                    )
+                                            )
+                                        }
+                                    }
+
+                                    Icon(
+                                        imageVector = if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                                        contentDescription = "Expand",
+                                        tint = TextMutedColor,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                            }
+
+                            // Expanded Content
+                            if (isExpanded) {
+                                Spacer(modifier = Modifier.height(10.dp))
+                                HorizontalDivider(
+                                    color = BorderSubtle,
+                                    thickness = 1.dp,
+                                    modifier = Modifier.padding(bottom = 8.dp)
+                                )
+
+                                Text(
+                                    text = "FRAMEWORK DEFINITION",
+                                    fontSize = 7.5.sp,
+                                    letterSpacing = 1.sp,
+                                    fontFamily = DMMonoFontFamily,
+                                    color = TextMutedColor,
+                                    modifier = Modifier.padding(bottom = 4.dp)
+                                )
+
+                                Text(
+                                    text = layerDef.description,
+                                    fontSize = 10.5.sp,
+                                    fontFamily = InstrumentSansFontFamily,
+                                    color = TextSecondaryColor,
+                                    lineHeight = 15.sp,
+                                    modifier = Modifier.padding(bottom = 12.dp)
+                                )
+
+                                if (isLiveActive && parsedMatch != null) {
+                                    Text(
+                                        text = "ACTIVE SESSION INTELLIGENCE",
+                                        fontSize = 7.5.sp,
+                                        letterSpacing = 1.sp,
+                                        fontFamily = DMMonoFontFamily,
+                                        color = layerDef.accentColor,
+                                        modifier = Modifier.padding(bottom = 4.dp)
+                                    )
+
+                                    Text(
+                                        text = parsedMatch.description,
+                                        fontSize = 11.5.sp,
+                                        fontFamily = InstrumentSansFontFamily,
+                                        color = TextPrimaryColor,
+                                        lineHeight = 16.sp
+                                    )
+                                } else {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .background(Surface3, shape = RoundedCornerShape(8.dp))
+                                            .border(1.dp, BorderSubtle, shape = RoundedCornerShape(8.dp))
+                                            .padding(8.dp)
+                                    ) {
+                                        Text(
+                                            text = "No study is currently processing this layer. Launch an analysis diagnostic inside Chat sheet to evaluate active real-world metrics for this level.",
+                                            fontSize = 9.5.sp,
+                                            fontFamily = InstrumentSansFontFamily,
+                                            color = TextMutedColor,
+                                            lineHeight = 13.sp
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // FUTURE PROBABILITY CANVS & MODEL (D3-style)
+            var selectedPointIndex by remember { mutableStateOf<Int?>(null) }
+            val scenarioCurvePoints = remember {
+                listOf(
+                    PlotPointData(0, 0.12f, 0.70f, "T+1 Month", "October 2026", "Initial Loop Friction", 58, "System response begins rejecting current paradigm. Feedback loop resistance bubbles across user networks."),
+                    PlotPointData(1, 0.38f, 0.35f, "T+3 Months", "December 2026", "Maximum Tension Structural Peak", 82, "Underlying psychological biases and competing incentives trigger structural choke points."),
+                    PlotPointData(2, 0.65f, 0.55f, "T+6 Months", "March 2027", "Intervention Horizon Shift", 45, "Structural policy adjustment alters resource distribution, resetting system boundaries."),
+                    PlotPointData(3, 0.88f, 0.20f, "T+12 Months", "September 2027", "Steady State Equilibrium", 92, "Absolute reality constraints assert control. System establishes sustainable, highly balanced alignment loops.")
+                )
+            }
+
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(14.dp),
+                colors = CardDefaults.cardColors(containerColor = Surface2),
+                border = BorderStroke(1.dp, BorderSubtle)
+            ) {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    // Header
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(Surface3)
+                            .border(BorderStroke(1.dp, BorderSubtle))
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "INTERACTIVE FORECAST CANVUSES (TAP POINTS)",
+                            fontSize = 8.sp,
+                            letterSpacing = 1.1.sp,
+                            fontFamily = DMMonoFontFamily,
+                            color = TextMutedColor,
+                            fontWeight = FontWeight.Bold
+                        )
+
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Box(modifier = Modifier.size(5.dp).background(SuccessColor, CircleShape))
+                            Text(
+                                text = "D3 INTERACTION CORE",
+                                fontSize = 7.5.sp,
+                                fontFamily = DMMonoFontFamily,
+                                color = SuccessColor,
                                 fontWeight = FontWeight.Bold
                             )
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    TextButton(
-                        onClick = { showPlusBottomSheet = false },
-                        modifier = Modifier.align(Alignment.End)
+                    // The Canvas
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(180.dp)
+                            .background(Surface2)
+                            .padding(8.dp)
                     ) {
-                        Text("Cancel", fontSize = 13.sp, color = ElectricViolet, fontWeight = FontWeight.Bold)
+                        Canvas(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .pointerInput(scenarioCurvePoints) {
+                                    detectTapGestures { offset ->
+                                        val w = size.width
+                                        val h = size.height
+                                        var closestIdx: Int? = null
+                                        var minDist = Float.MAX_VALUE
+                                        scenarioCurvePoints.forEach { pt ->
+                                            val px = pt.xRatio * w
+                                            val py = pt.yRatio * h
+                                            val dist = Math.hypot((offset.x - px).toDouble(), (offset.y - py).toDouble()).toFloat()
+                                            if (dist < 36.dp.toPx() && dist < minDist) {
+                                                closestIdx = pt.index
+                                                minDist = dist
+                                            }
+                                        }
+                                        selectedPointIndex = if (closestIdx == selectedPointIndex) null else closestIdx
+                                    }
+                                }
+                        ) {
+                            val w = size.width
+                            val h = size.height
+
+                            // Draw baseline grid lines
+                            val lines = 4
+                            for (i in 1..lines) {
+                                val ratio = i.toFloat() / (lines + 1)
+                                drawLine(
+                                    color = BorderSubtle.copy(alpha = 0.2f),
+                                    start = Offset(0f, ratio * h),
+                                    end = Offset(w, ratio * h),
+                                    strokeWidth = 1.dp.toPx()
+                                )
+                            }
+
+                            // Draw line curve
+                            val path = Path().apply {
+                                scenarioCurvePoints.forEachIndexed { idx, pt ->
+                                    val px = pt.xRatio * w
+                                    val py = pt.yRatio * h
+                                    if (idx == 0) {
+                                        moveTo(px, py)
+                                    } else {
+                                        val prev = scenarioCurvePoints[idx - 1]
+                                        val prevX = prev.xRatio * w
+                                        val prevY = prev.yRatio * h
+                                        cubicTo(
+                                            (prevX + px) / 2f, prevY,
+                                            (prevX + px) / 2f, py,
+                                            px, py
+                                        )
+                                    }
+                                }
+                            }
+
+                            drawPath(
+                                path = path,
+                                color = ElectricViolet.copy(alpha = 0.8f),
+                                style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round)
+                            )
+
+                            // Draw Event/Date Plot Points
+                            scenarioCurvePoints.forEach { pt ->
+                                val px = pt.xRatio * w
+                                val py = pt.yRatio * h
+                                val isSelected = selectedPointIndex == pt.index
+
+                                // Shimmering outer aura
+                                drawCircle(
+                                    color = if (isSelected) PremiumCyan.copy(alpha = 0.4f) else ElectricViolet.copy(alpha = 0.15f),
+                                    radius = if (isSelected) 11.dp.toPx() else 6.dp.toPx(),
+                                    center = Offset(px, py)
+                                )
+
+                                // Inner core
+                                drawCircle(
+                                    color = if (isSelected) PremiumCyan else ElectricViolet,
+                                    radius = 3.5.dp.toPx(),
+                                    center = Offset(px, py)
+                                )
+                            }
+                        }
+                    }
+
+                    // Specific Tooltip Overlay details
+                    selectedPointIndex?.let { idx ->
+                        val pt = scenarioCurvePoints[idx]
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(10.dp)
+                                .background(Surface3, shape = RoundedCornerShape(8.dp))
+                                .border(1.dp, PremiumCyan.copy(alpha = 0.4f), shape = RoundedCornerShape(8.dp))
+                                .padding(10.dp)
+                        ) {
+                            Column {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "${pt.label} Forecast · ${pt.date}",
+                                        fontSize = 8.sp,
+                                        fontFamily = DMMonoFontFamily,
+                                        color = PremiumCyan,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Text(
+                                        text = "${pt.prob}% PROB",
+                                        fontSize = 8.sp,
+                                        fontFamily = DMMonoFontFamily,
+                                        color = TextMutedColor
+                                    )
+                                }
+                                Spacer(modifier = Modifier.height(3.dp))
+                                Text(
+                                    text = pt.title,
+                                    fontSize = 11.sp,
+                                    fontFamily = InstrumentSansFontFamily,
+                                    fontWeight = FontWeight.Bold,
+                                    color = TextPrimaryColor
+                                )
+                                Spacer(modifier = Modifier.height(3.dp))
+                                Text(
+                                    text = pt.desc,
+                                    fontSize = 9.sp,
+                                    fontFamily = InstrumentSansFontFamily,
+                                    color = TextSecondaryColor,
+                                    lineHeight = 12.sp
+                                )
+                            }
+                        }
+                    }
+
+                    if (selectedPointIndex == null) {
+                        Text(
+                            text = "▲ Tap points above to inspect date markers and systemic implications",
+                            fontSize = 8.5.sp,
+                            fontStyle = FontStyle.Italic,
+                            color = TextMutedColor,
+                            modifier = Modifier.padding(10.dp)
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // 1. RECURSIVE SYSTEM FEEDBACK LOOP VISUALIZER
+            var selectedLoopElement by remember { mutableStateOf<Int?>(null) }
+            val feedbackLoopElements = remember {
+                listOf(
+                    FeedbackNode(0, "Incentive Reinforcement", "Competitive payout scales lock player behaviors.", "+25% Likelihood", "+12% System Risk"),
+                    FeedbackNode(1, "Erosion of Trust", "Symptomatic neglect degrades user community retention.", "-15% Likelihood", "+48% System Risk"),
+                    FeedbackNode(2, "Operational Bottleneck", "Capacity limit rules constrain scalability throughput.", "-8% Likelihood", "+18% System Risk"),
+                    FeedbackNode(3, "Paradigm Shift Horizon", "Absolute reality forces push adaptation toward steady-state equilibrium.", "+35% Likelihood", "-20% System Risk")
+                )
+            }
+
+            Text(
+                text = "RECURSIVE SYSTEM FEEDBACK LOOP (D3 INTERACTIVE ENGINE)",
+                fontSize = 8.sp,
+                letterSpacing = 1.3.sp,
+                fontFamily = DMMonoFontFamily,
+                fontWeight = FontWeight.Bold,
+                color = TextMutedColor,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 20.dp),
+                shape = RoundedCornerShape(12.dp),
+                colors = CardDefaults.cardColors(containerColor = Surface2),
+                border = BorderStroke(1.dp, BorderSubtle)
+            ) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Text(
+                        text = "Hover/Tap 'System Reality' components to see cascade effect on overall metrics.",
+                        fontSize = 9.5.sp,
+                        fontFamily = InstrumentSansFontFamily,
+                        color = TextSecondaryColor,
+                        modifier = Modifier.padding(bottom = 12.dp)
+                    )
+
+                    // Node loop visual grid/circle draw
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(130.dp)
+                            .background(Surface3, shape = RoundedCornerShape(8.dp))
+                            .border(1.dp, BorderSubtle, shape = RoundedCornerShape(8.dp))
+                            .padding(8.dp)
+                    ) {
+                        Canvas(modifier = Modifier.fillMaxSize()) {
+                            val cx = size.width / 2f
+                            val cy = size.height / 2f
+                            val radius = 42.dp.toPx()
+
+                            // Draw recursive ring path
+                            drawCircle(
+                                color = ElectricViolet.copy(alpha = 0.25f),
+                                radius = radius,
+                                center = Offset(cx, cy),
+                                style = Stroke(width = 2.dp.toPx())
+                            )
+
+                            // Helper to draw recursive curve arrowheads
+                            // 4 nodes distributed on the circle
+                            feedbackLoopElements.forEach { element ->
+                                val angle = (element.id * 90f) * (Math.PI / 180f)
+                                val nx = cx + radius * Math.cos(angle).toFloat()
+                                val ny = cy + radius * Math.sin(angle).toFloat()
+
+                                val isNodeSelected = selectedLoopElement == element.id
+
+                                // Ring highlight
+                                drawCircle(
+                                    color = if (isNodeSelected) PremiumCyan.copy(alpha = 0.35f) else ElectricViolet.copy(alpha = 0.15f),
+                                    radius = if (isNodeSelected) 14.dp.toPx() else 8.dp.toPx(),
+                                    center = Offset(nx, ny)
+                                )
+                                // Solid core
+                                drawCircle(
+                                    color = if (isNodeSelected) PremiumCyan else ElectricViolet,
+                                    radius = 4.dp.toPx(),
+                                    center = Offset(nx, ny)
+                                )
+                            }
+                        }
+
+                        // Superimposed central title or selected item labels
+                        Column(
+                            modifier = Modifier.align(Alignment.Center),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(
+                                text = "RECURSION RING",
+                                fontSize = 8.sp,
+                                fontFamily = DMMonoFontFamily,
+                                color = TextMutedColor,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = "LOOP FORCE",
+                                fontSize = 7.sp,
+                                fontFamily = DMMonoFontFamily,
+                                color = PremiumCyan,
+                                letterSpacing = 1.sp
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // Reality component selection list
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        feedbackLoopElements.forEach { node ->
+                            val isSelected = selectedLoopElement == node.id
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .background(
+                                        color = if (isSelected) PremiumCyan.copy(alpha = 0.14f) else Surface3,
+                                        shape = RoundedCornerShape(8.dp)
+                                    )
+                                    .border(
+                                        width = 1.dp,
+                                        color = if (isSelected) PremiumCyan else BorderSubtle,
+                                        shape = RoundedCornerShape(8.dp)
+                                    )
+                                    .clickable {
+                                        selectedLoopElement = if (isSelected) null else node.id
+                                    }
+                                    .padding(8.dp)
+                            ) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text(
+                                        text = "NODE 0${node.id + 1}",
+                                        fontSize = 8.sp,
+                                        fontFamily = DMMonoFontFamily,
+                                        color = if (isSelected) PremiumCyan else TextMutedColor,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Spacer(modifier = Modifier.height(3.dp))
+                                    Text(
+                                        text = node.title,
+                                        fontSize = 8.5.sp,
+                                        fontFamily = InstrumentSansFontFamily,
+                                        fontWeight = FontWeight.Bold,
+                                        color = TextPrimaryColor,
+                                        textAlign = TextAlign.Center,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // Display cascade impact if selected
+                    selectedLoopElement?.let { idx ->
+                        val node = feedbackLoopElements[idx]
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 12.dp)
+                                .background(Surface3, shape = RoundedCornerShape(8.dp))
+                                .border(1.dp, PremiumCyan.copy(alpha = 0.35f), shape = RoundedCornerShape(8.dp))
+                                .padding(10.dp)
+                        ) {
+                            Column {
+                                Text(
+                                    text = "SYSTEMIC IMPLICATION CASCADE",
+                                    fontSize = 8.sp,
+                                    fontFamily = DMMonoFontFamily,
+                                    color = PremiumCyan,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Spacer(modifier = Modifier.height(3.dp))
+                                Text(
+                                    text = node.desc,
+                                    fontSize = 11.sp,
+                                    fontFamily = InstrumentSansFontFamily,
+                                    color = TextPrimaryColor,
+                                    lineHeight = 15.sp
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Column {
+                                        Text("LIKELIHOOD EFFECT", fontSize = 7.5.sp, fontFamily = DMMonoFontFamily, color = TextMutedColor)
+                                        Text(node.likelihoodImpact, fontSize = 11.sp, fontFamily = DMMonoFontFamily, color = SuccessColor, fontWeight = FontWeight.Bold)
+                                    }
+                                    Column {
+                                        Text("SYSTEM RISK POTENTIAL", fontSize = 7.5.sp, fontFamily = DMMonoFontFamily, color = TextMutedColor)
+                                        Text(node.riskImpact, fontSize = 11.sp, fontFamily = DMMonoFontFamily, color = ErrorColor, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // 2. GENERATIVE AI DEEP-DIVE INSIGHT
+            val activeSessionIdStr = "guest_local"
+            val deepDiveInsight = deepDiveInsights[activeSessionIdStr]
+            val isDeepDiveLoadingVal = isDeepDiveLoading[activeSessionIdStr] == true
+
+            Text(
+                text = "SYSTEMIC DEEP-DIVE AI REFLECTION",
+                fontSize = 8.sp,
+                letterSpacing = 1.3.sp,
+                fontFamily = DMMonoFontFamily,
+                fontWeight = FontWeight.Bold,
+                color = TextMutedColor,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 24.dp),
+                shape = RoundedCornerShape(12.dp),
+                colors = CardDefaults.cardColors(containerColor = Surface2),
+                border = BorderStroke(1.dp, if (deepDiveInsight != null) ElectricViolet else BorderSubtle)
+            ) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Text(
+                        text = "Generative AI reflection focusing on secondary and tertiary cascade impacts of the active scenario.",
+                        fontSize = 9.5.sp,
+                        fontFamily = InstrumentSansFontFamily,
+                        color = TextSecondaryColor,
+                        modifier = Modifier.padding(bottom = 12.dp)
+                    )
+
+                    if (isDeepDiveLoadingVal) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(100.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator(color = ElectricViolet, strokeWidth = 2.dp)
+                        }
+                    } else if (deepDiveInsight != null) {
+                        Column {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(Surface3, shape = RoundedCornerShape(8.dp))
+                                    .border(1.dp, BorderSubtle, shape = RoundedCornerShape(8.dp))
+                                    .padding(10.dp)
+                            ) {
+                                Text(
+                                    text = deepDiveInsight,
+                                    fontSize = 11.sp,
+                                    fontFamily = InstrumentSansFontFamily,
+                                    color = TextPrimaryColor,
+                                    lineHeight = 16.sp
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Button(
+                                onClick = { onGenerateDeepDive(activeSessionIdStr, queryText) },
+                                colors = ButtonDefaults.buttonColors(containerColor = Surface3),
+                                shape = RoundedCornerShape(8.dp),
+                                border = BorderStroke(1.dp, BorderSubtle),
+                                modifier = Modifier.align(Alignment.End)
+                            ) {
+                                Text("RE-GENERATE INSIGHT", fontSize = 8.sp, fontFamily = DMMonoFontFamily, color = TextPrimaryColor)
+                            }
+                        }
+                    } else {
+                        Button(
+                            onClick = { onGenerateDeepDive(activeSessionIdStr, queryText) },
+                            colors = ButtonDefaults.buttonColors(containerColor = ElectricViolet),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("⚡ GENERATE SYSTEMIC REFLECTION", fontSize = 9.sp, fontFamily = DMMonoFontFamily, color = Color.White)
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // QUICK ACTIONS TEMPLATE BAR
+            Text(
+                text = "SIMULATOR QUICK ACTIONS",
+                fontSize = 8.sp,
+                letterSpacing = 1.3.sp,
+                fontFamily = DMMonoFontFamily,
+                fontWeight = FontWeight.Bold,
+                color = TextMutedColor,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 20.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                val actionTemplates = listOf(
+                    Triple("Analyze Relationship", "🤝", "Deconstruct hidden psychological biases and interpersonal feedback cycles..."),
+                    Triple("Evaluate Risk", "⚠️", "Identify escalation thresholds, stress-bearing parameters, and systemic risks..."),
+                    Triple("Map Incentives", "🪙", "Evaluate competing payoff structures and strategic user alignment levers...")
+                )
+
+                actionTemplates.forEach { action ->
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .background(Surface2, shape = RoundedCornerShape(8.dp))
+                            .border(1.dp, BorderSubtle, shape = RoundedCornerShape(8.dp))
+                            .clickable {
+                                onSubmitQuery(action.third)
+                                onBackToHome()
+                            }
+                            .padding(8.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(text = action.second, fontSize = 14.sp)
+                            Spacer(modifier = Modifier.height(3.dp))
+                            Text(
+                                text = action.first,
+                                fontSize = 8.sp,
+                                fontFamily = DMMonoFontFamily,
+                                fontWeight = FontWeight.Bold,
+                                color = TextPrimaryColor,
+                                textAlign = TextAlign.Center,
+                                lineHeight = 10.sp
+                            )
+                        }
+                    }
+                }
+            }
+
+            // SIMULATOR VOICE CONSOLE TOOlBAR
+            var isMicActive by remember { mutableStateOf(false) }
+            var isVoiceAnalyzing by remember { mutableStateOf(false) }
+            var transcribedTextMemo by remember { mutableStateOf("") }
+
+            Text(
+                text = "SIMULATOR INTELLIGENCE TOOLBAR",
+                fontSize = 8.sp,
+                letterSpacing = 1.3.sp,
+                fontFamily = DMMonoFontFamily,
+                fontWeight = FontWeight.Bold,
+                color = TextMutedColor,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 20.dp)
+                    .border(1.dp, BorderSubtle, RoundedCornerShape(10.dp)),
+                shape = RoundedCornerShape(10.dp),
+                colors = CardDefaults.cardColors(containerColor = Surface2)
+            ) {
+                Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(32.dp)
+                                    .background(
+                                        if (isMicActive) ErrorColor.copy(alpha = 0.2f) else Surface3,
+                                        shape = CircleShape
+                                    )
+                                    .clickable {
+                                if (isMicActive) {
+                                    isMicActive = false
+                                    isVoiceAnalyzing = true
+                                    coroutineScope.launch {
+                                        delay(2000)
+                                        isVoiceAnalyzing = false
+                                        transcribedTextMemo = "Evaluate the cognitive friction and organizational communication limits of modern distributed systems."
+                                    }
+                                } else {
+                                    isMicActive = true
+                                    transcribedTextMemo = ""
+                                }
+                            },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(text = if (isMicActive) "🛑" else "🎙️", fontSize = 12.sp)
+                            }
+
+                            Column {
+                                Text(
+                                    text = if (isMicActive) "Voice Recording Enabled" else "Brainstorm Buffer Dictation",
+                                    fontSize = 10.5.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (isMicActive) ErrorColor else TextPrimaryColor,
+                                    fontFamily = InstrumentSansFontFamily
+                                )
+                                if (isVoiceAnalyzing) {
+                                    ThreeDotThinkingIndicator(
+                                        modifier = Modifier.padding(top = 2.dp),
+                                        text = "Voice analyzing..."
+                                    )
+                                } else {
+                                    Text(
+                                        text = if (isMicActive) "Pulsing audio stream active. Tap STOP to transcribe." 
+                                               else if (transcribedTextMemo.isNotEmpty()) "Transcription ready for parsing"
+                                               else "Tap MIC to capture live vocal thought matrices directly",
+                                        fontSize = 8.5.sp,
+                                        color = TextMutedColor,
+                                        fontFamily = InstrumentSansFontFamily
+                                    )
+                                }
+                            }
+                        }
+
+                        if (transcribedTextMemo.isNotEmpty()) {
+                            Button(
+                                onClick = {
+                                    onSubmitQuery(transcribedTextMemo)
+                                    transcribedTextMemo = ""
+                                    onBackToHome()
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = ElectricViolet),
+                                shape = RoundedCornerShape(6.dp),
+                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp)
+                            ) {
+                                Text("DIAGNOSE", fontSize = 8.sp, color = Color.White, fontFamily = DMMonoFontFamily)
+                            }
+                        }
+                    }
+
+                    if (transcribedTextMemo.isNotEmpty()) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(Surface3, shape = RoundedCornerShape(6.dp))
+                                .padding(8.dp)
+                        ) {
+                            Text(
+                                text = "\"$transcribedTextMemo\"",
+                                fontSize = 9.sp,
+                                fontFamily = InstrumentSansFontFamily,
+                                fontStyle = FontStyle.Italic,
+                                color = TextSecondaryColor
+                            )
+                        }
+                    }
+                }
+            }
+
+            // GOOGLE SEARCH GROUNDING SIGNALS
+            var searchFieldName by remember { mutableStateOf("") }
+            var isSearchingWeb by remember { mutableStateOf(false) }
+            var webSignalList by remember {
+                mutableStateOf(
+                    listOf(
+                        WebSignalCardData("Regulatory Volatility Ledger Guidelines", "Fintech Intelligence Bureau", 89, "SEC revised centralized liquidity reserve standards, creating sudden feedback loops on stable networks.")
+                    )
+                )
+            }
+
+            Text(
+                text = "REAL-TIME WEB SIGNAL GROUNDING",
+                fontSize = 8.sp,
+                letterSpacing = 1.3.sp,
+                fontFamily = DMMonoFontFamily,
+                fontWeight = FontWeight.Bold,
+                color = TextMutedColor,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 20.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                OutlinedTextField(
+                    value = searchFieldName,
+                    onValueChange = { searchFieldName = it },
+                    placeholder = { Text("Search Web to ground active forecast metrics...", fontSize = 11.sp, color = TextMutedColor) },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(10.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = TextPrimaryColor,
+                        unfocusedTextColor = TextPrimaryColor,
+                        focusedBorderColor = ElectricViolet,
+                        unfocusedBorderColor = BorderSubtle,
+                        focusedContainerColor = Surface2,
+                        unfocusedContainerColor = Surface2
+                    ),
+                    trailingIcon = {
+                        if (isSearchingWeb) {
+                            CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 1.6.dp, color = PremiumCyan)
+                        } else {
+                            Text(
+                                text = "🔍",
+                                fontSize = 12.sp,
+                                modifier = Modifier.clickable {
+                                    if (searchFieldName.isNotBlank()) {
+                                        isSearchingWeb = true
+                                        val filter = searchFieldName
+                                        searchFieldName = ""
+                                        coroutineScope.launch {
+                                            delay(1200)
+                                            val newSignal = WebSignalCardData(
+                                                title = "Signal Grounding Index: $filter",
+                                                source = "Intelligence Service APIs & News",
+                                                relevance = 92,
+                                                summary = "Retrieved fresh context indicating increased index volatility and shifting strategic bounds related to user topic constraints."
+                                            )
+                                            webSignalList = listOf(newSignal) + webSignalList
+                                            isSearchingWeb = false
+                                        }
+                                    }
+                                }
+                            )
+                        }
+                    }
+                )
+
+                webSignalList.forEach { signal ->
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .border(1.dp, BorderSubtle, RoundedCornerShape(10.dp)),
+                        colors = CardDefaults.cardColors(containerColor = Surface3),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(10.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "EXTERNAL GROUNDING SIGNAL",
+                                    fontSize = 7.5.sp,
+                                    fontFamily = DMMonoFontFamily,
+                                    color = WarningColor,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = "${signal.relevance}% RELEVANCE",
+                                    fontSize = 7.5.sp,
+                                    fontFamily = DMMonoFontFamily,
+                                    color = TextMutedColor
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(3.dp))
+                            Text(
+                                text = signal.title,
+                                fontSize = 11.sp,
+                                fontFamily = InstrumentSansFontFamily,
+                                fontWeight = FontWeight.Bold,
+                                color = TextPrimaryColor
+                            )
+                            Text(
+                                text = "Source: ${signal.source}",
+                                fontSize = 8.5.sp,
+                                fontFamily = DMMonoFontFamily,
+                                color = TextMutedColor
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = signal.summary,
+                                fontSize = 9.sp,
+                                fontFamily = InstrumentSansFontFamily,
+                                color = TextSecondaryColor,
+                                lineHeight = 12.2.sp
+                            )
+                        }
+                    }
+                }
+            }
+
+            // PRINTABLE SESSION PDF REPORT GENERATOR
+            var showReportDrawerModal by remember { mutableStateOf(false) }
+
+            Button(
+                onClick = { showReportDrawerModal = true },
+                colors = ButtonDefaults.buttonColors(containerColor = ElectricViolet),
+                border = BorderStroke(1.dp, ElectricViolet),
+                shape = RoundedCornerShape(10.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 30.dp)
+            ) {
+                Text("📄 GENERATE PDF INTELLIGENCE REPORT", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold, fontFamily = DMMonoFontFamily)
+            }
+
+            if (showReportDrawerModal) {
+                Dialog(onDismissRequest = { showReportDrawerModal = false }) {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .fillMaxHeight(0.85f)
+                            .border(1.dp, Color.LightGray, RoundedCornerShape(12.dp)),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color.White)
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .verticalScroll(rememberScrollState())
+                                .padding(18.dp)
+                        ) {
+                            Text(
+                                text = "DEPTHLENS GLOBAL SYSTEM REPORT",
+                                fontSize = 12.sp,
+                                fontFamily = DMMonoFontFamily,
+                                color = Color.Black,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.align(Alignment.CenterHorizontally)
+                            )
+                            Text(
+                                text = "CONFIDENTIAL DIAGNOSTIC ANALYTICS BRIEF",
+                                fontSize = 8.sp,
+                                fontFamily = DMMonoFontFamily,
+                                color = Color.Gray,
+                                modifier = Modifier.align(Alignment.CenterHorizontally)
+                            )
+
+                            Spacer(modifier = Modifier.height(14.dp))
+                            Divider(color = Color.Black, thickness = 1.dp)
+                            Spacer(modifier = Modifier.height(10.dp))
+
+                            Text(
+                                text = "TARGET EXAMINED: \"$queryText\"",
+                                fontSize = 11.sp,
+                                fontFamily = InstrumentSansFontFamily,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.Black
+                            )
+                            Text(
+                                text = "Exploration Mode Scope: $selectedMode",
+                                fontSize = 8.5.sp,
+                                fontFamily = DMMonoFontFamily,
+                                color = Color.Gray
+                            )
+
+                            Spacer(modifier = Modifier.height(16.dp))
+
+                            Text(
+                                text = "A. PROCESSED REALITY COGNITIVE LENSES",
+                                fontSize = 9.5.sp,
+                                fontFamily = DMMonoFontFamily,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.Black
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+
+                            standardLayers.forEach { layer ->
+                                val processedLensText = parsedResponse?.depthLayers?.firstOrNull { it.layerNumber == layer.num }?.description
+                                                     ?: "Diagnostic metric offline. Standard reality alignment active."
+                                Text(
+                                    text = "Layer ${layer.num}: ${layer.name}",
+                                    fontSize = 9.sp,
+                                    fontFamily = InstrumentSansFontFamily,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.Black
+                                )
+                                Text(
+                                    text = processedLensText,
+                                    fontSize = 8.5.sp,
+                                    fontFamily = InstrumentSansFontFamily,
+                                    color = Color.DarkGray,
+                                    modifier = Modifier.padding(bottom = 8.dp)
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.height(14.dp))
+                            Divider(color = Color.Black, thickness = 0.5.dp)
+                            Spacer(modifier = Modifier.height(10.dp))
+
+                            Text(
+                                text = "B. PROBABILITY TIMELINE EVENT FORECASTS",
+                                fontSize = 9.5.sp,
+                                fontFamily = DMMonoFontFamily,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.Black
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+
+                            scenarioCurvePoints.forEach { pt ->
+                                Text(
+                                    text = "${pt.label} (${pt.prob}% Probable) - ${pt.title}",
+                                    fontSize = 9.sp,
+                                    fontFamily = InstrumentSansFontFamily,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.Black
+                                )
+                                Text(
+                                    text = pt.desc,
+                                    fontSize = 8.5.sp,
+                                    fontFamily = InstrumentSansFontFamily,
+                                    color = Color.DarkGray,
+                                    modifier = Modifier.padding(bottom = 8.dp)
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.height(20.dp))
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                TextButton(onClick = { showReportDrawerModal = false }) {
+                                    Text("CLOSE SYSTEM DOCUMENT", color = Color.Black, fontSize = 8.5.sp, fontWeight = FontWeight.Bold)
+                                }
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Button(
+                                        onClick = {
+                                            val savedPath = exportReportToLocalStorage(context, parsedResponse, queryText)
+                                            if (savedPath != null) {
+                                                android.widget.Toast.makeText(context, "✓ Saved: $savedPath", android.widget.Toast.LENGTH_LONG).show()
+                                            } else {
+                                                android.widget.Toast.makeText(context, "❌ Save failed", android.widget.Toast.LENGTH_SHORT).show()
+                                            }
+                                        },
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1B5E20)),
+                                        shape = RoundedCornerShape(4.dp),
+                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                                    ) {
+                                        Text("💾 EXPORT TXT", color = Color.White, fontSize = 8.5.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                    Button(
+                                        onClick = { showReportDrawerModal = false },
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color.Black),
+                                        shape = RoundedCornerShape(4.dp),
+                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                                    ) {
+                                        Text("PRINT OUT / SHARE PDF", color = Color.White, fontSize = 8.5.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
         }
     }
 }
-}
+
+// Scenarios structures helper classes
+data class LayerDefinition(val num: Int, val name: String, val accentColor: Color, val description: String)
+data class PlotPointData(
+    val index: Int,
+    val xRatio: Float,
+    val yRatio: Float,
+    val label: String,
+    val date: String,
+    val title: String,
+    val prob: Int,
+    val desc: String
+)
+data class WebSignalCardData(
+    val title: String,
+    val source: String,
+    val relevance: Int,
+    val summary: String
+)
+
+data class FeedbackNode(
+    val id: Int,
+    val title: String,
+    val desc: String,
+    val likelihoodImpact: String,
+    val riskImpact: String
+)
+
+private fun generateReportText(parsed: com.example.data.model.ParsedResponse?, query: String): String {
+    val sb = java.lang.StringBuilder()
+    sb.append("==================================================\n")
+    sb.append("        DEPTHLENS SYSTEMIC ANALYSIS REPORT        \n")
+    sb.append("==================================================\n\n")
+    sb.append("TARGET SCENARIO: \"$query\"\n\n")
+    
+    if (parsed == null) {
+        sb.append("Diagnostic study currently processing. Standard template outputs active.\n")
+        return sb.toString()
+    }
+    
+    sb.append("A. EXECUTIVE SUMMARY\n")
+    sb.append("--------------------\n")
+    sb.append("${parsed.executiveSummary ?: parsed.introduction}\n\n")
+    
+    sb.append("B. SYSTEM REALITY (SYSTEM MAP)\n")
+    sb.append("--------------------\n")
+    val layer7 = parsed.depthLayers.find { it.layerNumber == 7 }
+    if (layer7 != null) {
+        sb.append("Layer 7 - Systemic Reality Linkages:\n")
+        sb.append("${layer7.description}\n\n")
+    } else {
+        sb.append("Systemic Reality: No active feedback loops mapped in this session.\n\n")
+    }
+    
+    sb.append("C. ROOT CAUSE REALITY\n")
+    sb.append("---------------------\n")
+    val rc = parsed.rootCauseReport
+    if (rc != null) {
+        sb.append("Symptom: ${rc.symptom}\n")
+        sb.append("Immediate Cause: ${rc.immediateCause}\n")
+        sb.append("Underlying Cause: ${rc.underlyingCause}\n")
+        sb.append("Deeper Cause: ${rc.deeperCause}\n")
+        sb.append("Estimated Root Cause: ${rc.rootCauseEstimate}\n")
+        sb.append("Causal Confidence Level: ${rc.confidenceLevel}\n")
+        if (rc.alternativeExplanation.isNotEmpty()) {
+            sb.append("Alternative Explanations: ${rc.alternativeExplanation}\n")
+        }
+    } else {
+        val layer9 = parsed.depthLayers.find { it.layerNumber == 9 }
+        if (layer9 != null) {
+            sb.append("Estimated Root Cause: ${layer9.description}\n")
+        } else {
+            sb.append("Root Cause Reality: Unresolved.\n")
+        }
+    }
+    sb.append("\n")
+    
+    sb.append("D. FUTURE PROBABILITY OUTLOOK\n")
+    sb.append("-----------------------------\n")
+    val metrics = parsed.probabilityMetrics
+    if (metrics != null) {
+        sb.append("Likelihood: ${metrics.likelihood}%\n")
+        sb.append("Confidence: ${metrics.confidence}%\n")
+        sb.append("System Risk: ${metrics.risk}%\n")
+        sb.append("Strategic Opportunity: ${metrics.opportunity}%\n\n")
+    }
+    
+    if (parsed.futurePathways.isNotEmpty()) {
+        sb.append("Forecast Path Scenarios:\n")
+        parsed.futurePathways.forEachIndexed { i, p ->
+            sb.append("${i+1}. ${p.title} (${p.probability}% Probable)\n")
+            sb.append("   - Description: ${p.description}\n")
+            if (p.drivers.isNotEmpty()) sb.append("   - Drivers: ${p.drivers}\n")
+            if (p.risks.isNotEmpty()) sb.append("   - Risks: ${p.risks}\n")
+            if (p.opportunities.isNotEmpty()) sb.append("   - Opportunities: ${p.opportunities}\n")
+        }
+        sb.append("\n")
+    }
+    
+    val tf = parsed.timelineForecast
+    if (tf != null) {
+        sb.append("Causal Growth Forecast Horizons:\n")
+        sb.append("- Short Term (${tf.shortTermProb}%): ${tf.shortTermDesc}\n")
+        sb.append("- Mid Term (${tf.midTermProb}%): ${tf.midTermDesc}\n")
+        sb.append("- Long Term (${tf.longTermProb}%): ${tf.longTermDesc}\n")
+        if (tf.explanation.isNotEmpty()) {
+            sb.append("Growth Driver Explanation: ${tf.explanation}\n")
+        }
+        sb.append("\n")
+    }
+    
+    sb.append("E. COGNITIVE ANALYSIS OVERVIEW\n")
+    sb.append("------------------------------\n")
+    parsed.depthLayers.forEach { layer ->
+        if (layer.layerNumber != 7 && layer.layerNumber != 9) {
+            sb.append("Layer ${layer.layerNumber} - ${layer.layerName}:\n")
+            sb.append("${layer.description}\n\n")
+        }
+    }
+    
+    sb.append("Report generated on: ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())}\n")
+    return sb.toString()
 }
 
-@Composable
-private fun DisplayAIHeader(layersCount: Int) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.padding(bottom = 6.dp)
-    ) {
-        Box(
-            modifier = Modifier
-                .size(6.dp)
-                .background(ElectricViolet, CircleShape)
-        )
-        Spacer(modifier = Modifier.width(6.dp))
-        Text(
-            text = "DEPTHLENS" + (if (layersCount > 0) " · $layersCount LAYERS" else " · MODEL"),
-            fontSize = 8.sp,
-            color = ElectricViolet,
-            fontFamily = DMMonoFontFamily,
-            fontWeight = FontWeight.Bold,
-            letterSpacing = 1.sp
-        )
+private fun exportReportToLocalStorage(context: android.content.Context, parsed: com.example.data.model.ParsedResponse?, queryText: String): String? {
+    return try {
+        val content = generateReportText(parsed, queryText)
+        val fileName = "depthlens_report_${System.currentTimeMillis()}.txt"
+        context.openFileOutput(fileName, android.content.Context.MODE_PRIVATE).use {
+            it.write(content.toByteArray())
+        }
+        val file = context.getFileStreamPath(fileName)
+        file.absolutePath
+    } catch (e: Exception) {
+        e.printStackTrace()
+        null
     }
 }

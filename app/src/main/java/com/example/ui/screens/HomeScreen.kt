@@ -229,11 +229,23 @@ fun HomeScreen(
         val scrollState = rememberScrollState()
         val isKeyboardVisible = WindowInsets.isImeVisible
 
-        LaunchedEffect(activeMessages.size, isKeyboardVisible, isLoading) {
-            if (activeMessages.isNotEmpty()) {
+        // Scroll to bottom only when user sends a message or keyboard appears.
+        // Never scroll to bottom for AI responses — buries the start of the analysis.
+        LaunchedEffect(activeMessages.size, isKeyboardVisible) {
+            if (activeMessages.isNotEmpty() && activeMessages.last().role == "user") {
                 kotlinx.coroutines.delay(100)
                 scrollState.animateScrollTo(scrollState.maxValue)
             }
+        }
+
+        // Scroll to top when AI finishes generating.
+        var wasLoadingHome by remember { mutableStateOf(false) }
+        LaunchedEffect(isLoading) {
+            if (wasLoadingHome && !isLoading && activeMessages.isNotEmpty() && activeMessages.last().role == "model") {
+                kotlinx.coroutines.delay(150)
+                scrollState.animateScrollTo(0)
+            }
+            wasLoadingHome = isLoading
         }
 
         // Main scrollable content
