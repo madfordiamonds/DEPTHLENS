@@ -77,11 +77,11 @@ android {
   compileSdk = 36
 
   defaultConfig {
-    applicationId = "com.aistudio.depthlens.omg"
+    applicationId = "com.aistudio.depthlens.uqmzkx"
     minSdk = 24
     targetSdk = 36
-    versionCode = 4110
-    versionName = "4.1.1a"
+    versionCode = 4160
+    versionName = "4.1.6"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }

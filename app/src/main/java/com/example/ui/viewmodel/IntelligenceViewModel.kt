@@ -3,6 +3,7 @@ package com.example.ui.viewmodel
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.BuildConfig
 import com.example.data.model.*
 import com.example.data.repository.IntelligenceRepository
 import kotlinx.coroutines.flow.*
@@ -67,9 +68,33 @@ class IntelligenceViewModel(application: Application) : AndroidViewModel(applica
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    // Deep-dive system reflections cache
+    private val _deepDiveInsights = MutableStateFlow<Map<String, String>>(emptyMap())
+    val deepDiveInsights: StateFlow<Map<String, String>> = _deepDiveInsights.asStateFlow()
+
+    // Loading state for Deep-dive
+    private val _isDeepDiveLoading = MutableStateFlow<Map<String, Boolean>>(emptyMap())
+    val isDeepDiveLoading: StateFlow<Map<String, Boolean>> = _isDeepDiveLoading.asStateFlow()
+
     init {
         // Always open the Home Screen on app launch / entry
         _activeSessionId.value = null
+
+        // Load deep-dive insights from prefs
+        try {
+            val allPrefs = prefs.all
+            val loadedDeepDives = mutableMapOf<String, String>()
+            allPrefs.forEach { (key, value) ->
+                if (key.startsWith("deep_dive_") && value is String) {
+                    val sId = key.removePrefix("deep_dive_")
+                    loadedDeepDives[sId] = value
+                }
+            }
+            _deepDiveInsights.value = loadedDeepDives
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+        
         
         viewModelScope.launch {
             val existing = repository.allSessionsFlow.firstOrNull() ?: emptyList()
@@ -335,6 +360,69 @@ class IntelligenceViewModel(application: Application) : AndroidViewModel(applica
     fun setOnboardingCompleted(completed: Boolean) {
         onboardingCompleted.value = completed
         prefs.edit().putBoolean("onboarding_completed", completed).apply()
+    }
+
+    fun generateDeepDive(sessionId: String, queryText: String) {
+        if (_isDeepDiveLoading.value[sessionId] == true) return
+        _isDeepDiveLoading.value = _isDeepDiveLoading.value + (sessionId to true)
+
+        viewModelScope.launch {
+            try {
+                val apiKey = BuildConfig.GEMINI_API_KEY
+                if (apiKey.isEmpty() || apiKey == "MY_GEMINI_API_KEY") {
+                    val errMsg = "Error: Missing Gemini API Key in the Secrets panel."
+                    _deepDiveInsights.value = _deepDiveInsights.value + (sessionId to errMsg)
+                    return@launch
+                }
+
+                val request = com.example.data.network.GenerateContentRequest(
+                    contents = listOf(
+                        com.example.data.network.Content(
+                            parts = listOf(com.example.data.network.Part(text = "Provide a systemic deep-dive reflection on the query: '$queryText' emphasizing 2nd and 3rd order consequences."))
+                        )
+                    ),
+                    generationConfig = com.example.data.network.GenerationConfig(temperature = 0.72f),
+                    systemInstruction = com.example.data.network.Content(
+                        parts = listOf(
+                            com.example.data.network.Part(
+                                text = """
+                                    You are DepthLens Deep-Dive AI. Provide a high-level system-oriented reflection.
+                                    Meticulously structure your response into:
+                                    - **Systemic Reflection**: A profound overview of the scenario's hidden causal gears.
+                                    - **1st Order Impact**: The immediate, obvious results.
+                                    - **2nd Order (System Cascade) Ripple**: The knock-on effects that occur once the system reacts.
+                                    - **3rd Order (Evolutionary Loop) Shift**: The long-term behavioral, structural, and ontological adjustments.
+                                    Be stark, analytical, and highly structured. Do not use generic chat style or fluff.
+                                """.trimIndent()
+                            )
+                        )
+                    )
+                )
+
+                var insightText: String? = null
+                val modelsToTry = listOf("gemini-2.5-flash", "gemini-3.5-flash", "gemini-3.1-pro-preview")
+                for (modelName in modelsToTry) {
+                    try {
+                        val response = com.example.data.network.RetrofitClient.service.generateContent(modelName, apiKey, request)
+                        val text = response.candidates?.firstOrNull()?.content?.parts?.firstOrNull()?.text
+                        if (!text.isNullOrEmpty()) {
+                            insightText = text
+                            break
+                        }
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }
+
+                val result = insightText ?: "Error generating deep-dive insight from the service. Please verify your connection and try again."
+                _deepDiveInsights.value = _deepDiveInsights.value + (sessionId to result)
+                prefs.edit().putString("deep_dive_$sessionId", result).apply()
+            } catch (e: Exception) {
+                _deepDiveInsights.value = _deepDiveInsights.value + (sessionId to "Error: ${e.message}")
+            } finally {
+                _isDeepDiveLoading.value = _isDeepDiveLoading.value + (sessionId to false)
+            }
+        }
     }
 
     fun loginWithGoogle(email: String, fullName: String) {

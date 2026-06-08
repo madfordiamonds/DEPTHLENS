@@ -20,6 +20,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -30,6 +32,7 @@ import com.example.data.model.MessageEntity
 import com.example.data.repository.ResponseParser
 import com.example.ui.theme.*
 import com.example.ui.components.ThreeDotThinkingIndicator
+import com.example.ui.components.IntelligenceOSVisualizer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.geometry.Offset
@@ -60,9 +63,25 @@ fun AnalysisScreen(
     selectedMode: String,
     onBackToHome: () -> Unit,
     onSubmitQuery: (String) -> Unit = {},
+    deepDiveInsights: Map<String, String> = emptyMap(),
+    isDeepDiveLoading: Map<String, Boolean> = emptyMap(),
+    onGenerateDeepDive: (String, String) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier
 ) {
     val coroutineScope = rememberCoroutineScope()
+    val context = LocalContext.current
+    
+    var isRealityLensEnabled by remember { mutableStateOf(false) }
+    val infiniteTransition = rememberInfiniteTransition(label = "reality_lens_waves")
+    val pulsePhase by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(6000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "pulse_phase"
+    )
     // Find the latest model/AI message that contains diagnostic results
     val latestAiMessage = remember(activeMessages) {
         activeMessages.lastOrNull { it.role == "model" && !it.text.startsWith("Error:") }
@@ -80,8 +99,22 @@ fun AnalysisScreen(
         }
     }
 
+    val hasReportTags = remember(latestAiMessage?.text) {
+        latestAiMessage?.text?.let {
+            it.contains("<summary>") || it.contains("<depth>") || it.contains("<root_cause>") || it.contains("<future_pathways>")
+        } == true
+    }
+
     // Keep track of which cards are expanded
     val expandedStates = remember { mutableStateMapOf<Int, Boolean>() }
+
+    val scrollState = rememberScrollState()
+
+    LaunchedEffect(latestAiMessage?.id) {
+        if (latestAiMessage != null) {
+            scrollState.animateScrollTo(0)
+        }
+    }
 
     // Standard 10 Reality Layers definition with colors and specific default definitions
     val standardLayers = remember {
@@ -171,11 +204,199 @@ fun AnalysisScreen(
         Column(
             modifier = Modifier
                 .weight(1f)
-                .verticalScroll(rememberScrollState())
+                .drawBehind {
+                    if (isRealityLensEnabled) {
+                        // Draw subtle background grid of dots
+                        val gridGap = 24.dp.toPx()
+                        val cols = (size.width / gridGap).toInt()
+                        val rows = (size.height / gridGap).toInt()
+                        for (c in 0..cols) {
+                            for (r in 0..rows) {
+                                val x = c * gridGap
+                                val y = r * gridGap
+                                drawCircle(
+                                    color = PremiumCyan.copy(alpha = 0.05f),
+                                    radius = 1.dp.toPx(),
+                                    center = Offset(x, y)
+                                )
+                            }
+                        }
+
+                        // Draw animated interactive node-linking lines
+                        val nodeA = Offset(size.width * 0.12f, size.height * 0.15f)
+                        val nodeB = Offset(size.width * 0.45f, size.height * 0.35f)
+                        val nodeC = Offset(size.width * 0.78f, size.height * 0.22f)
+                        val nodeD = Offset(size.width * 0.28f, size.height * 0.65f)
+                        val nodeE = Offset(size.width * 0.82f, size.height * 0.52f)
+                        val nodeF = Offset(size.width * 0.52f, size.height * 0.85f)
+                        
+                        val nodes = listOf(nodeA, nodeB, nodeC, nodeD, nodeE, nodeF)
+                        val links = listOf(
+                            nodeA to nodeB,
+                            nodeB to nodeC,
+                            nodeC to nodeE,
+                            nodeB to nodeD,
+                            nodeD to nodeF,
+                            nodeE to nodeF,
+                            nodeD to nodeE
+                        )
+
+                        // Draw lines with soft glow
+                        links.forEach { link ->
+                            drawLine(
+                                color = PremiumCyan.copy(alpha = 0.12f),
+                                start = link.first,
+                                end = link.second,
+                                strokeWidth = 1.dp.toPx()
+                            )
+                        }
+
+                        // Draw pulsating node waves
+                        nodes.forEach { node ->
+                            drawCircle(
+                                color = PremiumCyan.copy(alpha = 0.08f * (1f - pulsePhase)),
+                                radius = (15.dp.toPx() * pulsePhase),
+                                center = node,
+                                style = Stroke(width = 1.dp.toPx())
+                            )
+                            drawCircle(
+                                color = PremiumCyan.copy(alpha = 0.25f),
+                                radius = 3.dp.toPx(),
+                                center = node
+                            )
+                        }
+                    }
+                }
+                .verticalScroll(scrollState)
                 .padding(16.dp)
         ) {
             // Dashboard header
             val queryText = latestUserMessage?.text ?: "All Layers Active Simulator"
+
+            if (parsedResponse == null || !hasReportTags) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 12.dp)
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(containerColor = Surface2),
+                            border = BorderStroke(1.dp, BorderSubtle),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Text(
+                                    text = "⚡ ADAPTIVE COGNITIVE MATRIX ACTIVE",
+                                    fontSize = 11.sp,
+                                    fontFamily = DMMonoFontFamily,
+                                    fontWeight = FontWeight.Bold,
+                                    color = ElectricViolet
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    text = "DepthLens has adapted its response scope to conversational depth. To mapping system parameters, causal loops, and probability matrices, request an investigation in the Chat tab.",
+                                    fontSize = 11.sp,
+                                    lineHeight = 16.sp,
+                                    color = TextSecondaryColor,
+                                    fontFamily = InstrumentSansFontFamily
+                                )
+                            }
+                        }
+
+                        if (latestAiMessage != null) {
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = CardDefaults.cardColors(containerColor = SurfaceCardColor),
+                                border = BorderStroke(1.dp, CardBorderColor),
+                                shape = RoundedCornerShape(topStart = 3.dp, topEnd = 12.dp, bottomEnd = 12.dp, bottomStart = 12.dp)
+                            ) {
+                                Column(modifier = Modifier.padding(14.dp)) {
+                                    Text(
+                                        text = "CONVERSATIONAL ANALYSIS PROFILE",
+                                        fontSize = 8.sp,
+                                        fontFamily = DMMonoFontFamily,
+                                        color = TextMutedColor,
+                                        letterSpacing = 1.sp
+                                    )
+                                    Spacer(modifier = Modifier.height(6.dp))
+                                    Text(
+                                        text = latestAiMessage.text,
+                                        fontSize = 14.sp,
+                                        lineHeight = 20.sp,
+                                        color = TextPrimaryColor,
+                                        fontFamily = InstrumentSansFontFamily
+                                    )
+                                }
+                            }
+                        }
+
+                        Text(
+                            text = "SUGGESTED DEEP-DIVE ANALYSIS DIRECTIVES",
+                            fontSize = 8.sp,
+                            fontFamily = DMMonoFontFamily,
+                            color = TextMutedColor,
+                            letterSpacing = 1.sp,
+                            modifier = Modifier.align(Alignment.Start).padding(top = 8.dp)
+                        )
+
+                        val suggestions = listOf(
+                            "Analyze this situation in depth using reality intelligence." to "⚡ FULL INVESTIGATION",
+                            "Deconstruct the root cause and psychological layers of this topic." to "🔍 ROOT CAUSE ANALYZER",
+                            "Forecast future probability branches and strategic risks for this plan." to "🔮 STRATEGIC OUTLOOK"
+                        )
+
+                        suggestions.forEach { (promptDef, actionTitle) ->
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { onSubmitQuery(promptDef) },
+                                colors = CardDefaults.cardColors(containerColor = Surface2),
+                                border = BorderStroke(1.dp, BorderSubtle),
+                                shape = RoundedCornerShape(10.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = actionTitle,
+                                            fontSize = 9.sp,
+                                            fontFamily = DMMonoFontFamily,
+                                            fontWeight = FontWeight.Bold,
+                                            color = ElectricViolet
+                                        )
+                                        Spacer(modifier = Modifier.height(2.dp))
+                                        Text(
+                                            text = "\"$promptDef\"",
+                                            fontSize = 11.sp,
+                                            fontFamily = InstrumentSansFontFamily,
+                                            color = TextPrimaryColor
+                                        )
+                                    }
+                                    Text(
+                                        text = "→",
+                                        fontSize = 18.sp,
+                                        fontFamily = DMMonoFontFamily,
+                                        color = TextMutedColor,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+                return@Column
+            }
+
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -221,8 +442,73 @@ fun AnalysisScreen(
                 fontFamily = DMMonoFontFamily,
                 color = TextMutedColor,
                 letterSpacing = 0.5.sp,
-                modifier = Modifier.padding(bottom = 20.dp)
+                modifier = Modifier.padding(bottom = 12.dp)
             )
+
+            // High-Tech Reality Lens Toggle Card
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 16.dp),
+                shape = RoundedCornerShape(10.dp),
+                colors = CardDefaults.cardColors(containerColor = Surface2),
+                border = BorderStroke(1.dp, if (isRealityLensEnabled) PremiumCyan else BorderSubtle)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 14.dp, vertical = 10.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        modifier = Modifier.weight(1f),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = if (isRealityLensEnabled) "🟢" else "⚫",
+                            fontSize = 11.sp
+                        )
+                        Column {
+                            Text(
+                                text = "SYSTEMIC REALITY LENS OVERLAY",
+                                fontSize = 9.sp,
+                                fontFamily = DMMonoFontFamily,
+                                fontWeight = FontWeight.Bold,
+                                color = if (isRealityLensEnabled) PremiumCyan else TextPrimaryColor,
+                                letterSpacing = 0.5.sp
+                            )
+                            Text(
+                                text = "Overlay dynamic relational causal nodes and links on analysis output.",
+                                fontSize = 8.5.sp,
+                                fontFamily = InstrumentSansFontFamily,
+                                color = TextMutedColor
+                            )
+                        }
+                    }
+                    Switch(
+                        checked = isRealityLensEnabled,
+                        onCheckedChange = { isRealityLensEnabled = it },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = PremiumCyan,
+                            checkedTrackColor = PremiumCyan.copy(alpha = 0.3f),
+                            uncheckedThumbColor = TextMutedColor,
+                            uncheckedTrackColor = Surface3
+                        ),
+                        modifier = Modifier.scale(0.82f)
+                    )
+                }
+            }
+
+            if (parsedResponse != null) {
+                IntelligenceOSVisualizer(
+                    parsed = parsedResponse,
+                    rawText = latestAiMessage?.text ?: "",
+                    onSubmitQuery = onSubmitQuery
+                )
+                Spacer(modifier = Modifier.height(20.dp))
+            }
 
             // Reality Layer Card Grid Stack
             Text(
@@ -416,408 +702,7 @@ fun AnalysisScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // ── LIVE PROBABILITY INTELLIGENCE ─────────────────────────────
-            val liveProbMetrics = parsedResponse?.probabilityMetrics
-            val liveFuturePathways = parsedResponse?.futurePathways ?: emptyList()
-            val liveTimelineForecast = parsedResponse?.timelineForecast
-
-            if (liveProbMetrics != null || liveFuturePathways.isNotEmpty() || liveTimelineForecast != null) {
-
-                // Section header
-                Text(
-                    text = "PROBABILITY INTELLIGENCE",
-                    fontSize = 8.5.sp,
-                    letterSpacing = 1.3.sp,
-                    fontFamily = DMMonoFontFamily,
-                    fontWeight = FontWeight.Bold,
-                    color = TextMutedColor,
-                    modifier = Modifier.padding(bottom = 10.dp)
-                )
-
-                // ── 1. PROBABILITY METRICS CARD (circular gauge style) ────
-                if (liveProbMetrics != null) {
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(14.dp),
-                        colors = CardDefaults.cardColors(containerColor = Surface2),
-                        border = BorderStroke(1.dp, ElectricViolet.copy(alpha = 0.35f))
-                    ) {
-                        Column(modifier = Modifier.padding(14.dp)) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Box(modifier = Modifier.size(7.dp).background(ElectricViolet, CircleShape))
-                                    Spacer(modifier = Modifier.width(7.dp))
-                                    Text(
-                                        text = "ANALYSIS PROBABILITY METRICS",
-                                        fontSize = 8.sp,
-                                        letterSpacing = 1.1.sp,
-                                        fontFamily = DMMonoFontFamily,
-                                        fontWeight = FontWeight.Bold,
-                                        color = ElectricViolet
-                                    )
-                                }
-                                Box(
-                                    modifier = Modifier
-                                        .background(ElectricViolet.copy(alpha = 0.12f), RoundedCornerShape(4.dp))
-                                        .padding(horizontal = 6.dp, vertical = 2.dp)
-                                ) {
-                                    Text(
-                                        text = "LIVE",
-                                        fontSize = 7.sp,
-                                        fontFamily = DMMonoFontFamily,
-                                        fontWeight = FontWeight.Bold,
-                                        color = ElectricViolet
-                                    )
-                                }
-                            }
-
-                            Spacer(modifier = Modifier.height(12.dp))
-
-                            // 4 metrics in 2×2 grid
-                            val metrics = listOf(
-                                Triple("Confidence", liveProbMetrics.confidence, PremiumCyan),
-                                Triple("Likelihood", liveProbMetrics.likelihood, SuccessColor),
-                                Triple("Risk Level", liveProbMetrics.risk, ErrorColor),
-                                Triple("Opportunity", liveProbMetrics.opportunity, WarningColor)
-                            )
-                            for (i in metrics.indices step 2) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth().padding(bottom = if (i + 2 < metrics.size) 8.dp else 0.dp),
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    for (j in 0..1) {
-                                        if (i + j < metrics.size) {
-                                            val (label, value, color) = metrics[i + j]
-                                            Column(modifier = Modifier.weight(1f)) {
-                                                Row(
-                                                    modifier = Modifier.fillMaxWidth(),
-                                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                                    verticalAlignment = Alignment.CenterVertically
-                                                ) {
-                                                    Text(
-                                                        text = label,
-                                                        fontSize = 9.sp,
-                                                        fontFamily = DMMonoFontFamily,
-                                                        color = TextSecondaryColor
-                                                    )
-                                                    Text(
-                                                        text = "$value%",
-                                                        fontSize = 13.sp,
-                                                        fontFamily = DMMonoFontFamily,
-                                                        fontWeight = FontWeight.Bold,
-                                                        color = color
-                                                    )
-                                                }
-                                                Spacer(modifier = Modifier.height(4.dp))
-                                                // Progress bar
-                                                Box(
-                                                    modifier = Modifier
-                                                        .fillMaxWidth()
-                                                        .height(5.dp)
-                                                        .background(Surface3, RoundedCornerShape(3.dp))
-                                                ) {
-                                                    Box(
-                                                        modifier = Modifier
-                                                            .fillMaxWidth(value / 100f)
-                                                            .fillMaxHeight()
-                                                            .background(
-                                                                Brush.horizontalGradient(listOf(color.copy(alpha = 0.6f), color)),
-                                                                RoundedCornerShape(3.dp)
-                                                            )
-                                                    )
-                                                }
-                                            }
-                                        } else {
-                                            Spacer(modifier = Modifier.weight(1f))
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(10.dp))
-                }
-
-                // ── 2. FUTURE PATHWAYS CARD (scenario cards with badges) ──
-                if (liveFuturePathways.isNotEmpty()) {
-                    val pathwayColors = listOf(SuccessColor, WarningColor, ErrorColor, PremiumCyan, ElectricViolet)
-
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(14.dp),
-                        colors = CardDefaults.cardColors(containerColor = Surface2),
-                        border = BorderStroke(1.dp, SuccessColor.copy(alpha = 0.35f))
-                    ) {
-                        Column(modifier = Modifier.padding(14.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Box(modifier = Modifier.size(7.dp).background(SuccessColor, CircleShape))
-                                Spacer(modifier = Modifier.width(7.dp))
-                                Text(
-                                    text = "FUTURE PATHWAYS FORECAST",
-                                    fontSize = 8.sp,
-                                    letterSpacing = 1.1.sp,
-                                    fontFamily = DMMonoFontFamily,
-                                    fontWeight = FontWeight.Bold,
-                                    color = SuccessColor
-                                )
-                            }
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = "Probability-weighted scenarios based on current trajectory",
-                                fontSize = 9.sp,
-                                fontFamily = InstrumentSansFontFamily,
-                                color = TextMutedColor,
-                                modifier = Modifier.padding(bottom = 10.dp)
-                            )
-
-                            liveFuturePathways.forEachIndexed { idx, pathway ->
-                                val pColor = pathwayColors.getOrElse(idx) { ElectricViolet }
-                                val prob = pathway.probability.coerceIn(0, 100)
-
-                                Column(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(bottom = if (idx < liveFuturePathways.size - 1) 10.dp else 0.dp)
-                                        .background(Surface3, RoundedCornerShape(10.dp))
-                                        .border(1.dp, pColor.copy(alpha = 0.25f), RoundedCornerShape(10.dp))
-                                        .padding(10.dp)
-                                ) {
-                                    // Title + probability badge
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Text(
-                                            text = pathway.title.ifEmpty { "Pathway ${idx + 1}" },
-                                            fontSize = 11.sp,
-                                            fontWeight = FontWeight.SemiBold,
-                                            fontFamily = InstrumentSansFontFamily,
-                                            color = TextPrimaryColor,
-                                            modifier = Modifier.weight(1f).padding(end = 6.dp)
-                                        )
-                                        // Probability badge
-                                        Box(
-                                            modifier = Modifier
-                                                .background(pColor.copy(alpha = 0.15f), RoundedCornerShape(6.dp))
-                                                .border(1.dp, pColor.copy(alpha = 0.5f), RoundedCornerShape(6.dp))
-                                                .padding(horizontal = 8.dp, vertical = 3.dp)
-                                        ) {
-                                            Text(
-                                                text = "$prob%",
-                                                fontSize = 12.sp,
-                                                fontFamily = DMMonoFontFamily,
-                                                fontWeight = FontWeight.Bold,
-                                                color = pColor
-                                            )
-                                        }
-                                    }
-
-                                    // Probability arc bar
-                                    Spacer(modifier = Modifier.height(7.dp))
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .height(4.dp)
-                                            .background(Surface4, RoundedCornerShape(2.dp))
-                                    ) {
-                                        Box(
-                                            modifier = Modifier
-                                                .fillMaxWidth(prob / 100f)
-                                                .fillMaxHeight()
-                                                .background(
-                                                    Brush.horizontalGradient(listOf(pColor.copy(alpha = 0.5f), pColor)),
-                                                    RoundedCornerShape(2.dp)
-                                                )
-                                        )
-                                    }
-
-                                    if (pathway.description.isNotEmpty()) {
-                                        Spacer(modifier = Modifier.height(7.dp))
-                                        Text(
-                                            text = pathway.description,
-                                            fontSize = 10.sp,
-                                            fontFamily = InstrumentSansFontFamily,
-                                            color = TextSecondaryColor,
-                                            lineHeight = 14.sp
-                                        )
-                                    }
-
-                                    // Drivers / Risks / Opportunities chips
-                                    if (pathway.drivers.isNotEmpty() || pathway.risks.isNotEmpty() || pathway.opportunities.isNotEmpty()) {
-                                        Spacer(modifier = Modifier.height(7.dp))
-                                        Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                                            if (pathway.drivers.isNotEmpty()) {
-                                                Box(
-                                                    modifier = Modifier
-                                                        .background(PremiumCyan.copy(alpha = 0.10f), RoundedCornerShape(4.dp))
-                                                        .padding(horizontal = 5.dp, vertical = 2.dp)
-                                                ) {
-                                                    Text(
-                                                        text = "↗ ${pathway.drivers}",
-                                                        fontSize = 8.5.sp,
-                                                        fontFamily = DMMonoFontFamily,
-                                                        color = PremiumCyan,
-                                                        maxLines = 1,
-                                                        overflow = TextOverflow.Ellipsis
-                                                    )
-                                                }
-                                            }
-                                            if (pathway.risks.isNotEmpty()) {
-                                                Box(
-                                                    modifier = Modifier
-                                                        .background(ErrorColor.copy(alpha = 0.10f), RoundedCornerShape(4.dp))
-                                                        .padding(horizontal = 5.dp, vertical = 2.dp)
-                                                ) {
-                                                    Text(
-                                                        text = "⚠ ${pathway.risks}",
-                                                        fontSize = 8.5.sp,
-                                                        fontFamily = DMMonoFontFamily,
-                                                        color = ErrorColor,
-                                                        maxLines = 1,
-                                                        overflow = TextOverflow.Ellipsis
-                                                    )
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(10.dp))
-                }
-
-                // ── 3. TIMELINE FORECAST CARD (horizontal timeline style) ──
-                if (liveTimelineForecast != null) {
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(14.dp),
-                        colors = CardDefaults.cardColors(containerColor = Surface2),
-                        border = BorderStroke(1.dp, WarningColor.copy(alpha = 0.35f))
-                    ) {
-                        Column(modifier = Modifier.padding(14.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Box(modifier = Modifier.size(7.dp).background(WarningColor, CircleShape))
-                                Spacer(modifier = Modifier.width(7.dp))
-                                Text(
-                                    text = "TEMPORAL PROBABILITY FORECAST",
-                                    fontSize = 8.sp,
-                                    letterSpacing = 1.1.sp,
-                                    fontFamily = DMMonoFontFamily,
-                                    fontWeight = FontWeight.Bold,
-                                    color = WarningColor
-                                )
-                            }
-                            Spacer(modifier = Modifier.height(12.dp))
-
-                            val timelineItems = listOf(
-                                Triple("SHORT TERM", liveTimelineForecast.shortTermProb, liveTimelineForecast.shortTermDesc),
-                                Triple("MID TERM", liveTimelineForecast.midTermProb, liveTimelineForecast.midTermDesc),
-                                Triple("LONG TERM", liveTimelineForecast.longTermProb, liveTimelineForecast.longTermDesc)
-                            )
-
-                            // Timeline connector layout
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(0.dp),
-                                verticalAlignment = Alignment.Top
-                            ) {
-                                timelineItems.forEachIndexed { idx, (label, prob, desc) ->
-                                    val tColor = when (idx) {
-                                        0 -> PremiumCyan
-                                        1 -> WarningColor
-                                        else -> ElectricViolet
-                                    }
-                                    val clampedProb = prob.coerceIn(0, 100)
-                                    Column(
-                                        modifier = Modifier.weight(1f),
-                                        horizontalAlignment = Alignment.CenterHorizontally
-                                    ) {
-                                        // Probability circle
-                                        Box(
-                                            modifier = Modifier
-                                                .size(48.dp)
-                                                .background(tColor.copy(alpha = 0.12f), CircleShape)
-                                                .border(2.dp, tColor.copy(alpha = 0.5f), CircleShape),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            Text(
-                                                text = "$clampedProb%",
-                                                fontSize = 13.sp,
-                                                fontFamily = DMMonoFontFamily,
-                                                fontWeight = FontWeight.Bold,
-                                                color = tColor
-                                            )
-                                        }
-                                        Spacer(modifier = Modifier.height(5.dp))
-                                        Text(
-                                            text = label,
-                                            fontSize = 7.sp,
-                                            fontFamily = DMMonoFontFamily,
-                                            fontWeight = FontWeight.Bold,
-                                            color = tColor,
-                                            textAlign = TextAlign.Center,
-                                            letterSpacing = 0.8.sp
-                                        )
-                                        if (desc.isNotEmpty()) {
-                                            Spacer(modifier = Modifier.height(4.dp))
-                                            Text(
-                                                text = desc,
-                                                fontSize = 8.5.sp,
-                                                fontFamily = InstrumentSansFontFamily,
-                                                color = TextMutedColor,
-                                                textAlign = TextAlign.Center,
-                                                lineHeight = 11.sp
-                                            )
-                                        }
-                                    }
-                                    // Connector line between items
-                                    if (idx < timelineItems.size - 1) {
-                                        Box(
-                                            modifier = Modifier
-                                                .width(16.dp)
-                                                .padding(top = 24.dp)
-                                                .height(1.dp)
-                                                .background(BorderSubtle)
-                                        )
-                                    }
-                                }
-                            }
-
-                            if (liveTimelineForecast.explanation.isNotEmpty()) {
-                                Spacer(modifier = Modifier.height(10.dp))
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .background(Surface3, RoundedCornerShape(8.dp))
-                                        .padding(10.dp)
-                                ) {
-                                    Text(
-                                        text = liveTimelineForecast.explanation,
-                                        fontSize = 9.5.sp,
-                                        fontFamily = InstrumentSansFontFamily,
-                                        color = TextSecondaryColor,
-                                        lineHeight = 13.sp
-                                    )
-                                }
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(10.dp))
-                }
-
-                Spacer(modifier = Modifier.height(14.dp))
-            }
+            Spacer(modifier = Modifier.height(14.dp))
 
             // FUTURE PROBABILITY CANVS & MODEL (D3-style)
             var selectedPointIndex by remember { mutableStateOf<Int?>(null) }
@@ -1024,6 +909,295 @@ fun AnalysisScreen(
                             color = TextMutedColor,
                             modifier = Modifier.padding(10.dp)
                         )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // 1. RECURSIVE SYSTEM FEEDBACK LOOP VISUALIZER
+            var selectedLoopElement by remember { mutableStateOf<Int?>(null) }
+            val feedbackLoopElements = remember {
+                listOf(
+                    FeedbackNode(0, "Incentive Reinforcement", "Competitive payout scales lock player behaviors.", "+25% Likelihood", "+12% System Risk"),
+                    FeedbackNode(1, "Erosion of Trust", "Symptomatic neglect degrades user community retention.", "-15% Likelihood", "+48% System Risk"),
+                    FeedbackNode(2, "Operational Bottleneck", "Capacity limit rules constrain scalability throughput.", "-8% Likelihood", "+18% System Risk"),
+                    FeedbackNode(3, "Paradigm Shift Horizon", "Absolute reality forces push adaptation toward steady-state equilibrium.", "+35% Likelihood", "-20% System Risk")
+                )
+            }
+
+            Text(
+                text = "RECURSIVE SYSTEM FEEDBACK LOOP (D3 INTERACTIVE ENGINE)",
+                fontSize = 8.sp,
+                letterSpacing = 1.3.sp,
+                fontFamily = DMMonoFontFamily,
+                fontWeight = FontWeight.Bold,
+                color = TextMutedColor,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 20.dp),
+                shape = RoundedCornerShape(12.dp),
+                colors = CardDefaults.cardColors(containerColor = Surface2),
+                border = BorderStroke(1.dp, BorderSubtle)
+            ) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Text(
+                        text = "Hover/Tap 'System Reality' components to see cascade effect on overall metrics.",
+                        fontSize = 9.5.sp,
+                        fontFamily = InstrumentSansFontFamily,
+                        color = TextSecondaryColor,
+                        modifier = Modifier.padding(bottom = 12.dp)
+                    )
+
+                    // Node loop visual grid/circle draw
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(130.dp)
+                            .background(Surface3, shape = RoundedCornerShape(8.dp))
+                            .border(1.dp, BorderSubtle, shape = RoundedCornerShape(8.dp))
+                            .padding(8.dp)
+                    ) {
+                        Canvas(modifier = Modifier.fillMaxSize()) {
+                            val cx = size.width / 2f
+                            val cy = size.height / 2f
+                            val radius = 42.dp.toPx()
+
+                            // Draw recursive ring path
+                            drawCircle(
+                                color = ElectricViolet.copy(alpha = 0.25f),
+                                radius = radius,
+                                center = Offset(cx, cy),
+                                style = Stroke(width = 2.dp.toPx())
+                            )
+
+                            // Helper to draw recursive curve arrowheads
+                            // 4 nodes distributed on the circle
+                            feedbackLoopElements.forEach { element ->
+                                val angle = (element.id * 90f) * (Math.PI / 180f)
+                                val nx = cx + radius * Math.cos(angle).toFloat()
+                                val ny = cy + radius * Math.sin(angle).toFloat()
+
+                                val isNodeSelected = selectedLoopElement == element.id
+
+                                // Ring highlight
+                                drawCircle(
+                                    color = if (isNodeSelected) PremiumCyan.copy(alpha = 0.35f) else ElectricViolet.copy(alpha = 0.15f),
+                                    radius = if (isNodeSelected) 14.dp.toPx() else 8.dp.toPx(),
+                                    center = Offset(nx, ny)
+                                )
+                                // Solid core
+                                drawCircle(
+                                    color = if (isNodeSelected) PremiumCyan else ElectricViolet,
+                                    radius = 4.dp.toPx(),
+                                    center = Offset(nx, ny)
+                                )
+                            }
+                        }
+
+                        // Superimposed central title or selected item labels
+                        Column(
+                            modifier = Modifier.align(Alignment.Center),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(
+                                text = "RECURSION RING",
+                                fontSize = 8.sp,
+                                fontFamily = DMMonoFontFamily,
+                                color = TextMutedColor,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = "LOOP FORCE",
+                                fontSize = 7.sp,
+                                fontFamily = DMMonoFontFamily,
+                                color = PremiumCyan,
+                                letterSpacing = 1.sp
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // Reality component selection list
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        feedbackLoopElements.forEach { node ->
+                            val isSelected = selectedLoopElement == node.id
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .background(
+                                        color = if (isSelected) PremiumCyan.copy(alpha = 0.14f) else Surface3,
+                                        shape = RoundedCornerShape(8.dp)
+                                    )
+                                    .border(
+                                        width = 1.dp,
+                                        color = if (isSelected) PremiumCyan else BorderSubtle,
+                                        shape = RoundedCornerShape(8.dp)
+                                    )
+                                    .clickable {
+                                        selectedLoopElement = if (isSelected) null else node.id
+                                    }
+                                    .padding(8.dp)
+                            ) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text(
+                                        text = "NODE 0${node.id + 1}",
+                                        fontSize = 8.sp,
+                                        fontFamily = DMMonoFontFamily,
+                                        color = if (isSelected) PremiumCyan else TextMutedColor,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Spacer(modifier = Modifier.height(3.dp))
+                                    Text(
+                                        text = node.title,
+                                        fontSize = 8.5.sp,
+                                        fontFamily = InstrumentSansFontFamily,
+                                        fontWeight = FontWeight.Bold,
+                                        color = TextPrimaryColor,
+                                        textAlign = TextAlign.Center,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // Display cascade impact if selected
+                    selectedLoopElement?.let { idx ->
+                        val node = feedbackLoopElements[idx]
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 12.dp)
+                                .background(Surface3, shape = RoundedCornerShape(8.dp))
+                                .border(1.dp, PremiumCyan.copy(alpha = 0.35f), shape = RoundedCornerShape(8.dp))
+                                .padding(10.dp)
+                        ) {
+                            Column {
+                                Text(
+                                    text = "SYSTEMIC IMPLICATION CASCADE",
+                                    fontSize = 8.sp,
+                                    fontFamily = DMMonoFontFamily,
+                                    color = PremiumCyan,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Spacer(modifier = Modifier.height(3.dp))
+                                Text(
+                                    text = node.desc,
+                                    fontSize = 11.sp,
+                                    fontFamily = InstrumentSansFontFamily,
+                                    color = TextPrimaryColor,
+                                    lineHeight = 15.sp
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Column {
+                                        Text("LIKELIHOOD EFFECT", fontSize = 7.5.sp, fontFamily = DMMonoFontFamily, color = TextMutedColor)
+                                        Text(node.likelihoodImpact, fontSize = 11.sp, fontFamily = DMMonoFontFamily, color = SuccessColor, fontWeight = FontWeight.Bold)
+                                    }
+                                    Column {
+                                        Text("SYSTEM RISK POTENTIAL", fontSize = 7.5.sp, fontFamily = DMMonoFontFamily, color = TextMutedColor)
+                                        Text(node.riskImpact, fontSize = 11.sp, fontFamily = DMMonoFontFamily, color = ErrorColor, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // 2. GENERATIVE AI DEEP-DIVE INSIGHT
+            val activeSessionIdStr = "guest_local"
+            val deepDiveInsight = deepDiveInsights[activeSessionIdStr]
+            val isDeepDiveLoadingVal = isDeepDiveLoading[activeSessionIdStr] == true
+
+            Text(
+                text = "SYSTEMIC DEEP-DIVE AI REFLECTION",
+                fontSize = 8.sp,
+                letterSpacing = 1.3.sp,
+                fontFamily = DMMonoFontFamily,
+                fontWeight = FontWeight.Bold,
+                color = TextMutedColor,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 24.dp),
+                shape = RoundedCornerShape(12.dp),
+                colors = CardDefaults.cardColors(containerColor = Surface2),
+                border = BorderStroke(1.dp, if (deepDiveInsight != null) ElectricViolet else BorderSubtle)
+            ) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Text(
+                        text = "Generative AI reflection focusing on secondary and tertiary cascade impacts of the active scenario.",
+                        fontSize = 9.5.sp,
+                        fontFamily = InstrumentSansFontFamily,
+                        color = TextSecondaryColor,
+                        modifier = Modifier.padding(bottom = 12.dp)
+                    )
+
+                    if (isDeepDiveLoadingVal) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(100.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator(color = ElectricViolet, strokeWidth = 2.dp)
+                        }
+                    } else if (deepDiveInsight != null) {
+                        Column {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(Surface3, shape = RoundedCornerShape(8.dp))
+                                    .border(1.dp, BorderSubtle, shape = RoundedCornerShape(8.dp))
+                                    .padding(10.dp)
+                            ) {
+                                Text(
+                                    text = deepDiveInsight,
+                                    fontSize = 11.sp,
+                                    fontFamily = InstrumentSansFontFamily,
+                                    color = TextPrimaryColor,
+                                    lineHeight = 16.sp
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Button(
+                                onClick = { onGenerateDeepDive(activeSessionIdStr, queryText) },
+                                colors = ButtonDefaults.buttonColors(containerColor = Surface3),
+                                shape = RoundedCornerShape(8.dp),
+                                border = BorderStroke(1.dp, BorderSubtle),
+                                modifier = Modifier.align(Alignment.End)
+                            ) {
+                                Text("RE-GENERATE INSIGHT", fontSize = 8.sp, fontFamily = DMMonoFontFamily, color = TextPrimaryColor)
+                            }
+                        }
+                    } else {
+                        Button(
+                            onClick = { onGenerateDeepDive(activeSessionIdStr, queryText) },
+                            colors = ButtonDefaults.buttonColors(containerColor = ElectricViolet),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("⚡ GENERATE SYSTEMIC REFLECTION", fontSize = 9.sp, fontFamily = DMMonoFontFamily, color = Color.White)
+                        }
                     }
                 }
             }
@@ -1462,14 +1636,35 @@ fun AnalysisScreen(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 TextButton(onClick = { showReportDrawerModal = false }) {
-                                    Text("CLOSE DOCUMENT", color = Color.Black, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                    Text("CLOSE SYSTEM DOCUMENT", color = Color.Black, fontSize = 8.5.sp, fontWeight = FontWeight.Bold)
                                 }
-                                Button(
-                                    onClick = { showReportDrawerModal = false },
-                                    colors = ButtonDefaults.buttonColors(containerColor = Color.Black),
-                                    shape = RoundedCornerShape(4.dp)
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Text("PRINT OUT / SHARE PDF", color = Color.White, fontSize = 8.5.sp, fontWeight = FontWeight.Bold)
+                                    Button(
+                                        onClick = {
+                                            val savedPath = exportReportToLocalStorage(context, parsedResponse, queryText)
+                                            if (savedPath != null) {
+                                                android.widget.Toast.makeText(context, "✓ Saved: $savedPath", android.widget.Toast.LENGTH_LONG).show()
+                                            } else {
+                                                android.widget.Toast.makeText(context, "❌ Save failed", android.widget.Toast.LENGTH_SHORT).show()
+                                            }
+                                        },
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1B5E20)),
+                                        shape = RoundedCornerShape(4.dp),
+                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                                    ) {
+                                        Text("💾 EXPORT TXT", color = Color.White, fontSize = 8.5.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                    Button(
+                                        onClick = { showReportDrawerModal = false },
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color.Black),
+                                        shape = RoundedCornerShape(4.dp),
+                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                                    ) {
+                                        Text("PRINT OUT / SHARE PDF", color = Color.White, fontSize = 8.5.sp, fontWeight = FontWeight.Bold)
+                                    }
                                 }
                             }
                         }
@@ -1498,3 +1693,122 @@ data class WebSignalCardData(
     val relevance: Int,
     val summary: String
 )
+
+data class FeedbackNode(
+    val id: Int,
+    val title: String,
+    val desc: String,
+    val likelihoodImpact: String,
+    val riskImpact: String
+)
+
+private fun generateReportText(parsed: com.example.data.model.ParsedResponse?, query: String): String {
+    val sb = java.lang.StringBuilder()
+    sb.append("==================================================\n")
+    sb.append("        DEPTHLENS SYSTEMIC ANALYSIS REPORT        \n")
+    sb.append("==================================================\n\n")
+    sb.append("TARGET SCENARIO: \"$query\"\n\n")
+    
+    if (parsed == null) {
+        sb.append("Diagnostic study currently processing. Standard template outputs active.\n")
+        return sb.toString()
+    }
+    
+    sb.append("A. EXECUTIVE SUMMARY\n")
+    sb.append("--------------------\n")
+    sb.append("${parsed.executiveSummary ?: parsed.introduction}\n\n")
+    
+    sb.append("B. SYSTEM REALITY (SYSTEM MAP)\n")
+    sb.append("--------------------\n")
+    val layer7 = parsed.depthLayers.find { it.layerNumber == 7 }
+    if (layer7 != null) {
+        sb.append("Layer 7 - Systemic Reality Linkages:\n")
+        sb.append("${layer7.description}\n\n")
+    } else {
+        sb.append("Systemic Reality: No active feedback loops mapped in this session.\n\n")
+    }
+    
+    sb.append("C. ROOT CAUSE REALITY\n")
+    sb.append("---------------------\n")
+    val rc = parsed.rootCauseReport
+    if (rc != null) {
+        sb.append("Symptom: ${rc.symptom}\n")
+        sb.append("Immediate Cause: ${rc.immediateCause}\n")
+        sb.append("Underlying Cause: ${rc.underlyingCause}\n")
+        sb.append("Deeper Cause: ${rc.deeperCause}\n")
+        sb.append("Estimated Root Cause: ${rc.rootCauseEstimate}\n")
+        sb.append("Causal Confidence Level: ${rc.confidenceLevel}\n")
+        if (rc.alternativeExplanation.isNotEmpty()) {
+            sb.append("Alternative Explanations: ${rc.alternativeExplanation}\n")
+        }
+    } else {
+        val layer9 = parsed.depthLayers.find { it.layerNumber == 9 }
+        if (layer9 != null) {
+            sb.append("Estimated Root Cause: ${layer9.description}\n")
+        } else {
+            sb.append("Root Cause Reality: Unresolved.\n")
+        }
+    }
+    sb.append("\n")
+    
+    sb.append("D. FUTURE PROBABILITY OUTLOOK\n")
+    sb.append("-----------------------------\n")
+    val metrics = parsed.probabilityMetrics
+    if (metrics != null) {
+        sb.append("Likelihood: ${metrics.likelihood}%\n")
+        sb.append("Confidence: ${metrics.confidence}%\n")
+        sb.append("System Risk: ${metrics.risk}%\n")
+        sb.append("Strategic Opportunity: ${metrics.opportunity}%\n\n")
+    }
+    
+    if (parsed.futurePathways.isNotEmpty()) {
+        sb.append("Forecast Path Scenarios:\n")
+        parsed.futurePathways.forEachIndexed { i, p ->
+            sb.append("${i+1}. ${p.title} (${p.probability}% Probable)\n")
+            sb.append("   - Description: ${p.description}\n")
+            if (p.drivers.isNotEmpty()) sb.append("   - Drivers: ${p.drivers}\n")
+            if (p.risks.isNotEmpty()) sb.append("   - Risks: ${p.risks}\n")
+            if (p.opportunities.isNotEmpty()) sb.append("   - Opportunities: ${p.opportunities}\n")
+        }
+        sb.append("\n")
+    }
+    
+    val tf = parsed.timelineForecast
+    if (tf != null) {
+        sb.append("Causal Growth Forecast Horizons:\n")
+        sb.append("- Short Term (${tf.shortTermProb}%): ${tf.shortTermDesc}\n")
+        sb.append("- Mid Term (${tf.midTermProb}%): ${tf.midTermDesc}\n")
+        sb.append("- Long Term (${tf.longTermProb}%): ${tf.longTermDesc}\n")
+        if (tf.explanation.isNotEmpty()) {
+            sb.append("Growth Driver Explanation: ${tf.explanation}\n")
+        }
+        sb.append("\n")
+    }
+    
+    sb.append("E. COGNITIVE ANALYSIS OVERVIEW\n")
+    sb.append("------------------------------\n")
+    parsed.depthLayers.forEach { layer ->
+        if (layer.layerNumber != 7 && layer.layerNumber != 9) {
+            sb.append("Layer ${layer.layerNumber} - ${layer.layerName}:\n")
+            sb.append("${layer.description}\n\n")
+        }
+    }
+    
+    sb.append("Report generated on: ${java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())}\n")
+    return sb.toString()
+}
+
+private fun exportReportToLocalStorage(context: android.content.Context, parsed: com.example.data.model.ParsedResponse?, queryText: String): String? {
+    return try {
+        val content = generateReportText(parsed, queryText)
+        val fileName = "depthlens_report_${System.currentTimeMillis()}.txt"
+        context.openFileOutput(fileName, android.content.Context.MODE_PRIVATE).use {
+            it.write(content.toByteArray())
+        }
+        val file = context.getFileStreamPath(fileName)
+        file.absolutePath
+    } catch (e: Exception) {
+        e.printStackTrace()
+        null
+    }
+}

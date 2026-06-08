@@ -116,7 +116,7 @@ object GithubUpdateManager {
         
         return try {
             val packageInfo = context.packageManager.getPackageInfo(context.packageName, 0)
-            packageInfo.versionName ?: "4.1.1a"
+            packageInfo.versionName ?: "4.1.5"
         } catch (e: Exception) {
             "4.0.0"
         }
@@ -245,23 +245,18 @@ object GithubUpdateManager {
                     val localVersion = getInstalledVersion(context)
                     
                     val mockRelease = GitHubRelease(
-                        tagName = "v4.1.1a",
-                        name = "DepthLens v4.1.1a — Intelligence Refinement",
+                        tagName = "v4.1.5",
+                        name = "DepthLens v4.1.5 — Polar Dawn Patch",
                         publishedAt = "June 7, 2026",
-                        body = "### What's New\n" +
-                                "- **UI/UX and navigation experience refined**\n" +
-                                "- **Improved chat and analysis workflow**\n" +
-                                "- **Added question editing and text selection**\n" +
-                                "- **Added copy actions for analysis results**\n" +
-                                "- **Enhanced deep analysis and probability forecasting**\n" +
-                                "- **Improved future scenario predictions**\n" +
-                                "- **Redesigned attachment and voice input system**\n" +
-                                "- **Restored in-app update functionality**\n" +
-                                "- **Simplified Settings and removed developer-only tools**\n" +
-                                "- **Added GitHub repository link**\n" +
+                        body = "### What's New in v4.1.5\n" +
+                                "- **Sleek Polar Dawn UI Consistency**: Complete light template audit and element leaks resolved across the system.\n" +
+                                "- **Icon-Only Response Action Row**: Clean 4-button modern pill layout for intuitive user operations.\n" +
+                                "- **Full-Featured Copy, Share, Export Actions**: Copy complete insights, trigger Android Share Sheets, and export as TXT, JSON or PDF to local Downloads.\n" +
+                                "- **Larger Symmetrical Header Logo**: Sized up main logo by 30% with continuous glowing centering.\n" +
+                                "- **Corrected Greeting Typography**: Soft, eye-safe readable dark greeting tones for Polar Dawn.\n" +
                                 "- **Performance improvements and bug fixes**",
-                        apkUrl = "https://github.com/guy-with-ideas-uncoded/DEPTHLENS/releases/download/v4.1.1a/DEPTHLENS.apk",
-                        apkFileName = "DEPTHLENS.apk",
+                        apkUrl = "https://github.com/guy-with-ideas-uncoded/DEPTHLENS/releases/download/v4.1.5/DEPTHLENS.apk",
+                        apkFileName = "DEPTHLENS-v415.apk",
                         apkSize = 41943040L
                     )
                     
@@ -272,7 +267,7 @@ object GithubUpdateManager {
                     val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
                     prefs.edit().putLong(KEY_LAST_CHECK, now).apply()
 
-                    val isNew = isNewerVersion("v4.1.1a", localVersion)
+                    val isNew = isNewerVersion("v4.1.5", localVersion)
                     onComplete(isNew, mockRelease)
                 }
             }

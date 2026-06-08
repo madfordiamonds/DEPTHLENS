@@ -10,6 +10,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.animation.core.*
+import androidx.compose.animation.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material.icons.filled.Delete
@@ -48,6 +49,7 @@ import com.example.data.model.*
 import com.example.data.repository.ResponseParser
 import com.example.ui.theme.*
 import com.example.ui.components.ThreeDotThinkingIndicator
+import com.example.ui.components.IntelligenceOSVisualizer
 import androidx.compose.ui.window.Dialog
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -65,6 +67,21 @@ import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.ui.graphics.SolidColor
+
+@OptIn(ExperimentalLayoutApi::class)
+// Strips raw markdown symbols that Compose Text() cannot render  
+private fun stripMarkdown(text: String): String {
+    return text
+        .replace(Regex("""\*\*(.+?)\*\*""", setOf(RegexOption.DOT_MATCHES_ALL)), "$1")
+        .replace(Regex("""\*(.+?)\*""", setOf(RegexOption.DOT_MATCHES_ALL)), "$1")
+        .replace(Regex("""__(.+?)__""", setOf(RegexOption.DOT_MATCHES_ALL)), "$1")
+        .replace(Regex("""_(.+?)_""", setOf(RegexOption.DOT_MATCHES_ALL)), "$1")
+        .replace(Regex("""^#{1,6}\s+""", setOf(RegexOption.MULTILINE)), "")
+        .replace(Regex("""^>\s+""", setOf(RegexOption.MULTILINE)), "")
+        .replace(Regex("""^[-*+]\s""", setOf(RegexOption.MULTILINE)), "• ")
+        .replace("---", "").replace("***", "")
+}
+
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -160,6 +177,8 @@ fun HomeScreen(
     }
 
     var showAttachBottomSheet by remember { mutableStateOf(false) }
+    var showExportDialog by remember { mutableStateOf(false) }
+    var messageToExport by remember { mutableStateOf<com.example.data.model.MessageEntity?>(null) }
 
     val attachPermLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
@@ -224,7 +243,7 @@ fun HomeScreen(
             verticalArrangement = Arrangement.Top
         ) {
 
-            // Symmetrical Sized Header Row (v4.1.4 Sleek Design)
+            // Symmetrical Sized Header Row (v4.1.5 Sleek Design)
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -254,13 +273,13 @@ fun HomeScreen(
                     }
                 }
 
-                // Center aligned: Sleek Symmetrical DepthLens Logo (Compact & aligned v4.1.4)
+                // Center aligned: Sleek Symmetrical DepthLens Logo (Compact & aligned v4.1.5)
                 Image(
                     painter = painterResource(id = R.drawable.ic_depthlens_logo),
                     contentDescription = "DepthLens",
                     modifier = Modifier
-                        .height(34.dp)
-                        .padding(vertical = 2.dp),
+                        .height(56.dp)
+                        .padding(vertical = 1.dp),
                     contentScale = androidx.compose.ui.layout.ContentScale.Fit
                 )
 
@@ -299,6 +318,22 @@ fun HomeScreen(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center
                 ) {
+                    val isPolarDawn = ThemeManager.themeName == "Polar Dawn"
+                    val greetingColor = if (isPolarDawn) Color(0xFF2F2F2F) else Color.White
+                    val greetingShadow = if (isPolarDawn) {
+                        androidx.compose.ui.graphics.Shadow(
+                            color = Color(0xFFDCD6F7).copy(alpha = 0.2f),
+                            offset = androidx.compose.ui.geometry.Offset(0f, 0f),
+                            blurRadius = 4f
+                        )
+                    } else {
+                        androidx.compose.ui.graphics.Shadow(
+                            color = ElectricViolet.copy(alpha = 0.45f),
+                            offset = androidx.compose.ui.geometry.Offset(0f, 0f),
+                            blurRadius = 12f
+                        )
+                    }
+
                     Text(
                         text = greeting,
                         style = TextStyle(
@@ -307,12 +342,8 @@ fun HomeScreen(
                             lineHeight = 38.sp,
                             fontWeight = FontWeight.ExtraBold,
                             letterSpacing = 4.sp,
-                            color = Color.White,
-                            shadow = androidx.compose.ui.graphics.Shadow(
-                                color = ElectricViolet.copy(alpha = 0.45f),
-                                offset = androidx.compose.ui.geometry.Offset(0f, 0f),
-                                blurRadius = 12f
-                            )
+                            color = greetingColor,
+                            shadow = greetingShadow
                         ),
                         textAlign = TextAlign.Center
                     )
@@ -369,7 +400,7 @@ fun HomeScreen(
                     letterSpacing = 1.2.sp,
                     fontFamily = DMMonoFontFamily,
                     fontWeight = FontWeight.Bold,
-                    color = TextMutedColor
+                    color = if (ThemeManager.themeName == "Polar Dawn") Color(0xFF3A3A3A) else TextMutedColor
                 )
 
                 Row(
@@ -675,16 +706,24 @@ fun HomeScreen(
                                 } else if (parsedResponse != null) {
                                     Card(
                                         shape = RoundedCornerShape(topStart = 3.dp, topEnd = 14.dp, bottomEnd = 14.dp, bottomStart = 14.dp),
-                                        colors = CardDefaults.cardColors(containerColor = Color(0xFF141420)),
-                                        border = BorderStroke(1.dp, Color(0x0FFFFFFF)),
+                                        colors = CardDefaults.cardColors(containerColor = SurfaceCardColor),
+                                        border = BorderStroke(1.dp, CardBorderColor),
                                         modifier = Modifier.fillMaxWidth()
                                     ) {
                                         Column(modifier = Modifier.padding(12.dp)) {
+                                            // Redesigned Future Intelligence Visual Dashboard (Summarizes BEFORE detailed explanations)
+                                            IntelligenceOSVisualizer(
+                                                parsed = parsedResponse,
+                                                rawText = message.text,
+                                                onSubmitQuery = onSubmitQuery
+                                            )
+                                            Spacer(modifier = Modifier.height(16.dp))
+
                                             SelectionContainer {
                                                 Column {
                                                     if (parsedResponse.introduction.isNotEmpty()) {
                                                 Text(
-                                                    text = parsedResponse.introduction,
+                                                    text = stripMarkdown(parsedResponse.introduction),
                                                     fontSize = 18.sp,
                                                     color = TextSecondaryColor,
                                                     lineHeight = 25.sp,
@@ -746,7 +785,7 @@ fun HomeScreen(
                                                             if (layerExpanded) {
                                                                 Spacer(modifier = Modifier.height(4.dp))
                                                                 Text(
-                                                                    text = layer.description,
+                                                                    text = stripMarkdown(layer.description),
                                                                     fontSize = 16.sp,
                                                                     color = TextSecondaryColor,
                                                                     lineHeight = 22.sp,
@@ -781,7 +820,7 @@ fun HomeScreen(
                                             if ((parsedResponse.executiveSummary ?: "").isNotEmpty()) {
                                                 Spacer(modifier = Modifier.height(10.dp))
                                                 Text(
-                                                    text = parsedResponse.executiveSummary!!,
+                                                    text = stripMarkdown(parsedResponse.executiveSummary!!),
                                                     fontSize = 16.sp,
                                                     color = TextSecondaryColor,
                                                     lineHeight = 22.sp,
@@ -803,87 +842,61 @@ fun HomeScreen(
                                              Row(
                                                  modifier = Modifier
                                                      .fillMaxWidth()
-                                                     .padding(vertical = 12.dp),
-                                                 horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                                     .padding(vertical = 8.dp),
+                                                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                                                  verticalAlignment = Alignment.CenterVertically
                                              ) {
-                                                 // Copy Button with glass style and violet borders
+                                                 // 1. Compact Copy Button (Circle Shape)
                                                  Box(
                                                      modifier = Modifier
-                                                         .height(34.dp)
-                                                         .weight(1f)
-                                                         .clip(RoundedCornerShape(8.dp))
+                                                         .size(34.dp)
+                                                         .clip(CircleShape)
                                                          .background(Surface2)
-                                                         .border(1.dp, ElectricViolet.copy(alpha = 0.4f), RoundedCornerShape(8.dp))
+                                                         .border(1.dp, if (copied) ElectricViolet else BorderSubtle, CircleShape)
                                                          .clickable {
                                                              val cleanText = ResponseParser.getCopyableText(message.text)
                                                              clipboardManager.setText(AnnotatedString(cleanText))
                                                              copied = true
+                                                             android.widget.Toast.makeText(context, "Analysis copied", android.widget.Toast.LENGTH_SHORT).show()
                                                          },
                                                      contentAlignment = Alignment.Center
                                                  ) {
-                                                     Row(
-                                                         verticalAlignment = Alignment.CenterVertically,
-                                                         horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                                     ) {
-                                                         Icon(
-                                                             imageVector = Icons.Default.ContentCopy,
-                                                             contentDescription = "Copy text",
-                                                             tint = if (copied) ElectricViolet else TextPrimaryColor,
-                                                             modifier = Modifier.size(13.dp)
-                                                         )
-                                                         Text(
-                                                             text = if (copied) "Copied" else "Copy",
-                                                             fontFamily = InstrumentSansFontFamily,
-                                                             fontWeight = FontWeight.Medium,
-                                                             fontSize = 11.sp,
-                                                             color = if (copied) ElectricViolet else TextPrimaryColor
-                                                         )
-                                                     }
+                                                     Icon(
+                                                         imageVector = Icons.Default.ContentCopy,
+                                                         contentDescription = "Copy analysis",
+                                                         tint = if (copied) ElectricViolet else TextPrimaryColor,
+                                                         modifier = Modifier.size(14.dp)
+                                                     )
                                                  }
 
-                                                 // Go Deeper Button with interactive behavior
+                                                 // 2. Compact Go Deeper Button (Circle Shape)
                                                  Box(
                                                      modifier = Modifier
-                                                         .height(34.dp)
-                                                         .weight(1.1f)
-                                                         .clip(RoundedCornerShape(8.dp))
+                                                         .size(34.dp)
+                                                         .clip(CircleShape)
                                                          .background(Surface2)
-                                                         .border(1.dp, ElectricViolet.copy(alpha = 0.4f), RoundedCornerShape(8.dp))
+                                                         .border(1.dp, BorderSubtle, CircleShape)
                                                          .clickable {
                                                              val deeperPrompt = "Go Deeper on the previous analysis of '" + associatedUserQuery + "'. Reveal: assumptions, unconscious patterns, systemic forces, hidden incentives, and long-term trajectories. Provide genuinely new insights."
                                                              onSubmitQuery(if (associatedUserQuery.isNotEmpty()) deeperPrompt else "Go Deeper on previous situation")
                                                          },
                                                      contentAlignment = Alignment.Center
                                                  ) {
-                                                     Row(
-                                                         verticalAlignment = Alignment.CenterVertically,
-                                                         horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                                     ) {
-                                                         Icon(
-                                                             imageVector = Icons.Default.TrendingUp,
-                                                             contentDescription = "Go Deeper",
-                                                             tint = TextPrimaryColor,
-                                                             modifier = Modifier.size(13.dp)
-                                                         )
-                                                         Text(
-                                                             text = "Deeper",
-                                                             fontFamily = InstrumentSansFontFamily,
-                                                             fontWeight = FontWeight.Medium,
-                                                             fontSize = 11.sp,
-                                                             color = TextPrimaryColor
-                                                         )
-                                                     }
+                                                     Icon(
+                                                         imageVector = Icons.Default.TrendingUp,
+                                                         contentDescription = "Dig Deeper",
+                                                         tint = TextPrimaryColor,
+                                                         modifier = Modifier.size(14.dp)
+                                                     )
                                                  }
 
-                                                 // Share Button
+                                                 // 3. Compact Share Button (Circle Shape)
                                                  Box(
                                                      modifier = Modifier
-                                                         .height(34.dp)
-                                                         .weight(1f)
-                                                         .clip(RoundedCornerShape(8.dp))
+                                                         .size(34.dp)
+                                                         .clip(CircleShape)
                                                          .background(Surface2)
-                                                         .border(1.dp, ElectricViolet.copy(alpha = 0.4f), RoundedCornerShape(8.dp))
+                                                         .border(1.dp, BorderSubtle, CircleShape)
                                                          .clickable {
                                                              val cleanText = ResponseParser.getCopyableText(message.text)
                                                              val shareIntent = Intent(Intent.ACTION_SEND).apply {
@@ -894,89 +907,67 @@ fun HomeScreen(
                                                          },
                                                      contentAlignment = Alignment.Center
                                                  ) {
-                                                     Row(
-                                                         verticalAlignment = Alignment.CenterVertically,
-                                                         horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                                     ) {
-                                                         Icon(
-                                                             imageVector = Icons.Default.Share,
-                                                             contentDescription = "Share",
-                                                             tint = TextPrimaryColor,
-                                                             modifier = Modifier.size(13.dp)
-                                                         )
-                                                         Text(
-                                                             text = "Share",
-                                                             fontFamily = InstrumentSansFontFamily,
-                                                             fontWeight = FontWeight.Medium,
-                                                             fontSize = 11.sp,
-                                                             color = TextPrimaryColor
-                                                         )
-                                                     }
+                                                     Icon(
+                                                         imageVector = Icons.Default.Share,
+                                                         contentDescription = "Share analysis",
+                                                         tint = TextPrimaryColor,
+                                                         modifier = Modifier.size(14.dp)
+                                                     )
                                                  }
 
-                                                 // Export File Button
+                                                 // 4. Compact Export Button (Circle Shape)
                                                  Box(
                                                      modifier = Modifier
-                                                         .height(34.dp)
-                                                         .weight(1f)
-                                                         .clip(RoundedCornerShape(8.dp))
+                                                         .size(34.dp)
+                                                         .clip(CircleShape)
                                                          .background(Surface2)
-                                                         .border(1.dp, ElectricViolet.copy(alpha = 0.4f), RoundedCornerShape(8.dp))
+                                                         .border(1.dp, BorderSubtle, CircleShape)
                                                          .clickable {
-                                                             try {
-                                                                 val cleanText = ResponseParser.getCopyableText(message.text)
-                                                                 val cacheFile = java.io.File(context.cacheDir, "depthlens_analysis_report.txt")
-                                                                 cacheFile.writeText(cleanText)
-                                                                 val contentUri = FileProvider.getUriForFile(
-                                                                     context,
-                                                                     "com.aistudio.depthlens.omg.fileprovider",
-                                                                     cacheFile
-                                                                 )
-                                                                 val exportIntent = Intent(Intent.ACTION_SEND).apply {
-                                                                     type = "text/plain"
-                                                                     putExtra(Intent.EXTRA_STREAM, contentUri)
-                                                                     addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                                                 }
-                                                                 context.startActivity(Intent.createChooser(exportIntent, "Export Analysis Report"))
-                                                             } catch (e: Exception) {
-                                                                 android.widget.Toast.makeText(context, "Export Error: ${e.localizedMessage}", android.widget.Toast.LENGTH_LONG).show()
-                                                             }
+                                                             messageToExport = message
+                                                             showExportDialog = true
                                                          },
                                                      contentAlignment = Alignment.Center
                                                  ) {
-                                                     Row(
-                                                         verticalAlignment = Alignment.CenterVertically,
-                                                         horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                                     ) {
-                                                         Icon(
-                                                             imageVector = Icons.Default.Download,
-                                                             contentDescription = "Export Report",
-                                                             tint = TextPrimaryColor,
-                                                             modifier = Modifier.size(13.dp)
-                                                         )
-                                                         Text(
-                                                             text = "Export",
-                                                             fontFamily = InstrumentSansFontFamily,
-                                                             fontWeight = FontWeight.Medium,
-                                                             fontSize = 11.sp,
-                                                             color = TextPrimaryColor
-                                                         )
-                                                     }
+                                                     Icon(
+                                                         imageVector = Icons.Default.Download,
+                                                         contentDescription = "Export report options",
+                                                         tint = TextPrimaryColor,
+                                                         modifier = Modifier.size(14.dp)
+                                                     )
                                                  }
                                              }
 
-                                              Spacer(modifier = Modifier.height(6.dp))
-                                              Text(
-                                                  text = "DIG DEEPER",
-                                                  fontSize = 11.sp,
-                                                  letterSpacing = 1.sp,
-                                                  fontFamily = DMMonoFontFamily,
-                                                  fontWeight = FontWeight.Bold,
-                                                  color = PremiumCyan,
-                                                  modifier = Modifier.padding(bottom = 6.dp)
-                                              )
+                                              var digDeeperExpanded by remember { mutableStateOf(false) }
+                                              Row(
+                                                  modifier = Modifier
+                                                      .fillMaxWidth()
+                                                      .clickable { digDeeperExpanded = !digDeeperExpanded }
+                                                      .padding(vertical = 4.dp),
+                                                  horizontalArrangement = Arrangement.SpaceBetween,
+                                                  verticalAlignment = Alignment.CenterVertically
+                                              ) {
+                                                  Text(
+                                                      text = "DIG DEEPER",
+                                                      fontSize = 11.sp,
+                                                      letterSpacing = 1.sp,
+                                                      fontFamily = DMMonoFontFamily,
+                                                      fontWeight = FontWeight.Bold,
+                                                      color = PremiumCyan
+                                                  )
+                                                  Icon(
+                                                      imageVector = if (digDeeperExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                                                      contentDescription = "Toggle Dig Deeper Options",
+                                                      tint = PremiumCyan,
+                                                      modifier = Modifier.size(16.dp)
+                                                  )
+                                              }
 
-                                             Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                                              AnimatedVisibility(
+                                                  visible = digDeeperExpanded,
+                                                  enter = expandVertically() + fadeIn(),
+                                                  exit = shrinkVertically() + fadeOut()
+                                              ) {
+                                                  Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
                                                  val digDeeperPaths = remember(associatedUserQuery) {
                                                      listOf(
                                                          "Go Deeper" to ("Go Deeper on the previous analysis of '" + associatedUserQuery + "'. Reveal: assumptions, unconscious patterns, systemic forces, hidden incentives, and long-term trajectories. Provide genuinely new insights."),
@@ -1051,19 +1042,41 @@ fun HomeScreen(
                                                  }
                                              }
 
-                                             // ── Exploration paths ──────────────────────────
+                                              } // Close AnimatedVisibility for DIG DEEPER
+
+                                              // ── Exploration paths ──────────────────────────
                                              if (parsedResponse.explorationPaths.isNotEmpty()) {
+                                                 var exploreFurtherExpanded by remember { mutableStateOf(false) }
                                                  Spacer(modifier = Modifier.height(10.dp))
-                                                 Text(
-                                                     text = "EXPLORE FURTHER",
-                                                     fontSize = 11.sp,
-                                                     letterSpacing = 1.sp,
-                                                     fontFamily = DMMonoFontFamily,
-                                                     fontWeight = FontWeight.Bold,
-                                                     color = ElectricViolet,
-                                                     modifier = Modifier.padding(bottom = 5.dp)
-                                                 )
-                                                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                                 Row(
+                                                     modifier = Modifier
+                                                         .fillMaxWidth()
+                                                         .clickable { exploreFurtherExpanded = !exploreFurtherExpanded }
+                                                         .padding(vertical = 4.dp),
+                                                     horizontalArrangement = Arrangement.SpaceBetween,
+                                                     verticalAlignment = Alignment.CenterVertically
+                                                 ) {
+                                                     Text(
+                                                         text = "EXPLORE FURTHER",
+                                                         fontSize = 11.sp,
+                                                         letterSpacing = 1.sp,
+                                                         fontFamily = DMMonoFontFamily,
+                                                         fontWeight = FontWeight.Bold,
+                                                         color = ElectricViolet
+                                                     )
+                                                     Icon(
+                                                         imageVector = if (exploreFurtherExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                                                         contentDescription = "Toggle Explore Further",
+                                                         tint = ElectricViolet,
+                                                         modifier = Modifier.size(16.dp)
+                                                     )
+                                                 }
+                                                 AnimatedVisibility(
+                                                     visible = exploreFurtherExpanded,
+                                                     enter = expandVertically() + fadeIn(),
+                                                     exit = shrinkVertically() + fadeOut()
+                                                 ) {
+                                                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                                      parsedResponse.explorationPaths.forEach { path ->
                                                          Row(
                                                              modifier = Modifier
@@ -1092,11 +1105,12 @@ fun HomeScreen(
                                             }
                                         }
                                     }
+                                }
                                 } else {
                                     Card(
                                          shape = RoundedCornerShape(topStart = 3.dp, topEnd = 14.dp, bottomEnd = 14.dp, bottomStart = 14.dp),
-                                        colors = CardDefaults.cardColors(containerColor = Color(0xFF141420)),
-                                        border = BorderStroke(1.dp, Color(0x0FFFFFFF)),
+                                        colors = CardDefaults.cardColors(containerColor = SurfaceCardColor),
+                                        border = BorderStroke(1.dp, CardBorderColor),
                                         modifier = Modifier.fillMaxWidth()
                                     ) {
                                         Text(
@@ -1117,8 +1131,8 @@ fun HomeScreen(
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .background(Color(0xFF141420), RoundedCornerShape(12.dp))
-                                .border(1.dp, Color(0x0FFFFFFF), RoundedCornerShape(12.dp))
+                                .background(SurfaceCardColor, RoundedCornerShape(12.dp))
+                                .border(1.dp, CardBorderColor, RoundedCornerShape(12.dp))
                                 .padding(horizontal = 14.dp, vertical = 10.dp)
                         ) {
                             ThreeDotThinkingIndicator(
@@ -1168,7 +1182,7 @@ fun HomeScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(bottom = 8.dp)
-                            .background(Color(0xFF141420), RoundedCornerShape(8.dp))
+                            .background(Surface2, RoundedCornerShape(8.dp))
                             .border(1.dp, ElectricViolet.copy(alpha = 0.3f), RoundedCornerShape(8.dp))
                             .padding(horizontal = 10.dp, vertical = 6.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -1647,7 +1661,256 @@ fun HomeScreen(
                 }
             }
         }
+
+        if (showExportDialog) {
+            messageToExport?.let { message ->
+                ExportOptionsDialog(
+                    onDismiss = { showExportDialog = false },
+                    messageText = message.text,
+                    context = context
+                )
+            }
+        }
     }
+}
+
+// ───────────────────────────────────────────
+// EXPORTERS & EXPORT OPTION DIALOG FOR V4.1.5
+// ───────────────────────────────────────────
+
+private fun saveToDownloads(context: android.content.Context, fileName: String, mimeType: String, contentBytes: ByteArray): Boolean {
+    return try {
+        val resolver = context.contentResolver
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+            val contentValues = android.content.ContentValues().apply {
+                put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, fileName)
+                put(android.provider.MediaStore.MediaColumns.MIME_TYPE, mimeType)
+                put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH, android.os.Environment.DIRECTORY_DOWNLOADS)
+            }
+            val uri = resolver.insert(android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, contentValues)
+            if (uri != null) {
+                resolver.openOutputStream(uri)?.use { outputStream ->
+                    outputStream.write(contentBytes)
+                }
+                true
+            } else {
+                false
+            }
+        } else {
+            val downloadsDir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS)
+            val file = java.io.File(downloadsDir, fileName)
+            file.writeBytes(contentBytes)
+            true
+        }
+    } catch (e: Exception) {
+        e.printStackTrace()
+        false
+    }
+}
+
+private fun generatePdfReport(titleText: String, textContent: String): ByteArray {
+    val pdfDocument = android.graphics.pdf.PdfDocument()
+    val pageInfo = android.graphics.pdf.PdfDocument.PageInfo.Builder(595, 842, 1).create() // A4 Size: 595 x 842 pt
+    var page = pdfDocument.startPage(pageInfo)
+    var canvas = page.canvas
+    val paint = android.graphics.Paint()
+    
+    // Draw Elegant Header Title
+    paint.textSize = 20f
+    paint.isFakeBoldText = true
+    paint.color = android.graphics.Color.rgb(124, 58, 237) // Modern violet #7C3AED
+    canvas.drawText("DEPTHLENS ANALYSIS REPORT", 40f, 55f, paint)
+    
+    // Draw details metadata
+    paint.textSize = 10f
+    paint.isFakeBoldText = false
+    paint.color = android.graphics.Color.GRAY
+    val timestamp = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())
+    canvas.drawText("Generated: $timestamp | Version v4.1.5", 40f, 75f, paint)
+    
+    // Divider
+    paint.strokeWidth = 1.2f
+    paint.color = android.graphics.Color.LTGRAY
+    canvas.drawLine(40f, 90f, 555f, 90f, paint)
+    
+    // Render text with pages pagination
+    var currentY = 120f
+    val margin = 40f
+    val maxWidth = 515f
+    paint.color = android.graphics.Color.BLACK
+    paint.textSize = 10.5f
+    
+    val sections = textContent.replace("\r", "").split("\n")
+    for (section in sections) {
+        if (section.trim().isEmpty()) {
+            currentY += 10f
+            continue
+        }
+        
+        if (section.startsWith("###") || section.startsWith("##") || section.startsWith("#")) {
+            paint.isFakeBoldText = true
+            paint.textSize = 12f
+            paint.color = android.graphics.Color.rgb(88, 28, 135)
+            val cleanSec = section.replace("#", "").trim()
+            if (currentY > 790) {
+                pdfDocument.finishPage(page)
+                page = pdfDocument.startPage(android.graphics.pdf.PdfDocument.PageInfo.Builder(595, 842, pdfDocument.pages.size + 1).create())
+                canvas = page.canvas
+                currentY = 50f
+            }
+            canvas.drawText(cleanSec, margin, currentY, paint)
+            currentY += 22f
+            continue
+        } else {
+            paint.isFakeBoldText = false
+            paint.textSize = 10f
+            paint.color = android.graphics.Color.BLACK
+        }
+        
+        val words = section.split(" ")
+        val line = StringBuilder()
+        for (word in words) {
+            val spaceText = if (line.isNotEmpty()) " " + word else word
+            if (paint.measureText(line.toString() + spaceText) < maxWidth) {
+                line.append(spaceText)
+            } else {
+                if (currentY > 790) {
+                    pdfDocument.finishPage(page)
+                    page = pdfDocument.startPage(android.graphics.pdf.PdfDocument.PageInfo.Builder(595, 842, pdfDocument.pages.size + 1).create())
+                    canvas = page.canvas
+                    currentY = 50f
+                }
+                canvas.drawText(line.toString(), margin, currentY, paint)
+                currentY += 16f
+                line.setLength(0)
+                line.append(word)
+            }
+        }
+        if (line.isNotEmpty()) {
+            if (currentY > 790) {
+                pdfDocument.finishPage(page)
+                page = pdfDocument.startPage(android.graphics.pdf.PdfDocument.PageInfo.Builder(595, 842, pdfDocument.pages.size + 1).create())
+                canvas = page.canvas
+                currentY = 50f
+            }
+            canvas.drawText(line.toString(), margin, currentY, paint)
+            currentY += 18f
+        }
+    }
+    
+    pdfDocument.finishPage(page)
+    val outputStream = java.io.ByteArrayOutputStream()
+    pdfDocument.writeTo(outputStream)
+    pdfDocument.close()
+    return outputStream.toByteArray()
+}
+
+@Composable
+private fun ExportOptionsDialog(
+    onDismiss: () -> Unit,
+    messageText: String,
+    context: android.content.Context
+) {
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                "EXPORT REPORT",
+                fontSize = 14.sp,
+                fontFamily = DMMonoFontFamily,
+                fontWeight = FontWeight.Bold,
+                color = PremiumCyan,
+                letterSpacing = 1.sp
+            )
+        },
+        text = {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Text(
+                    "Choose an output format to save to your local Downloads folder:",
+                    fontSize = 11.sp,
+                    color = TextSecondaryColor,
+                    fontFamily = InstrumentSansFontFamily,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+                
+                val options = listOf(
+                    Triple("Plain Text Document", "depthlens_report.txt", "text/plain"),
+                    Triple("Structured JSON Document", "depthlens_report.json", "application/json"),
+                    Triple("Portable Document Format (PDF)", "depthlens_report.pdf", "application/pdf")
+                )
+                
+                options.forEach { (label, fileNm, mime) ->
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(Surface2, RoundedCornerShape(8.dp))
+                            .border(1.dp, BorderSubtle, RoundedCornerShape(8.dp))
+                            .clickable {
+                                val cleanText = ResponseParser.getCopyableText(messageText)
+                                val finalBytes = when (mime) {
+                                    "application/json" -> {
+                                        try {
+                                            val jsonObject = org.json.JSONObject().apply {
+                                                put("platform", "DepthLens")
+                                                put("version", "v4.1.5")
+                                                put("timestamp", System.currentTimeMillis())
+                                                put("analysis_report", cleanText)
+                                            }
+                                            jsonObject.toString(4).toByteArray()
+                                        } catch (e: Exception) {
+                                            cleanText.toByteArray()
+                                        }
+                                    }
+                                    "application/pdf" -> {
+                                        generatePdfReport("DepthLens Analysis", cleanText)
+                                    }
+                                    else -> cleanText.toByteArray()
+                                }
+                                val ok = saveToDownloads(context, fileNm, mime, finalBytes)
+                                if (ok) {
+                                    android.widget.Toast.makeText(context, "Saved successfully to Downloads!", android.widget.Toast.LENGTH_SHORT).show()
+                                } else {
+                                    android.widget.Toast.makeText(context, "Export failed. Please check permissions.", android.widget.Toast.LENGTH_LONG).show()
+                                }
+                                onDismiss()
+                            }
+                            .padding(horizontal = 14.dp, vertical = 12.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = label,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = TextPrimaryColor,
+                                fontFamily = InstrumentSansFontFamily
+                            )
+                            Icon(
+                                imageVector = Icons.Default.Download,
+                                contentDescription = "Download icons",
+                                tint = ElectricViolet,
+                                modifier = Modifier.size(14.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("CANCEL", color = PremiumCyan, fontWeight = FontWeight.Bold, fontFamily = DMMonoFontFamily, fontSize = 11.sp)
+            }
+        },
+        containerColor = DeepMidnight,
+        shape = RoundedCornerShape(16.dp),
+        modifier = Modifier.border(1.2.dp, ElectricViolet.copy(alpha = 0.5f), RoundedCornerShape(16.dp))
+    )
 }
 
 // Helper to parse archived JSON — kept for any legacy calls

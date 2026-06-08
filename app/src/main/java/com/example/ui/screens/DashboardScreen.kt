@@ -50,6 +50,7 @@ import com.example.data.model.*
 import com.example.data.repository.ResponseParser
 import com.example.ui.theme.*
 import com.example.ui.components.ThreeDotThinkingIndicator
+import com.example.ui.components.IntelligenceOSVisualizer
 import com.example.ui.viewmodel.IntelligenceViewModel
 import kotlinx.coroutines.launch
 import java.util.Calendar
@@ -90,6 +91,8 @@ fun DashboardScreen(
     val repoOwnerAndName by viewModel.repoOwnerAndName.collectAsState()
     val onboardingCompleted by viewModel.onboardingCompleted.collectAsState()
     val archivedInsights by viewModel.archivedInsights.collectAsState()
+    val deepDiveInsights by viewModel.deepDiveInsights.collectAsState()
+    val isDeepDiveLoading by viewModel.isDeepDiveLoading.collectAsState()
 
     val continuityBrief by viewModel.continuityBrief.collectAsState()
     val continuityBriefStatus by viewModel.continuityBriefStatus.collectAsState()
@@ -971,7 +974,8 @@ fun DashboardScreen(
                             Triple("Void", "Void", "Pure Black • Silver • Minimalist"),
                             Triple("Deep Sea", "Deep Sea", "Indigo • Neon Cyan • Cinematic"),
                             Triple("Polar Dawn", "Polar Dawn", "Clean • Bright • Productive"),
-                            Triple("Ember", "Ember", "Fiery • Warm • Glowing Charcoal")
+                            Triple("Ember", "Ember", "Fiery • Warm • Glowing Charcoal"),
+                            Triple("Future", "Future", "Holographic • Neon Laser • 2126 OS")
                         )
 
                         themesList.forEach { (themeKey, name, desc) ->
@@ -1622,7 +1626,7 @@ fun DashboardScreen(
                                     .padding(horizontal = 16.dp, vertical = 4.dp)
                                     .clip(RoundedCornerShape(10.dp))
                                     .background(DeepMidnight)
-                                    .border(1.dp, SurfaceCardColor, RoundedCornerShape(10.dp))
+                                    .border(1.dp, if (ThemeManager.themeName == "Polar Dawn") Color(0xFFCBD5E1) else SurfaceCardColor, RoundedCornerShape(10.dp))
                                     .padding(horizontal = 12.dp, vertical = 8.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
@@ -1702,6 +1706,23 @@ fun DashboardScreen(
                             val isSelected = session.id == activeSessionId
                             val relativeTime = getRelativeTimeString(session.lastUpdatedAt)
                             
+                            val isPolarDawn = ThemeManager.themeName == "Polar Dawn"
+                            val containerBackground = if (isSelected) {
+                                if (isPolarDawn) Color(0xFFEDE8FB) else SurfaceCardColor
+                            } else {
+                                Color.Transparent
+                            }
+                            val containerTitleColor = if (isSelected) {
+                                if (isPolarDawn) Color(0xFF0F172A) else Color.White
+                            } else {
+                                TextSecondaryColor
+                            }
+                            val containerTimeColor = if (isPolarDawn) {
+                                Color(0xFF64748B)
+                            } else {
+                                TextSecondaryColor.copy(alpha = 0.7f)
+                            }
+
                             androidx.compose.material3.Surface(
                                 onClick = {
                                     viewModel.selectSession(session.id)
@@ -1711,7 +1732,7 @@ fun DashboardScreen(
                                     .fillMaxWidth()
                                     .padding(horizontal = 14.dp, vertical = 2.dp),
                                 shape = RoundedCornerShape(10.dp),
-                                color = if (isSelected) SurfaceCardColor else Color.Transparent,
+                                color = containerBackground,
                                 border = if (isSelected) BorderStroke(1.dp, ElectricViolet.copy(alpha = 0.5f)) else null
                             ) {
                                 Row(
@@ -1741,13 +1762,13 @@ fun DashboardScreen(
                                             maxLines = 1,
                                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                                             fontSize = 12.sp,
-                                            color = if (isSelected) Color.White else TextSecondaryColor
+                                            color = containerTitleColor
                                         )
                                         Spacer(modifier = Modifier.height(2.dp))
                                         Text(
                                             text = relativeTime,
                                             fontSize = 10.sp,
-                                            color = TextSecondaryColor.copy(alpha = 0.7f)
+                                            color = containerTimeColor
                                         )
                                     }
                                     
@@ -2101,8 +2122,8 @@ fun DashboardScreen(
                                                     // AI bubble background: Color(0xFF141420), border: Color(0x0FFFFFFF), corner radius 14dp (top-left 3dp)
                                                     Card(
                                                         shape = RoundedCornerShape(topStart = 3.dp, topEnd = 14.dp, bottomEnd = 14.dp, bottomStart = 14.dp),
-                                                        colors = CardDefaults.cardColors(containerColor = Color(0xFF141420)),
-                                                        border = BorderStroke(1.dp, Color(0x0FFFFFFF)),
+                                                        colors = CardDefaults.cardColors(containerColor = SurfaceCardColor),
+                                                        border = BorderStroke(1.dp, CardBorderColor),
                                                         modifier = Modifier.fillMaxWidth()
                                                     ) {
                                                         Column(modifier = Modifier.padding(12.dp)) {
@@ -2585,6 +2606,14 @@ fun DepthLensDiagnosticCard(
             .fillMaxWidth()
             .padding(bottom = 12.dp)
     ) {
+        // New interactive v4.1.6 future visualizer
+        IntelligenceOSVisualizer(
+            parsed = parsed,
+            rawText = parsed.introduction,
+            onSubmitQuery = onPromptSelected
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+
         // Conversation overview context
         if (parsed.introduction.isNotEmpty()) {
             Text(
@@ -3655,13 +3684,13 @@ fun BottomInputPanel(
                 enabled = !isLoading,
                 modifier = Modifier
                     .size(40.dp)
-                    .background(Color(0xFF141420), CircleShape) // Surface 2
-                    .border(1.dp, Color(0x0FFFFFFF), CircleShape) // Border subtle
+                    .background(Surface2, CircleShape) // Surface 2
+                    .border(1.dp, BorderSubtle, CircleShape) // Border subtle
             ) {
                 Icon(
                     imageVector = Icons.Default.Add,
                     contentDescription = "Attach resource",
-                    tint = Color(0xFF00D4FF), // PremiumCyan
+                    tint = PremiumCyan, // PremiumCyan
                     modifier = Modifier.size(20.dp)
                 )
             }
@@ -3675,23 +3704,23 @@ fun BottomInputPanel(
                     Text(
                         text = "Ask anything deeper...",
                         fontSize = 12.sp,
-                        color = Color(0x4DF0EEFF), // ink-3
+                        color = TextSecondaryColor.copy(alpha = 0.5f), // ink-3 dynamic
                         fontFamily = InstrumentSansFontFamily
                     )
                 },
                 modifier = Modifier
                     .weight(1f)
                     .clip(RoundedCornerShape(28.dp))
-                    .background(Color(0xFF141420)) // Surface 2
-                    .border(1.dp, Color(0x0FFFFFFF), RoundedCornerShape(28.dp)) // Border subtle
+                    .background(Surface2) // Surface 2
+                    .border(1.dp, BorderSubtle, RoundedCornerShape(28.dp)) // Border subtle
                     .heightIn(min = 40.dp, max = 110.dp),
                 maxLines = 4,
                 colors = TextFieldDefaults.colors(
-                    focusedTextColor = Color(0xFFF0EEFF), // ink-1
-                    unfocusedTextColor = Color(0xFFF0EEFF),
-                    focusedContainerColor = Color(0xFF141420),
-                    unfocusedContainerColor = Color(0xFF141420),
-                    disabledContainerColor = Color(0xFF141420),
+                    focusedTextColor = TextPrimaryColor, // ink-1 dynamic
+                    unfocusedTextColor = TextPrimaryColor,
+                    focusedContainerColor = Surface2,
+                    unfocusedContainerColor = Surface2,
+                    disabledContainerColor = Surface2,
                     focusedIndicatorColor = Color.Transparent,
                     unfocusedIndicatorColor = Color.Transparent,
                     disabledIndicatorColor = Color.Transparent
@@ -4998,28 +5027,6 @@ fun BottomTabItem(
                         val sparkleColor = if (isActive) PremiumCyan else tint
                         drawCircle(color = sparkleColor, radius = 1.8.dp.toPx(), center = Offset(size.width * 0.75f, size.height * 0.15f))
                         drawCircle(color = sparkleColor, radius = 1.0.dp.toPx(), center = Offset(size.width * 0.88f, size.height * 0.25f))
-                    }
-                }
-                "analysis" -> {
-                    Canvas(modifier = Modifier.fillMaxSize()) {
-                        drawCircle(color = tint, radius = size.minDimension * 0.38f, style = Stroke(width = 1.8.dp.toPx()))
-                        drawCircle(color = tint, radius = size.minDimension * 0.16f, style = Stroke(width = 1.dp.toPx()))
-                        
-                        if (isActive) {
-                            drawCircle(color = PremiumCyan, radius = 2.dp.toPx(), center = Offset(size.width * 0.5f, size.height * 0.5f))
-                        }
-                        drawLine(
-                            color = tint.copy(alpha = 0.5f),
-                            start = Offset(size.width * 0.5f, size.height * 0.05f),
-                            end = Offset(size.width * 0.5f, size.height * 0.95f),
-                            strokeWidth = 1.2.dp.toPx()
-                        )
-                        drawLine(
-                            color = tint.copy(alpha = 0.5f),
-                            start = Offset(size.width * 0.05f, size.height * 0.5f),
-                            end = Offset(size.width * 0.95f, size.height * 0.5f),
-                            strokeWidth = 1.2.dp.toPx()
-                        )
                     }
                 }
                 "sessions" -> {

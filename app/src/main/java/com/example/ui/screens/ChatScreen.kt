@@ -16,6 +16,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Mic
@@ -39,6 +40,7 @@ import com.example.data.model.*
 import com.example.data.repository.ResponseParser
 import com.example.ui.theme.*
 import com.example.ui.components.ThreeDotThinkingIndicator
+import com.example.ui.components.IntelligenceOSVisualizer
 import kotlinx.coroutines.launch
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -54,6 +56,21 @@ import androidx.core.content.ContextCompat
 import coil.compose.AsyncImage
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
+
+
+// Strips raw markdown symbols that Compose Text() cannot render
+private fun stripMarkdown(text: String): String {
+    return text
+        .replace(Regex("""\*\*(.+?)\*\*"""), "$1")   // **bold** -> bold
+        .replace(Regex("""\*(.+?)\*"""), "$1")         // *italic* -> italic
+        .replace(Regex("""__(.+?)__"""), "$1")         // __bold__
+        .replace(Regex("""_(.+?)_"""), "$1")           // _italic_
+        .replace(Regex("""^#{1,6}\s""", RegexOption.MULTILINE), "") // ## headers
+        .replace(Regex("""^>\s""", RegexOption.MULTILINE), "")      // > blockquotes
+        .replace(Regex("""^[-*+]\s""", RegexOption.MULTILINE), "• ") // bullet lists -> •
+        .replace("---", "")
+        .replace("***", "")
+}
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -338,10 +355,17 @@ fun ChatScreen(
                                             modifier = Modifier.fillMaxWidth()
                                         ) {
                                             Column(modifier = Modifier.padding(12.dp)) {
+                                                // Redesigned Future Intelligence Visual Dashboard (Summarizes BEFORE detailed explanations)
+                                                IntelligenceOSVisualizer(
+                                                    parsed = parsed,
+                                                    rawText = message.text,
+                                                    onSubmitQuery = onSubmitQuery
+                                                )
+                                                Spacer(modifier = Modifier.height(16.dp))
                                                 // Introduction Summary Text
                                                 if (parsed.introduction.isNotEmpty()) {
                                                     Text(
-                                                        text = parsed.introduction,
+                                                        text = stripMarkdown(parsed.introduction),
                                                         fontSize = 12.sp,
                                                         color = TextPrimaryColor,
                                                         lineHeight = 17.sp,
@@ -368,7 +392,7 @@ fun ChatScreen(
                                                             .padding(start = 12.dp, top = 4.dp, bottom = 4.dp)
                                                     ) {
                                                         Text(
-                                                            text = summary,
+                                                            text = stripMarkdown(summary),
                                                             fontSize = 11.sp,
                                                             fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
                                                             color = TextSecondaryColor,
@@ -547,7 +571,7 @@ fun ChatScreen(
                                                                 if (expandedInsightLocal) {
                                                                     Spacer(modifier = Modifier.height(4.dp))
                                                                     Text(
-                                                                        text = layer.description,
+                                                                        text = stripMarkdown(layer.description),
                                                                         fontSize = 11.sp,
                                                                         color = TextSecondaryColor,
                                                                         lineHeight = 15.sp,
@@ -580,7 +604,7 @@ fun ChatScreen(
                                                             )
 
                                                             Text(
-                                                                text = "Symptom: ${rc.symptom}",
+                                                                text = "Symptom: ${stripMarkdown(rc.symptom)}",
                                                                 fontSize = 10.sp,
                                                                 color = TextPrimaryColor,
                                                                 fontFamily = InstrumentSansFontFamily,
@@ -588,11 +612,101 @@ fun ChatScreen(
                                                             )
                                                             Spacer(modifier = Modifier.height(4.dp))
                                                             Text(
-                                                                text = "Incentive: ${rc.immediateCause}",
+                                                                text = "Incentive: ${stripMarkdown(rc.immediateCause)}",
                                                                 fontSize = 10.sp,
                                                                 color = TextSecondaryColor,
                                                                 fontFamily = InstrumentSansFontFamily,
                                                                 lineHeight = 13.sp
+                                                            )
+                                                        }
+                                                    }
+                                                }
+
+
+                                                // ── Copy & Share bar ──────────────────────────────────
+                                                val copyShareClipboard = LocalClipboardManager.current
+                                                val copyShareContext = LocalContext.current
+                                                var copyShareCopied by remember { mutableStateOf(false) }
+                                                val copyableText = remember(message.text) {
+                                                    com.example.data.repository.ResponseParser.getCopyableText(message.text)
+                                                }
+
+                                                Row(
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .padding(bottom = 10.dp),
+                                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                                ) {
+                                                    // COPY button
+                                                    Button(
+                                                        onClick = {
+                                                            copyShareClipboard.setText(AnnotatedString(copyableText))
+                                                            copyShareCopied = true
+                                                        },
+                                                        colors = ButtonDefaults.buttonColors(
+                                                            containerColor = if (copyShareCopied) SuccessColor.copy(alpha = 0.15f) else Surface3
+                                                        ),
+                                                        border = BorderStroke(1.dp, if (copyShareCopied) SuccessColor.copy(alpha = 0.6f) else BorderSubtle),
+                                                        shape = RoundedCornerShape(8.dp),
+                                                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
+                                                        modifier = Modifier.weight(1f)
+                                                    ) {
+                                                        Row(
+                                                            verticalAlignment = Alignment.CenterVertically,
+                                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                                        ) {
+                                                            Icon(
+                                                                imageVector = Icons.Default.ContentCopy,
+                                                                contentDescription = "Copy",
+                                                                tint = if (copyShareCopied) SuccessColor else TextSecondaryColor,
+                                                                modifier = Modifier.size(13.dp)
+                                                            )
+                                                            Text(
+                                                                text = if (copyShareCopied) "Copied!" else "Copy Analysis",
+                                                                fontSize = 10.sp,
+                                                                fontFamily = DMMonoFontFamily,
+                                                                fontWeight = FontWeight.Bold,
+                                                                color = if (copyShareCopied) SuccessColor else TextSecondaryColor
+                                                            )
+                                                        }
+                                                    }
+
+                                                    // SHARE button
+                                                    Button(
+                                                        onClick = {
+                                                            val shareIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                                                                type = "text/plain"
+                                                                putExtra(android.content.Intent.EXTRA_SUBJECT, "DepthLens Analysis")
+                                                                putExtra(android.content.Intent.EXTRA_TEXT, copyableText)
+                                                            }
+                                                            copyShareContext.startActivity(
+                                                                android.content.Intent.createChooser(shareIntent, "Share Analysis")
+                                                            )
+                                                        },
+                                                        colors = ButtonDefaults.buttonColors(
+                                                            containerColor = ElectricViolet.copy(alpha = 0.12f)
+                                                        ),
+                                                        border = BorderStroke(1.dp, ElectricViolet.copy(alpha = 0.4f)),
+                                                        shape = RoundedCornerShape(8.dp),
+                                                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
+                                                        modifier = Modifier.weight(1f)
+                                                    ) {
+                                                        Row(
+                                                            verticalAlignment = Alignment.CenterVertically,
+                                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                                        ) {
+                                                            Icon(
+                                                                imageVector = Icons.Default.Share,
+                                                                contentDescription = "Share",
+                                                                tint = ElectricViolet,
+                                                                modifier = Modifier.size(13.dp)
+                                                            )
+                                                            Text(
+                                                                text = "Share",
+                                                                fontSize = 10.sp,
+                                                                fontFamily = DMMonoFontFamily,
+                                                                fontWeight = FontWeight.Bold,
+                                                                color = ElectricViolet
                                                             )
                                                         }
                                                     }

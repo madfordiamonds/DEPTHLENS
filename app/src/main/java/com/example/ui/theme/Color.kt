@@ -57,12 +57,13 @@ object TypographyManager {
     }
 }
 
-// DepthLens Dynamic Premium Visual Palette supporting Void, Deep Sea, Polar Dawn, and Ember themes
+// DepthLens Dynamic Premium Visual Palette supporting Void, Deep Sea, Polar Dawn, Ember, and Future themes
 val DeepMidnight: Color get() = when (ThemeManager.themeName) {
     "Void" -> Color(0xFF000000)
     "Deep Sea" -> Color(0xFF060609)
     "Polar Dawn" -> Color(0xFFFFFFFF)
     "Ember" -> Color(0xFF0B0606)
+    "Future" -> Color(0xFF010103)
     else -> Color(0xFF060609)
 }
 
@@ -71,6 +72,7 @@ val RichNavy: Color get() = when (ThemeManager.themeName) {
     "Deep Sea" -> Color(0xFF0D0D14)
     "Polar Dawn" -> Color(0xFFF8FAFC)
     "Ember" -> Color(0xFF140B0B)
+    "Future" -> Color(0xFF04060C)
     else -> Color(0xFF0D0D14)
 }
 
@@ -79,6 +81,7 @@ val SurfaceCardColor: Color get() = when (ThemeManager.themeName) {
     "Deep Sea" -> Color(0xFF141420)
     "Polar Dawn" -> Color(0xFFFFFFFF)
     "Ember" -> Color(0xFF1F1212)
+    "Future" -> Color(0xFF0A0F1D)
     else -> Color(0xFF141420)
 }
 
@@ -87,6 +90,7 @@ val ElectricViolet: Color get() = when (ThemeManager.themeName) {
     "Deep Sea" -> Color(0xFF7E65FF) // Electric Violet
     "Polar Dawn" -> Color(0xFF581C87) // Deep Indigo Purple
     "Ember" -> Color(0xFFFF5E1A) // Fiery Orange
+    "Future" -> Color(0xFF00FF66) // Holographic Cyber Green
     else -> Color(0xFF7E65FF)
 }
 
@@ -95,6 +99,7 @@ val PremiumCyan: Color get() = when (ThemeManager.themeName) {
     "Deep Sea" -> Color(0xFF00D4FF) // Vibrant Cyan
     "Polar Dawn" -> Color(0xFF0369A1) // Rich Deep Blue
     "Ember" -> Color(0xFFFFAA40) // Glowing Amber
+    "Future" -> Color(0xFF00E5FF) // Futuristic Cyber Cyan
     else -> Color(0xFF00D4FF)
 }
 
@@ -103,6 +108,7 @@ val HighlightGlow: Color get() = when (ThemeManager.themeName) {
     "Deep Sea" -> Color(0xFF7E65FF)
     "Polar Dawn" -> Color(0xFF581C87)
     "Ember" -> Color(0xFFFF5E1A)
+    "Future" -> Color(0xFF00FF66)
     else -> Color(0xFF7E65FF)
 }
 
@@ -110,6 +116,7 @@ val TextPrimaryColor: Color get() = when (ThemeManager.themeName) {
     "Polar Dawn" -> Color(0xFF0F172A) // Deep Charcoal
     "Void" -> Color(0xFFF8FAFC)
     "Ember" -> Color(0xFFFFF3F0)
+    "Future" -> Color(0xFFE0F2FE)
     else -> Color(0xFFF0EEFF) // Off-white for Dark Sea
 }
 
@@ -117,6 +124,7 @@ val TextSecondaryColor: Color get() = when (ThemeManager.themeName) {
     "Polar Dawn" -> Color(0xFF334155) // Dark Slate
     "Void" -> Color(0xFFCBD5E1) // Silver grey
     "Ember" -> Color(0xFFD3C2BD)
+    "Future" -> Color(0x99E0F2FE)
     else -> Color(0x99F0EEFF)
 }
 
@@ -124,6 +132,7 @@ val SuccessColor: Color get() = when (ThemeManager.themeName) {
     "Polar Dawn" -> Color(0xFF047857) // Solid Emerald
     "Void" -> Color(0xFF34D399)
     "Ember" -> Color(0xFF10B981)
+    "Future" -> Color(0xFF00FF99)
     else -> Color(0xFF2EE8A0)
 }
 
@@ -131,6 +140,7 @@ val WarningColor: Color get() = when (ThemeManager.themeName) {
     "Polar Dawn" -> Color(0xFFB45309) // Rich Amber
     "Void" -> Color(0xFFFBBF24)
     "Ember" -> Color(0xFFF59E0B)
+    "Future" -> Color(0xFFFFB300)
     else -> Color(0xFFFFAA40)
 }
 
@@ -138,6 +148,7 @@ val ErrorColor: Color get() = when (ThemeManager.themeName) {
     "Polar Dawn" -> Color(0xFFB91C1C) // Pure Crimson
     "Void" -> Color(0xFFF87171)
     "Ember" -> Color(0xFFEF4444)
+    "Future" -> Color(0xFFFF3366)
     else -> Color(0xFFFF5E8A)
 }
 
@@ -145,6 +156,7 @@ val TextMutedColor: Color get() = when (ThemeManager.themeName) {
     "Polar Dawn" -> Color(0xFF64748B)
     "Void" -> Color(0xFF666666)
     "Ember" -> Color(0xFF8E7C77)
+    "Future" -> Color(0x4DE0F2FE)
     else -> Color(0x4DF0EEFF)
 }
 
@@ -152,6 +164,7 @@ val SectionLabelColor: Color get() = when (ThemeManager.themeName) {
     "Polar Dawn" -> Color(0xFF475569)
     "Void" -> Color(0xFF888888)
     "Ember" -> Color(0xFFA68F8A)
+    "Future" -> Color(0x99E0F2FE)
     else -> Color(0x99F0EEFF)
 }
 
@@ -159,6 +172,7 @@ val PlaceholderColor: Color get() = when (ThemeManager.themeName) {
     "Polar Dawn" -> Color(0xFF94A3B8)
     "Void" -> Color(0xFF444444)
     "Ember" -> Color(0xFF60524F)
+    "Future" -> Color(0x4DE0F2FE)
     else -> Color(0x4DF0EEFF)
 }
 
@@ -173,6 +187,7 @@ val Surface3: Color get() = when (ThemeManager.themeName) {
     "Deep Sea" -> Color(0xFF1C1C2E)
     "Polar Dawn" -> Color(0xFFF1F5F9)
     "Ember" -> Color(0xFF271818)
+    "Future" -> Color(0xFF13192F)
     else -> Color(0xFF1C1C2E)
 }
 
@@ -181,6 +196,7 @@ val Surface4: Color get() = when (ThemeManager.themeName) {
     "Deep Sea" -> Color(0xFF22223A)
     "Polar Dawn" -> Color(0xFFE2E8F0)
     "Ember" -> Color(0xFF332020)
+    "Future" -> Color(0xFF1D2644)
     else -> Color(0xFF22223A)
 }
 
@@ -189,6 +205,7 @@ val BorderSubtle: Color get() = when (ThemeManager.themeName) {
     "Deep Sea" -> Color(0x0FFFFFFF)
     "Polar Dawn" -> Color(0xFFE2E8F0)
     "Ember" -> Color(0xFF332020)
+    "Future" -> Color(0x12FFFFFF)
     else -> Color(0x0FFFFFFF)
 }
 
@@ -199,6 +216,7 @@ val CardBorderColor: Color get() = when (ThemeManager.themeName) {
     "Deep Sea" -> BorderSubtle
     "Polar Dawn" -> Color(0xFFCBD5E1)
     "Ember" -> Color(0xFF3A2323)
+    "Future" -> Color(0x1F00FF66)
     else -> BorderSubtle
 }
 
