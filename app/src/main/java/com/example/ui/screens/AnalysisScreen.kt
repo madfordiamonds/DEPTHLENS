@@ -525,7 +525,7 @@ fun AnalysisScreen(
 
             if (parsedResponse != null) {
                 IntelligenceOSVisualizer(
-                    parsed = parsedResponse,
+                    parsed = parsedResponse, messageId = latestAiMessage?.id ?: "analysis_default",
                     rawText = latestAiMessage?.text ?: "",
                     onSubmitQuery = onSubmitQuery
                 )

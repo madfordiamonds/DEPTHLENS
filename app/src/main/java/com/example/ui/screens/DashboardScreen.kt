@@ -2681,6 +2681,7 @@ fun DepthLensDiagnosticCard(
         IntelligenceOSVisualizer(
             parsed = parsed,
             rawText = parsed.introduction,
+            messageId = messageId,
             onSubmitQuery = onPromptSelected
         )
         Spacer(modifier = Modifier.height(16.dp))
@@ -2926,82 +2927,7 @@ fun DepthLensDiagnosticCard(
             }
         }
 
-        // 2. Key Insights - Active Cognitive Layers Panel
-        if (parsed.depthLayers.isNotEmpty()) {
-            Card(
-                shape = RoundedCornerShape(12.dp),
-                colors = CardDefaults.cardColors(containerColor = SurfaceCardColor),
-                border = BorderStroke(1.dp, RichNavy),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 5.dp)
-            ) {
-                Column(modifier = Modifier.padding(14.dp)) {
-                    Text(
-                        "KEY INSIGHTS COGNITIVE LAYERS",
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = ElectricViolet,
-                        letterSpacing = 1.sp,
-                        fontFamily = FontFamily.Monospace
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
 
-                    parsed.depthLayers.forEachIndexed { idx, layer ->
-                        var isExpanded by remember { mutableStateOf(false) }
-
-                        Surface(
-                            color = if (isExpanded) RichNavy else Color.Transparent,
-                            shape = RoundedCornerShape(6.dp),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 2.dp)
-                        ) {
-                            Column(
-                                modifier = Modifier
-                                    .clickable { isExpanded = !isExpanded }
-                                    .padding(8.dp)
-                            ) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            text = "LAYER ${layer.layerNumber} - ${layer.layerName.uppercase()}",
-                                            fontSize = 9.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = PremiumCyan
-                                        )
-                                    }
-                                    Icon(
-                                        imageVector = if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                                        contentDescription = "Expand Layer",
-                                        tint = TextSecondaryColor,
-                                        modifier = Modifier.size(14.dp)
-                                    )
-                                }
-
-                                AnimatedVisibility(
-                                    visible = isExpanded,
-                                    enter = expandVertically() + fadeIn(),
-                                    exit = shrinkVertically() + fadeOut()
-                                ) {
-                                    Text(
-                                        text = layer.description,
-                                        fontSize = 11.sp,
-                                        color = TextSecondaryColor,
-                                        lineHeight = 16.sp,
-                                        modifier = Modifier.padding(top = 4.dp)
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
 
         // 3. Most Likely Explanation - Root Cause report
         parsed.rootCauseReport?.let { rc ->
@@ -3571,7 +3497,7 @@ fun DepthLensDiagnosticCard(
                         val clipboardManager = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
                         val clipData = android.content.ClipData.newPlainText("DepthLens Analysis", shareableText)
                         clipboardManager.setPrimaryClip(clipData)
-                        Toast.makeText(context, "Copied to Clipboard", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, "Copied Successfully", Toast.LENGTH_SHORT).show()
                         dashCopied = true
                     }
                     .padding(horizontal = 10.dp, vertical = 5.dp),
@@ -3610,9 +3536,9 @@ fun DepthLensDiagnosticCard(
                         val pdfBytes = generatePdfReport("DepthLens Analysis Result", shareableText)
                         val ok = saveToDownloads(context, fileName, "application/pdf", pdfBytes)
                         if (ok) {
-                            Toast.makeText(context, "Saved successfully to Downloads!", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, "Exported Successfully", Toast.LENGTH_SHORT).show()
                         } else {
-                            Toast.makeText(context, "Export failed.", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, "Export failed: unable to write PDF file.", Toast.LENGTH_SHORT).show()
                         }
                         isPdfExporting = false
                     }
@@ -3638,46 +3564,81 @@ fun DepthLensDiagnosticCard(
                 }
             }
             
-            // ↗ Share Button
-            Row(
+            // Share Button - styled consistent with Copy and Export buttons
+            Box(
                 modifier = Modifier
-                    .clip(RoundedCornerShape(6.dp))
+                    .clip(RoundedCornerShape(7.dp))
+                    .background(Surface3)
+                    .border(1.dp, BorderSubtle, RoundedCornerShape(7.dp))
                     .clickable {
                         hapticFeedback.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
-                        val shareIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
-                            type = "text/plain"
-                            putExtra(android.content.Intent.EXTRA_TEXT, shareableText)
-                            putExtra(android.content.Intent.EXTRA_SUBJECT, "DepthLens Analysis")
+                        try {
+                            val shareIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                                type = "text/plain"
+                                putExtra(android.content.Intent.EXTRA_TEXT, shareableText)
+                                putExtra(android.content.Intent.EXTRA_SUBJECT, "DepthLens Analysis")
+                            }
+                            context.startActivity(android.content.Intent.createChooser(shareIntent, "Share DepthLens Report"))
+                            Toast.makeText(context, "Shared Successfully", Toast.LENGTH_SHORT).show()
+                        } catch (e: Exception) {
+                            Toast.makeText(context, "Share failed: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
                         }
-                        context.startActivity(android.content.Intent.createChooser(shareIntent, "Share DepthLens Report"))
                     }
-                    .padding(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Center
+                    .padding(horizontal = 10.dp, vertical = 5.dp),
+                contentAlignment = Alignment.Center
             ) {
-                Text(
-                    text = "↗",
-                    fontSize = 15.sp,
-                    color = PremiumCyan,
-                    fontWeight = FontWeight.Bold
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(5.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Share,
+                        contentDescription = "Share analysis",
+                        tint = PremiumCyan,
+                        modifier = Modifier.size(11.dp)
+                    )
+                    Text(
+                        text = "Share",
+                        fontSize = 8.5.sp,
+                        fontFamily = DMMonoFontFamily,
+                        color = PremiumCyan
+                    )
+                }
             }
 
-            // 🔄 Regenerate Button (AI response only)
-            Row(
+            // Regenerate Button - styled consistent with app design
+            Box(
                 modifier = Modifier
-                    .clip(RoundedCornerShape(6.dp))
+                    .clip(RoundedCornerShape(7.dp))
+                    .background(Surface3)
+                    .border(1.dp, BorderSubtle, RoundedCornerShape(7.dp))
                     .clickable {
-                        onRegenerate()
+                        try {
+                            onRegenerate()
+                        } catch (e: Exception) {
+                            Toast.makeText(context, "Regeneration failed: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
+                        }
                     }
-                    .padding(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Center
+                    .padding(horizontal = 10.dp, vertical = 5.dp),
+                contentAlignment = Alignment.Center
             ) {
-                Text(
-                    text = "🔄",
-                    fontSize = 15.sp
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(5.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Refresh,
+                        contentDescription = "Regenerate analysis",
+                        tint = WarningColor,
+                        modifier = Modifier.size(11.dp)
+                    )
+                    Text(
+                        text = "Regen",
+                        fontSize = 8.5.sp,
+                        fontFamily = DMMonoFontFamily,
+                        color = WarningColor
+                    )
+                }
             }
         }
 

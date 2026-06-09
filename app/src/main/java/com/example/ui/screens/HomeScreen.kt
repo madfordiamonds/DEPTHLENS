@@ -826,7 +826,7 @@ fun HomeScreen(
                                         Column(modifier = Modifier.padding(12.dp)) {
                                             // Redesigned Future Intelligence Visual Dashboard (Summarizes BEFORE detailed explanations)
                                             IntelligenceOSVisualizer(
-                                                parsed = parsedResponse,
+                                                parsed = parsedResponse, messageId = message.id,
                                                 rawText = message.text,
                                                 onSubmitQuery = onSubmitQuery
                                             )
@@ -970,7 +970,7 @@ fun HomeScreen(
                                                              val cleanText = ResponseParser.getCopyableText(message.text)
                                                              clipboardManager.setText(AnnotatedString(cleanText))
                                                              copied = true
-                                                             android.widget.Toast.makeText(context, "Analysis copied", android.widget.Toast.LENGTH_SHORT).show()
+                                                             android.widget.Toast.makeText(context, "Copied Successfully", android.widget.Toast.LENGTH_SHORT).show()
                                                          },
                                                      contentAlignment = Alignment.Center
                                                  ) {
@@ -1017,6 +1017,7 @@ fun HomeScreen(
                                                                  putExtra(Intent.EXTRA_TEXT, cleanText)
                                                              }
                                                              context.startActivity(Intent.createChooser(shareIntent, "Share Analysis"))
+                                                              android.widget.Toast.makeText(context, "Shared Successfully", android.widget.Toast.LENGTH_SHORT).show()
                                                          },
                                                      contentAlignment = Alignment.Center
                                                  ) {
@@ -2041,9 +2042,9 @@ private fun ExportOptionsDialog(
                                 }
                                 val ok = saveToDownloads(context, fileNm, mime, finalBytes)
                                 if (ok) {
-                                    android.widget.Toast.makeText(context, "Saved successfully to Downloads!", android.widget.Toast.LENGTH_SHORT).show()
+                                    android.widget.Toast.makeText(context, "Exported Successfully", android.widget.Toast.LENGTH_SHORT).show()
                                 } else {
-                                    android.widget.Toast.makeText(context, "Export failed. Please check permissions.", android.widget.Toast.LENGTH_LONG).show()
+                                    android.widget.Toast.makeText(context, "Export failed: unable to write document.", android.widget.Toast.LENGTH_LONG).show()
                                 }
                                 onDismiss()
                             }

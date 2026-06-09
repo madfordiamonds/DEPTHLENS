@@ -13,6 +13,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -32,6 +33,7 @@ import kotlin.math.abs
 fun IntelligenceOSVisualizer(
     parsed: ParsedResponse,
     rawText: String,
+    messageId: String,
     modifier: Modifier = Modifier,
     onSubmitQuery: (String) -> Unit = {}
 ) {
@@ -40,86 +42,96 @@ fun IntelligenceOSVisualizer(
         DeterministicIntelligenceGenerator(rawText, parsed)
     }
 
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(20.dp)
-    ) {
-        // 1. EXECUTIVE SUMMARY CARD (Large premium layout)
-        ExecutiveSummaryCard(
-            summaryText = parsed.executiveSummary?.ifBlank { null } ?: calculatedData.executiveSummary
-        )
-
-        // 2. REALITY LAYER ACTIVATION PANEL
-        RealityLayerActivationPanel(
-            activeLayersCount = parsed.depthLayers.size.coerceAtLeast(calculatedData.layersCount),
-            parsedLayers = parsed.depthLayers
-        )
-
-        // 2B. D3 FORCE-DIRECTED LAYERS ENGINE GRAPH
-        D3ForceDirectedGraph(
-            parsedLayers = parsed.depthLayers
-        )
-
-        // 3. AI CONFIDENCE ENGINE (Displayed prominently early)
-        AiConfidenceEngine(
-            confidenceLevel = parsed.confidence?.ifBlank { null } ?: calculatedData.confidenceLevel,
-            confidenceScore = calculatedData.confidenceScore,
-            reasoning = calculatedData.confidenceReasoning
-        )
-
-        // 4. FUTURE PROBABILITY DASHBOARD
-        FutureProbabilityDashboard(
-            patternProb = calculatedData.probPatternContinues,
-            interventionProb = calculatedData.probInterventionWorks,
-            escalationRisk = calculatedData.probEscalationRisk
-        )
-
-        // 5. FUTURE SCENARIO COMPARISON
-        FutureScenarioComparison(
-            scenarios = parsed.futureScenarios.ifEmpty { calculatedData.scenarios },
-            onScenarioClick = { scenarioName ->
-                onSubmitQuery("Analyze in detail the scenario: '$scenarioName' from the current context.")
-            }
-        )
-
-        // 6. FUTURE TIMELINE FORECAST
-        FutureTimelineForecast(
-            timeline = parsed.timelineForecast ?: calculatedData.timelineForecast
-        )
-
-        // 11. INTELLIGENCE SIGNALS
-        IntelligenceSignalsSection(
-            stability = calculatedData.signalStability,
-            volatility = calculatedData.signalVolatility,
-            escalation = calculatedData.signalEscalation,
-            opportunity = calculatedData.signalOpportunity,
-            consistency = calculatedData.signalConsistency,
-            pressure = calculatedData.signalPressure
-        )
-
-        // 7. RISK VS OPPORTUNITY MATRIX
-        RiskVsOpportunityMatrix(
-            risks = calculatedData.highRisks,
-            opportunities = calculatedData.highOpportunities
-        )
-
-        // 8 & 9. RISK ASSESSMENT & OPPORTUNITY SCORE ENGINES
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+    androidx.compose.foundation.text.selection.SelectionContainer {
+        Column(
+            modifier = modifier
+                .fillMaxWidth()
+                .padding(vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
-            Column(modifier = Modifier.weight(1f)) {
-                RiskAssessmentEngine(calculatedData = calculatedData)
-            }
-            Column(modifier = Modifier.weight(1f)) {
-                OpportunityScoreEngine(
-                    actions = calculatedData.highestLeverageActions,
-                    onActionClick = { actionName ->
-                        onSubmitQuery("Develop an implementation playbook for the leverage action: '$actionName' in this situation.")
-                    }
-                )
+            // 1. EXECUTIVE SUMMARY CARD (Large premium layout)
+            ExecutiveSummaryCard(
+                summaryText = parsed.executiveSummary?.ifBlank { null } ?: calculatedData.executiveSummary
+            )
+
+            // 2. REALITY LAYER ACTIVATION PANEL
+            RealityLayerActivationPanel(
+                messageId = messageId,
+                activeLayersCount = parsed.depthLayers.size.coerceAtLeast(calculatedData.layersCount),
+                parsedLayers = parsed.depthLayers
+            )
+
+            // 2B. D3 FORCE-DIRECTED LAYERS ENGINE GRAPH
+            // Completely removed from rendering in UI based on performance and visual noise reduction requirements.
+            // D3ForceDirectedGraph(
+            //     parsedLayers = parsed.depthLayers
+            // )
+
+            // 3. AI CONFIDENCE ENGINE (Displayed prominently early)
+            AiConfidenceEngine(
+                messageId = messageId,
+                confidenceLevel = parsed.confidence?.ifBlank { null } ?: calculatedData.confidenceLevel,
+                confidenceScore = calculatedData.confidenceScore,
+                reasoning = calculatedData.confidenceReasoning
+            )
+
+            // 4. FUTURE PROBABILITY DASHBOARD
+            FutureProbabilityDashboard(
+                messageId = messageId,
+                patternProb = calculatedData.probPatternContinues,
+                interventionProb = calculatedData.probInterventionWorks,
+                escalationRisk = calculatedData.probEscalationRisk
+            )
+
+            // 5. FUTURE SCENARIO COMPARISON
+            FutureScenarioComparison(
+                messageId = messageId,
+                scenarios = parsed.futureScenarios.ifEmpty { calculatedData.scenarios },
+                onScenarioClick = { scenarioName ->
+                    onSubmitQuery("Analyze in detail the scenario: '$scenarioName' from the current context.")
+                }
+            )
+
+            // 6. FUTURE TIMELINE FORECAST
+            FutureTimelineForecast(
+                messageId = messageId,
+                timeline = parsed.timelineForecast ?: calculatedData.timelineForecast
+            )
+
+            // 11. INTELLIGENCE SIGNALS
+            IntelligenceSignalsSection(
+                messageId = messageId,
+                stability = calculatedData.signalStability,
+                volatility = calculatedData.signalVolatility,
+                escalation = calculatedData.signalEscalation,
+                opportunity = calculatedData.signalOpportunity,
+                consistency = calculatedData.signalConsistency,
+                pressure = calculatedData.signalPressure
+            )
+
+            // 7. RISK VS OPPORTUNITY MATRIX
+            RiskVsOpportunityMatrix(
+                messageId = messageId,
+                risks = calculatedData.highRisks,
+                opportunities = calculatedData.highOpportunities
+            )
+
+            // 8 & 9. RISK ASSESSMENT & OPPORTUNITY SCORE ENGINES
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    RiskAssessmentEngine(calculatedData = calculatedData)
+                }
+                Column(modifier = Modifier.weight(1f)) {
+                    OpportunityScoreEngine(
+                        actions = calculatedData.highestLeverageActions,
+                        onActionClick = { actionName ->
+                            onSubmitQuery("Develop an implementation playbook for the leverage action: '$actionName' in this situation.")
+                        }
+                    )
+                }
             }
         }
     }
@@ -222,10 +234,11 @@ fun ExecutiveSummaryCard(summaryText: String) {
 // ────────────────────────────────────────────────────────────────────────
 @Composable
 fun RealityLayerActivationPanel(
+    messageId: String,
     activeLayersCount: Int,
     parsedLayers: List<DepthLayerInsight>
 ) {
-    var isExpanded by remember { mutableStateOf(false) }
+    var isExpanded by rememberSaveable(key = "${messageId}_layer_activation") { mutableStateOf(false) }
 
     val standardNames = listOf(
         "Observable Reality" to "Physical, textual, or literal facts visible in plain sight.",
@@ -419,11 +432,12 @@ fun RealityLayerActivationPanel(
 // ────────────────────────────────────────────────────────────────────────
 @Composable
 fun AiConfidenceEngine(
+    messageId: String,
     confidenceLevel: String,
     confidenceScore: Int,
     reasoning: String
 ) {
-    var isExpanded by remember { mutableStateOf(false) }
+    var isExpanded by rememberSaveable(key = "${messageId}_confidence") { mutableStateOf(false) }
     val levelColor = when (confidenceLevel.uppercase()) {
         "HIGH", "HIGH CONFIDENCE" -> SuccessColor
         "MODERATE", "MODERATE CONFIDENCE" -> WarningColor
@@ -553,11 +567,12 @@ fun AiConfidenceEngine(
 // ────────────────────────────────────────────────────────────────────────
 @Composable
 fun FutureProbabilityDashboard(
+    messageId: String,
     patternProb: Int,
     interventionProb: Int,
     escalationRisk: Int
 ) {
-    var isExpanded by remember { mutableStateOf(false) }
+    var isExpanded by rememberSaveable(key = "${messageId}_probability") { mutableStateOf(false) }
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(14.dp),
@@ -673,6 +688,7 @@ fun ProbabilityAsciiBar(label: String, score: Int, primaryColor: Color) {
 // ────────────────────────────────────────────────────────────────────────
 @Composable
 fun FutureScenarioComparison(
+    messageId: String,
     scenarios: List<FutureScenario>,
     onScenarioClick: (String) -> Unit
 ) {
@@ -697,7 +713,7 @@ fun FutureScenarioComparison(
                     else -> "LOW PROBABILITY FUTURE" to WarningColor
                 }
 
-                var isScenarioExpanded by remember { mutableStateOf(false) }
+                var isScenarioExpanded by rememberSaveable(key = "${messageId}_scenario_$index") { mutableStateOf(false) }
 
                 Card(
                     modifier = Modifier
@@ -825,8 +841,11 @@ fun FutureScenarioComparison(
 // 6. FUTURE TIMELINE FORECAST Composable
 // ────────────────────────────────────────────────────────────────────────
 @Composable
-fun FutureTimelineForecast(timeline: TimelineForecast) {
-    var isExpanded by remember { mutableStateOf(false) }
+fun FutureTimelineForecast(
+    messageId: String,
+    timeline: TimelineForecast
+) {
+    var isExpanded by rememberSaveable(key = "${messageId}_timeline") { mutableStateOf(false) }
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(14.dp),
@@ -988,10 +1007,11 @@ fun FutureTimelineForecast(timeline: TimelineForecast) {
 // ────────────────────────────────────────────────────────────────────────
 @Composable
 fun RiskVsOpportunityMatrix(
+    messageId: String,
     risks: List<String>,
     opportunities: List<String>
 ) {
-    var isExpanded by remember { mutableStateOf(false) }
+    var isExpanded by rememberSaveable(key = "${messageId}_matrix") { mutableStateOf(false) }
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier
@@ -1290,6 +1310,7 @@ fun OpportunityScoreEngine(
 // ────────────────────────────────────────────────────────────────────────
 @Composable
 fun IntelligenceSignalsSection(
+    messageId: String,
     stability: Int,
     volatility: Int,
     escalation: Int,
@@ -1297,7 +1318,7 @@ fun IntelligenceSignalsSection(
     consistency: Int,
     pressure: Int
 ) {
-    var isExpanded by remember { mutableStateOf(false) }
+    var isExpanded by rememberSaveable(key = "${messageId}_signals") { mutableStateOf(false) }
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier
