@@ -572,7 +572,7 @@
       border: 1px solid var(--glass-border);
       border-radius: 16px;
       padding: 2.2rem 2rem;
-      transition: all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+      transition: transform 0.5s cubic-bezier(0.25, 0.8, 0.25, 1.4), border-color 0.4s ease, box-shadow 0.6s ease;
       position: relative;
       overflow: hidden;
     }
@@ -583,9 +583,9 @@
       opacity: 0; transition: opacity 0.4s; pointer-events: none;
     }
     .feature-card:hover {
-      transform: translateY(-8px) scale(1.03);
-      border-color: rgba(0, 229, 255, 0.4);
-      box-shadow: 0 16px 36px rgba(4, 3, 15, 0.6), 0 0 24px rgba(0, 229, 255, 0.15);
+      transform: translateY(-8px) scale(1.045);
+      border-color: rgba(0, 229, 255, 0.6);
+      box-shadow: 0 20px 40px rgba(4, 3, 15, 0.7), 0 0 30px rgba(0, 229, 255, 0.25);
     }
     .feature-card:hover::before {
       opacity: 1;
@@ -1445,14 +1445,18 @@
     .sc-ltext { font-size:8px;color:var(--s-ink3);flex:1; }
     .sc-lbar { height:2px;border-radius:2px;background:var(--s-surf4);width:40px;overflow:hidden; }
     .sc-lfill { height:100%;border-radius:2px; }
-    .sc-typing { display:flex;gap:3px;align-items:center;padding:8px 10px; }
+    .sc-typing { display:flex;flex-direction:column;gap:6px;padding:8px 10px;width:100%;min-width:180px; }
     .sc-typing span {
-      width:4px;height:4px;border-radius:50%;background:var(--s-violet);
-      animation:scTyping 1.2s infinite;
+      height:6px;border-radius:3px;
+      background: linear-gradient(90deg, var(--s-surf2) 25%, var(--s-surf4) 50%, var(--s-surf2) 75%);
+      background-size: 200% 100%;
+      animation: scShimmer 1.5s infinite linear;
+      display: block;
     }
-    .sc-typing span:nth-child(2){animation-delay:0.2s;}
-    .sc-typing span:nth-child(3){animation-delay:0.4s;}
-    @keyframes scTyping{0%,100%{opacity:0.3;transform:translateY(0);}50%{opacity:1;transform:translateY(-3px);}}
+    .sc-typing span:nth-child(1){width:45%;animation-delay:0s;}
+    .sc-typing span:nth-child(2){width:90%;animation-delay:0.15s;}
+    .sc-typing span:nth-child(3){width:65%;animation-delay:0.3s;}
+    @keyframes scShimmer{0%{background-position:-200% 0;}100%{background-position:200% 0;}}
     .sc-input-bar { flex-shrink:0;padding:7px 10px 16px;border-top:1px solid var(--s-border);display:flex;flex-direction:column;gap:5px; }
     .sc-chips { display:flex;gap:3px;overflow:hidden; }
     .sc-chip {
@@ -2022,36 +2026,9 @@
                   </div>
                 </div>
                 <div class="sc-diag-query">"Why does Q4 keep underperforming despite the same strategy?"</div>
-                <div class="sc-diag-meta">Root Cause · Systems · 10 Layers · Jun 6, 2026</div>
+                <div class="sc-diag-meta">Root Cause · Systems · Jun 6, 2026</div>
               </div>
               <div class="sc-diag-body">
-                <div class="sc-sec-lbl">Reality Layer Activation</div>
-                <div class="sc-layers-viz">
-                  <div class="sc-lviz-row active">
-                    <div class="sc-lnum">01</div>
-                    <div class="sc-lcdot" style="background:#00D4FF"></div>
-                    <div class="sc-lname">Observable Reality</div>
-                    <div class="sc-pips"><div class="sc-pip on"></div><div class="sc-pip on"></div><div class="sc-pip on"></div><div class="sc-pip on"></div><div class="sc-pip"></div></div>
-                  </div>
-                  <div class="sc-lviz-row active">
-                    <div class="sc-lnum">04</div>
-                    <div class="sc-lcdot" style="background:#FF5E8A"></div>
-                    <div class="sc-lname">Emotional Reality</div>
-                    <div class="sc-pips"><div class="sc-pip on"></div><div class="sc-pip on"></div><div class="sc-pip on"></div><div class="sc-pip"></div><div class="sc-pip"></div></div>
-                  </div>
-                  <div class="sc-lviz-row active">
-                    <div class="sc-lnum">06</div>
-                    <div class="sc-lcdot" style="background:#FF7A5C"></div>
-                    <div class="sc-lname">Strategic Reality</div>
-                    <div class="sc-pips"><div class="sc-pip on"></div><div class="sc-pip on"></div><div class="sc-pip on"></div><div class="sc-pip on"></div><div class="sc-pip on"></div></div>
-                  </div>
-                  <div class="sc-lviz-row active">
-                    <div class="sc-lnum">09</div>
-                    <div class="sc-lcdot" style="background:#F472B6"></div>
-                    <div class="sc-lname">Root Cause</div>
-                    <div class="sc-pips"><div class="sc-pip on"></div><div class="sc-pip on"></div><div class="sc-pip on"></div><div class="sc-pip on"></div><div class="sc-pip"></div></div>
-                  </div>
-                </div>
                 <div class="sc-prob-box">
                   <div class="sc-prob-hdr">
                     Future Probability

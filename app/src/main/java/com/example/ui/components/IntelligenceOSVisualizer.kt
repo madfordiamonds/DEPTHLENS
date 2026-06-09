@@ -28,7 +28,9 @@ import androidx.compose.ui.unit.sp
 import com.example.data.model.*
 import com.example.ui.theme.*
 import kotlin.math.abs
+import kotlinx.coroutines.launch
 
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 fun IntelligenceOSVisualizer(
     parsed: ParsedResponse,
@@ -42,95 +44,458 @@ fun IntelligenceOSVisualizer(
         DeterministicIntelligenceGenerator(rawText, parsed)
     }
 
+    val coroutineScope = rememberCoroutineScope()
+    val unlockedSections = remember { mutableStateMapOf<String, Boolean>() }
+    val generatingSections = remember { mutableStateMapOf<String, Boolean>() }
+
+    val relevantChips = remember(rawText) {
+        val lowercaseText = rawText.lowercase()
+        val chips = mutableListOf<String>()
+        
+        // Analyze context to select highly relevant dashboards on-the-fly
+        val isBusiness = lowercaseText.contains("market") || lowercaseText.contains("startup") || 
+                         lowercaseText.contains("business") || lowercaseText.contains("company") || 
+                         lowercaseText.contains("diamond") || lowercaseText.contains("industry") || 
+                         lowercaseText.contains("finance") || lowercaseText.contains("product") ||
+                         lowercaseText.contains("revenue") || lowercaseText.contains("valuation") ||
+                         lowercaseText.contains("strategy") || lowercaseText.contains("pricing")
+                         
+        val isRelationshipOrPersonal = lowercaseText.contains("relationship") || lowercaseText.contains("friend") || 
+                                       lowercaseText.contains("love") || lowercaseText.contains("feel") || 
+                                       lowercaseText.contains("marry") || lowercaseText.contains("her") || 
+                                       lowercaseText.contains("him") || lowercaseText.contains("she") || 
+                                       lowercaseText.contains("he") || lowercaseText.contains("family") || 
+                                       lowercaseText.contains("leave") || lowercaseText.contains("job") ||
+                                       lowercaseText.contains("career") || lowercaseText.contains("anxious")
+        
+        if (isRelationshipOrPersonal) {
+            chips.add("Future Outcomes")
+            chips.add("Risk Analysis")
+            chips.add("Hidden Factors")
+            chips.add("Deep Dive")
+        } else if (isBusiness) {
+            chips.add("Future Outcomes")
+            chips.add("Risk Analysis")
+            chips.add("Probability")
+            chips.add("Strategic View")
+            chips.add("Deep Dive")
+        } else {
+            chips.add("Future Outcomes")
+            chips.add("Risk Analysis")
+            chips.add("Probability")
+            chips.add("Hidden Factors")
+            chips.add("Strategic View")
+            chips.add("Deep Dive")
+        }
+        chips.toList()
+    }
+
     androidx.compose.foundation.text.selection.SelectionContainer {
         Column(
             modifier = modifier
                 .fillMaxWidth()
                 .padding(vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(20.dp)
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // 1. EXECUTIVE SUMMARY CARD (Large premium layout)
+            // 1. EXECUTIVE SUMMARY CARD (Always visible summary brief)
             ExecutiveSummaryCard(
                 summaryText = parsed.executiveSummary?.ifBlank { null } ?: calculatedData.executiveSummary
             )
 
-            // 2. REALITY LAYER ACTIVATION PANEL
-            RealityLayerActivationPanel(
-                messageId = messageId,
-                activeLayersCount = parsed.depthLayers.size.coerceAtLeast(calculatedData.layersCount),
-                parsedLayers = parsed.depthLayers
+            // Reality Layer Activation Panel removed from analysis per user request
+
+            // ── SMART ADAPTIVE CHIPS ROW ──
+            Text(
+                text = "INTELLIGENCE DEEP DIVE PANELS (CHIP CONTROL)",
+                fontSize = 9.sp,
+                letterSpacing = 1.2.sp,
+                fontFamily = DMMonoFontFamily,
+                fontWeight = FontWeight.Bold,
+                color = TextMutedColor,
+                modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
             )
 
-            // 2B. D3 FORCE-DIRECTED LAYERS ENGINE GRAPH
-            // Completely removed from rendering in UI based on performance and visual noise reduction requirements.
-            // D3ForceDirectedGraph(
-            //     parsedLayers = parsed.depthLayers
-            // )
-
-            // 3. AI CONFIDENCE ENGINE (Displayed prominently early)
-            AiConfidenceEngine(
-                messageId = messageId,
-                confidenceLevel = parsed.confidence?.ifBlank { null } ?: calculatedData.confidenceLevel,
-                confidenceScore = calculatedData.confidenceScore,
-                reasoning = calculatedData.confidenceReasoning
-            )
-
-            // 4. FUTURE PROBABILITY DASHBOARD
-            FutureProbabilityDashboard(
-                messageId = messageId,
-                patternProb = calculatedData.probPatternContinues,
-                interventionProb = calculatedData.probInterventionWorks,
-                escalationRisk = calculatedData.probEscalationRisk
-            )
-
-            // 5. FUTURE SCENARIO COMPARISON
-            FutureScenarioComparison(
-                messageId = messageId,
-                scenarios = parsed.futureScenarios.ifEmpty { calculatedData.scenarios },
-                onScenarioClick = { scenarioName ->
-                    onSubmitQuery("Analyze in detail the scenario: '$scenarioName' from the current context.")
-                }
-            )
-
-            // 6. FUTURE TIMELINE FORECAST
-            FutureTimelineForecast(
-                messageId = messageId,
-                timeline = parsed.timelineForecast ?: calculatedData.timelineForecast
-            )
-
-            // 11. INTELLIGENCE SIGNALS
-            IntelligenceSignalsSection(
-                messageId = messageId,
-                stability = calculatedData.signalStability,
-                volatility = calculatedData.signalVolatility,
-                escalation = calculatedData.signalEscalation,
-                opportunity = calculatedData.signalOpportunity,
-                consistency = calculatedData.signalConsistency,
-                pressure = calculatedData.signalPressure
-            )
-
-            // 7. RISK VS OPPORTUNITY MATRIX
-            RiskVsOpportunityMatrix(
-                messageId = messageId,
-                risks = calculatedData.highRisks,
-                opportunities = calculatedData.highOpportunities
-            )
-
-            // 8 & 9. RISK ASSESSMENT & OPPORTUNITY SCORE ENGINES
-            Row(
+            androidx.compose.foundation.layout.FlowRow(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    RiskAssessmentEngine(calculatedData = calculatedData)
-                }
-                Column(modifier = Modifier.weight(1f)) {
-                    OpportunityScoreEngine(
-                        actions = calculatedData.highestLeverageActions,
-                        onActionClick = { actionName ->
-                            onSubmitQuery("Develop an implementation playbook for the leverage action: '$actionName' in this situation.")
+                relevantChips.forEach { chipName ->
+                    val isUnlocked = unlockedSections[chipName] == true
+                    val isGenerating = generatingSections[chipName] == true
+                    val activeColor = when (chipName) {
+                        "Future Outcomes" -> ElectricViolet
+                        "Risk Analysis" -> ErrorColor
+                        "Probability" -> PremiumCyan
+                        "Hidden Factors" -> WarningColor
+                        "Strategic View" -> SuccessColor
+                        else -> ElectricViolet
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(if (isUnlocked) activeColor.copy(alpha = 0.15f) else Surface2)
+                            .border(
+                                width = 1.dp,
+                                color = if (isUnlocked) activeColor else BorderSubtle,
+                                shape = RoundedCornerShape(8.dp)
+                            )
+                            .clickable(enabled = !isGenerating) {
+                                if (isUnlocked) {
+                                    unlockedSections[chipName] = false
+                                } else {
+                                    generatingSections[chipName] = true
+                                    coroutineScope.launch {
+                                        kotlinx.coroutines.delay(1200)
+                                        generatingSections[chipName] = false
+                                        unlockedSections[chipName] = true
+                                    }
+                                }
+                            }
+                            .padding(horizontal = 12.dp, vertical = 8.dp)
+                            .minimumInteractiveComponentSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            if (isGenerating) {
+                                CircularProgressIndicator(
+                                    color = activeColor,
+                                    strokeWidth = 1.5.dp,
+                                    modifier = Modifier.size(12.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                            }
+                            Text(
+                                text = chipName.uppercase(),
+                                fontSize = 11.sp,
+                                fontFamily = DMMonoFontFamily,
+                                fontWeight = FontWeight.SemiBold,
+                                color = if (isUnlocked) activeColor else TextPrimaryColor
+                            )
                         }
-                    )
+                    }
+                }
+            }
+
+            // ── OPTIONAL DYNAMIC CHIP-CONTROLLED PANELS ──
+
+            relevantChips.forEach { chipName ->
+                val isUnlocked = unlockedSections[chipName] == true
+                val isGenerating = generatingSections[chipName] == true
+                val activeColor = when (chipName) {
+                    "Future Outcomes" -> ElectricViolet
+                    "Risk Analysis" -> ErrorColor
+                    "Probability" -> PremiumCyan
+                    "Hidden Factors" -> WarningColor
+                    "Strategic View" -> SuccessColor
+                    else -> ElectricViolet
+                }
+
+                if (isGenerating) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(Surface2, RoundedCornerShape(12.dp))
+                            .border(1.dp, activeColor.copy(alpha = 0.4f), RoundedCornerShape(12.dp))
+                            .padding(16.dp)
+                    ) {
+                        Column {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                CircularProgressIndicator(
+                                    color = activeColor,
+                                    strokeWidth = 2.dp,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Text(
+                                    text = "DEPTHLENS SYNTHESIS ENGINE PROCESSING...",
+                                    fontSize = 10.sp,
+                                    fontFamily = DMMonoFontFamily,
+                                    fontWeight = FontWeight.Bold,
+                                    color = activeColor,
+                                    letterSpacing = 1.sp
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Text(
+                                text = "Cross-referencing behavioral indicators and computing scenario factors for $chipName...",
+                                fontSize = 12.sp,
+                                fontFamily = InstrumentSansFontFamily,
+                                color = TextSecondaryColor
+                            )
+                        }
+                    }
+                }
+
+                AnimatedVisibility(
+                    visible = isUnlocked,
+                    enter = expandVertically() + fadeIn(),
+                    exit = shrinkVertically() + fadeOut()
+                ) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        when (chipName) {
+                            "Future Outcomes" -> {
+                                // 4. FUTURE PROBABILITY DASHBOARD
+                                FutureProbabilityDashboard(
+                                    messageId = messageId,
+                                    patternProb = calculatedData.probPatternContinues,
+                                    interventionProb = calculatedData.probInterventionWorks,
+                                    escalationRisk = calculatedData.probEscalationRisk
+                                )
+
+                                // 5. FUTURE SCENARIO COMPARISON
+                                FutureScenarioComparison(
+                                    messageId = messageId,
+                                    scenarios = parsed.futureScenarios.ifEmpty { calculatedData.scenarios },
+                                    onScenarioClick = { scenarioName ->
+                                        onSubmitQuery("Analyze in detail the scenario: '$scenarioName' from the current context.")
+                                    }
+                                )
+                            }
+                            "Risk Analysis" -> {
+                                // 7. RISK VS OPPORTUNITY MATRIX
+                                RiskVsOpportunityMatrix(
+                                    messageId = messageId,
+                                    risks = calculatedData.highRisks,
+                                    opportunities = calculatedData.highOpportunities
+                                )
+
+                                RiskAssessmentEngine(calculatedData = calculatedData)
+                            }
+                            "Probability" -> {
+                                // 3. AI CONFIDENCE ENGINE
+                                AiConfidenceEngine(
+                                    messageId = messageId,
+                                    confidenceLevel = parsed.confidence?.ifBlank { null } ?: calculatedData.confidenceLevel,
+                                    confidenceScore = calculatedData.confidenceScore,
+                                    reasoning = calculatedData.confidenceReasoning
+                                )
+
+                                // 6. FUTURE TIMELINE FORECAST
+                                FutureTimelineForecast(
+                                    messageId = messageId,
+                                    timeline = parsed.timelineForecast ?: calculatedData.timelineForecast
+                                )
+                            }
+                            "Hidden Factors" -> {
+                                Card(
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = CardDefaults.cardColors(containerColor = Surface2),
+                                    border = BorderStroke(1.dp, WarningColor.copy(alpha = 0.35f)),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Column(modifier = Modifier.padding(14.dp)) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(Icons.Default.Troubleshoot, contentDescription = null, tint = WarningColor, modifier = Modifier.size(15.dp))
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text(
+                                                "UNDERLYING DRIVERS & HIDDEN FACTORS",
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = WarningColor,
+                                                letterSpacing = 1.sp,
+                                                fontFamily = DMMonoFontFamily
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.height(10.dp))
+                                        Text(
+                                            text = "Psychological need focus: ${calculatedData.confidenceReasoning.split(".").firstOrNull() ?: "Protecting structural viability and core incentive alignments."}",
+                                            fontSize = 12.sp,
+                                            color = TextSecondaryColor,
+                                            lineHeight = 16.sp
+                                        )
+                                    }
+                                }
+                            }
+                            "Strategic View" -> {
+                                // 11. INTELLIGENCE SIGNALS
+                                IntelligenceSignalsSection(
+                                    messageId = messageId,
+                                    stability = calculatedData.signalStability,
+                                    volatility = calculatedData.signalVolatility,
+                                    escalation = calculatedData.signalEscalation,
+                                    opportunity = calculatedData.signalOpportunity,
+                                    consistency = calculatedData.signalConsistency,
+                                    pressure = calculatedData.signalPressure
+                                )
+
+                                OpportunityScoreEngine(
+                                    actions = calculatedData.highestLeverageActions,
+                                    onActionClick = { actionName ->
+                                        onSubmitQuery("Develop an implementation playbook for the leverage action: '$actionName' in this situation.")
+                                    }
+                                )
+                            }
+                            "Deep Dive" -> {
+                                Column(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    Card(
+                                        shape = RoundedCornerShape(14.dp),
+                                        colors = CardDefaults.cardColors(containerColor = Surface2),
+                                        border = BorderStroke(1.dp, ElectricViolet.copy(alpha = 0.4f)),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Column(modifier = Modifier.padding(16.dp)) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Cyclone,
+                                                    contentDescription = null,
+                                                    tint = ElectricViolet,
+                                                    modifier = Modifier.size(16.dp)
+                                                )
+                                                Text(
+                                                    "COGNITIVE DEEP DIVE SIMULATOR",
+                                                    fontSize = 11.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = ElectricViolet,
+                                                    letterSpacing = 1.2.sp,
+                                                    fontFamily = DMMonoFontFamily
+                                                )
+                                            }
+                                            Spacer(modifier = Modifier.height(8.dp))
+                                            Text(
+                                                text = "Initiate targeted systemic deconstructions across 10 distinct layers of hidden reality. Selecting an individual layer triggers focused cognitive inquiries, while launching the complete simulator performs an ultra-deep strategic synthesis.",
+                                                fontSize = 12.sp,
+                                                color = TextSecondaryColor,
+                                                lineHeight = 17.sp,
+                                                fontFamily = InstrumentSansFontFamily
+                                            )
+                                            Spacer(modifier = Modifier.height(14.dp))
+                                            
+                                            // Primary action button (Full 10-Layer Deep Dive)
+                                            Button(
+                                                onClick = {
+                                                    onSubmitQuery("Conduct a comprehensive, multi-layer Deep Dive on my previous scenario. For each of the 10 developmental layers (from Layer 1: Observable Reality to Layer 10: Outside Observer's perspective), uncover hidden assumptions, unconscious defense patterns, systemic contradictions, emotional drivers, and the single deepest point of leverage. Present your analysis with unmatched strategic and psychological depth, and conclude with a stark, penetrative DEEP SYNTHESIS.")
+                                                },
+                                                colors = ButtonDefaults.buttonColors(
+                                                    containerColor = ElectricViolet,
+                                                    contentColor = Color.White
+                                                ),
+                                                shape = RoundedCornerShape(10.dp),
+                                                modifier = Modifier.fillMaxWidth(),
+                                                contentPadding = PaddingValues(vertical = 12.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Launch,
+                                                    contentDescription = null,
+                                                    modifier = Modifier.size(14.dp)
+                                                )
+                                                Spacer(modifier = Modifier.width(8.dp))
+                                                Text(
+                                                    text = "LAUNCH 10-LAYER DEEP DIVE",
+                                                    fontSize = 11.sp,
+                                                    fontFamily = DMMonoFontFamily,
+                                                    fontWeight = FontWeight.Bold,
+                                                    letterSpacing = 1.sp
+                                                )
+                                            }
+                                        }
+                                    }
+
+                                    // Display 10 interactive layer-specific exploration cards
+                                    val deepDiveLayers = listOf(
+                                        Pair("Layer 1 · Events", "Deconstruct explicit facts and verifiable surface occurrences."),
+                                        Pair("Layer 2 · Triggers", "Deconstruct the systemic triggers, lock-ins, and institutional constraints."),
+                                        Pair("Layer 3 · Drivers", "Deconstruct the core underlying feeling states and emotional projections."),
+                                        Pair("Layer 4 · Patterns", "Deconstruct historical repetitions, scripts, and defense mechanisms."),
+                                        Pair("Layer 5 · Assumptions", "Deconstruct artificial mental rules and unstated blind-spot commitments."),
+                                        Pair("Layer 6 · Paradoxes", "Deconstruct active contradictions, double-binds, and paradoxical incentives."),
+                                        Pair("Layer 7 · Consequences", "Deconstruct branching mid-to-long trajectories and second-order details."),
+                                        Pair("Layer 8 · Leverage", "Deconstruct the single high-leverage corrective Archimedean catalyst."),
+                                        Pair("Layer 9 · Truths", "Deconstruct critically excluded, denied, or uncomfortable raw facts."),
+                                        Pair("Layer 10 · Observer", "Deconstruct objective third-party feedback that remains completely unseen.")
+                                    )
+
+                                    Column(
+                                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        deepDiveLayers.forEachIndexed { index, (title, summary) ->
+                                            val layerNumber = index + 1
+                                            val layerColor = getLayerColor(layerNumber)
+                                            
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .background(Surface2, RoundedCornerShape(12.dp))
+                                                    .border(1.dp, layerColor.copy(alpha = 0.25f), RoundedCornerShape(12.dp))
+                                                    .clickable {
+                                                        val queryPrompt = when(layerNumber) {
+                                                            1 -> "Deconstruct Layer 1 (Observable Reality) in my previous scenario. Look past the surface report: What systematic, physical occurrences or verifiable behaviors are concretely taking place that might easily be overlooked?"
+                                                            2 -> "Deconstruct Layer 2 (Systemic Reality) in my previous scenario. Analyze the systemic triggers, feedback loops, structural dependencies, regulatory limits, or institutional boundaries that govern the situation."
+                                                            3 -> "Deconstruct Layer 3 (Emotional Reality) in my previous scenario. What underlying feelings, anxieties, projecting fears, or core emotional needs are driving internal and external behaviors?"
+                                                            4 -> "Deconstruct Layer 4 (Psychological/Pattern Reality) in my previous scenario. What unconscious defense mechanisms, cognitive biases, or historical repetitions are operating? Outline the repeating script."
+                                                            5 -> "Deconstruct Layer 5 (Hidden Assumptions/Calculations) in my previous scenario. What unstated commitments or invisible, core mental assumptions exist? What rules are we assuming that are actually artificial?"
+                                                            6 -> "Deconstruct Layer 6 (Paradoxes & Contradictions) in my previous scenario. What conflicting incentives, dual-binding situations, or systemic double-standards are operating underneath?"
+                                                            7 -> "Deconstruct Layer 7 (Probability / Strategic Reality) in my previous scenario. What are the second-order effects, branching future trajectories, and long-term consequences of this situation continuing unchanged?"
+                                                            8 -> "Deconstruct Layer 8 (Root Cause / Highest Leverage) in my previous scenario. What is the fundamental, highest-leverage corrective action? What tiny change here releases the biggest structural bottleneck?"
+                                                            9 -> "Deconstruct Layer 9 (The Ignored Reality) in my previous scenario. What critical, uncomfortable truth or raw fact is actively being denied, ignored, or projected away?"
+                                                            else -> "Deconstruct Layer 10 (Objective Observer's view) in my previous scenario. If a completely objective, non-invested third-party observer looked at this dynamic, what would they notice immediately that we are blind to?"
+                                                        }
+                                                        onSubmitQuery(queryPrompt)
+                                                    }
+                                                    .padding(12.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(24.dp)
+                                                        .background(layerColor.copy(alpha = 0.12f), CircleShape)
+                                                        .border(1.dp, layerColor.copy(alpha = 0.6f), CircleShape),
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    Text(
+                                                        text = "L$layerNumber",
+                                                        fontSize = 9.sp,
+                                                        fontFamily = DMMonoFontFamily,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = layerColor
+                                                    )
+                                                }
+                                                Spacer(modifier = Modifier.width(12.dp))
+                                                Column(modifier = Modifier.weight(1f)) {
+                                                    Text(
+                                                        text = title.uppercase(),
+                                                        fontSize = 11.sp,
+                                                        fontFamily = DMMonoFontFamily,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = TextPrimaryColor
+                                                    )
+                                                    Spacer(modifier = Modifier.height(2.dp))
+                                                    Text(
+                                                        text = summary,
+                                                        fontSize = 11.sp,
+                                                        fontFamily = InstrumentSansFontFamily,
+                                                        color = TextSecondaryColor,
+                                                        lineHeight = 15.sp
+                                                    )
+                                                }
+                                                Spacer(modifier = Modifier.width(8.dp))
+                                                Icon(
+                                                    imageVector = Icons.Default.ArrowForward,
+                                                    contentDescription = null,
+                                                    tint = layerColor.copy(alpha = 0.8f),
+                                                    modifier = Modifier.size(16.dp)
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -232,49 +597,67 @@ fun ExecutiveSummaryCard(summaryText: String) {
 // ────────────────────────────────────────────────────────────────────────
 // 2. REALITY LAYER ACTIVATION PANEL Composable
 // ────────────────────────────────────────────────────────────────────────
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 fun RealityLayerActivationPanel(
     messageId: String,
     activeLayersCount: Int,
     parsedLayers: List<DepthLayerInsight>
 ) {
-    var isExpanded by rememberSaveable(key = "${messageId}_layer_activation") { mutableStateOf(false) }
-
     val standardNames = listOf(
-        "Observable Reality" to "Physical, textual, or literal facts visible in plain sight.",
-        "Behavioral Reality" to "Action patterns, habits, communication protocols, and interactive signals.",
-        "Emotional Reality" to "Core underlying feeling states, anxiety projection, and mood stabilizers.",
-        "Strategic Reality" to "Intentional alignments, calculated games, competitive postures, and objectives.",
-        "Systemic Reality" to "Institutional boundaries, regulatory rules, protocols, and architectural ties.",
-        "Pattern Reality" to "Historical repetitions, archetype behaviors, and cyclical triggers.",
-        "Root Cause Reality" to "The fundamental friction point spawning downstream occurrences.",
-        "Probability Reality" to "Calculated expectations and statistical directions.",
-        "Hidden Risks" to "Unseen liabilities, blind spots, and latent cascading triggers.",
-        "Opportunities" to "High leverage strategic unlocks, hidden reserves, and potential transformations."
+        "Observable",
+        "Behavioral",
+        "Psychological",
+        "Emotional",
+        "Strategic",
+        "Systemic",
+        "Pattern",
+        "Root Cause",
+        "Probability",
+        "Hidden Risks"
     )
 
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(Surface2, RoundedCornerShape(14.dp))
-            .border(1.dp, BorderSubtle, RoundedCornerShape(14.dp))
-            .padding(14.dp)
+    val activeList = remember(parsedLayers, activeLayersCount) {
+        if (parsedLayers.isNotEmpty()) {
+            parsedLayers.map { 
+                val cleanName = it.layerName
+                    .removeSuffix(" Reality")
+                    .removeSuffix(" Insight")
+                    .removeSuffix(" & Opportunities")
+                    .trim()
+                it.copy(layerName = cleanName)
+            }
+        } else {
+            (1..activeLayersCount.coerceIn(1, 10)).map { i ->
+                DepthLayerInsight(
+                    layerNumber = i,
+                    layerName = standardNames[i - 1],
+                    description = ""
+                )
+            }
+        }
+    }
+
+    Card(
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = Surface2),
+        border = BorderStroke(1.dp, BorderSubtle),
+        modifier = Modifier.fillMaxWidth()
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable { isExpanded = !isExpanded },
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+        Column(
+            modifier = Modifier.padding(14.dp)
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.padding(bottom = 8.dp)
+            ) {
                 Icon(
                     imageVector = Icons.Default.Troubleshoot,
                     contentDescription = null,
                     tint = PremiumCyan,
-                    modifier = Modifier.size(18.dp)
+                    modifier = Modifier.size(16.dp)
                 )
-                Spacer(modifier = Modifier.width(8.dp))
                 Column {
                     Text(
                         text = "REALITY LAYER ACTIVATION",
@@ -285,144 +668,163 @@ fun RealityLayerActivationPanel(
                         letterSpacing = 1.2.sp
                     )
                     Text(
-                        text = "$activeLayersCount Active Diagnostic Layers detected",
+                        text = "${activeList.size} Active Diagnostic Layers detected",
                         fontFamily = InstrumentSansFontFamily,
                         fontSize = 11.sp,
                         color = TextMutedColor
                     )
                 }
             }
-            IconButton(onClick = { isExpanded = !isExpanded }, modifier = Modifier.size(24.dp)) {
-                Icon(
-                    imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                    contentDescription = "Expand layers list",
-                    tint = TextSecondaryColor
-                )
-            }
-        }
 
-        Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(10.dp))
 
-        // Activation Indicators row (like an active hardware panel)
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(5.dp)
-        ) {
-            for (i in 1..10) {
-                val isActive = i <= activeLayersCount
-                val activeColor = getLayerColor(i)
-                val dotColor = if (isActive) activeColor else BorderSubtle.copy(alpha = 0.4f)
-                
-                // Infinite glowing/pulsing effect for active indicators
-                val infiniteTransition = rememberInfiniteTransition(label = "LayerGlow_$i")
-                val pulseRatio by if (isActive) {
-                    infiniteTransition.animateFloat(
-                        initialValue = 0.5f,
-                        targetValue = 1.0f,
-                        animationSpec = infiniteRepeatable(
-                            animation = tween(800 + i * 150, easing = LinearEasing),
-                            repeatMode = RepeatMode.Reverse
-                        ),
-                        label = "pulse_$i"
+            // Activation Indicators row (pulsing hardware panel)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(5.dp)
+            ) {
+                for (i in 1..10) {
+                    val isActive = i <= activeLayersCount
+                    val activeColor = getLayerColor(i)
+                    val barColor = if (isActive) activeColor else BorderSubtle.copy(alpha = 0.3f)
+                    
+                    val infiniteTransition = rememberInfiniteTransition(label = "LayerGlow_$i")
+                    val pulseRatio by if (isActive) {
+                        infiniteTransition.animateFloat(
+                            initialValue = 0.4f,
+                            targetValue = 1.0f,
+                            animationSpec = infiniteRepeatable(
+                                animation = tween(800 + i * 120, easing = LinearEasing),
+                                repeatMode = RepeatMode.Reverse
+                            ),
+                            label = "pulse_$i"
+                        )
+                    } else remember { mutableStateOf(1f) }
+
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(6.dp)
+                            .clip(RoundedCornerShape(3.dp))
+                            .background(barColor.copy(alpha = if (isActive) pulseRatio else 1.0f))
                     )
-                } else remember { mutableStateOf(1f) }
-
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(6.dp)
-                        .clip(RoundedCornerShape(3.dp))
-                        .background(dotColor.copy(alpha = if (isActive) pulseRatio else 1.0f))
-                )
+                }
             }
-        }
 
-        AnimatedVisibility(
-            visible = isExpanded,
-            enter = expandVertically() + fadeIn(),
-            exit = shrinkVertically() + fadeOut()
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 14.dp),
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // Beautiful FlowRow layout of visual diagnostic capsules
+            androidx.compose.foundation.layout.FlowRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 for (i in 1..10) {
                     val isActive = i <= activeLayersCount
-                    val matchingParsed = parsedLayers.firstOrNull { it.layerNumber == i }
-                    val name = matchingParsed?.layerName ?: standardNames[i - 1].first
-                    val desc = matchingParsed?.description ?: standardNames[i - 1].second
-                    val baseColor = getLayerColor(i)
+                    val matching = activeList.firstOrNull { it.layerNumber == i }
+                    val name = matching?.layerName ?: standardNames.getOrNull(i - 1) ?: "L$i"
+                    val layerColor = getLayerColor(i)
                     
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(if (isActive) Surface3 else DeepMidnight.copy(alpha = 0.15f), RoundedCornerShape(8.dp))
-                            .border(1.dp, if (isActive) baseColor.copy(alpha = 0.3f) else Color.Transparent, RoundedCornerShape(8.dp))
-                            .padding(10.dp),
-                        verticalAlignment = Alignment.Top
-                    ) {
+                    if (isActive) {
                         Box(
                             modifier = Modifier
-                                .size(20.dp)
-                                .background(if (isActive) baseColor.copy(alpha = 0.15f) else Color.Transparent, CircleShape)
-                                .border(1.dp, if (isActive) baseColor else BorderSubtle, CircleShape),
-                            contentAlignment = Alignment.Center
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(layerColor.copy(alpha = 0.12f))
+                                .border(1.dp, layerColor.copy(alpha = 0.5f), RoundedCornerShape(6.dp))
+                                .padding(horizontal = 8.dp, vertical = 4.dp)
                         ) {
                             Text(
-                                text = "L$i",
-                                fontSize = 8.5.sp,
+                                text = "L$i $name".uppercase(),
+                                fontSize = 9.sp,
+                                fontFamily = DMMonoFontFamily,
                                 fontWeight = FontWeight.Bold,
-                                color = if (isActive) baseColor else TextMutedColor,
-                                fontFamily = DMMonoFontFamily
+                                color = layerColor
                             )
                         }
-
-                        Spacer(modifier = Modifier.width(10.dp))
-
-                        Column(modifier = Modifier.weight(1f)) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = name,
-                                    fontFamily = InstrumentSansFontFamily,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 13.sp,
-                                    color = if (isActive) TextPrimaryColor else TextMutedColor
-                                )
-                                if (isActive) {
-                                    val confPercent = 100 - (i * 3) - (abs(name.hashCode() % 10))
-                                    Text(
-                                        text = "CONFIDENCE: $confPercent%",
-                                        fontFamily = DMMonoFontFamily,
-                                        fontSize = 8.5.sp,
-                                        color = baseColor.copy(alpha = 0.85f)
-                                    )
-                                } else {
-                                    Text(
-                                        text = "DORMANT",
-                                        fontFamily = DMMonoFontFamily,
-                                        fontSize = 8.5.sp,
-                                        color = TextMutedColor
-                                    )
-                                }
-                            }
-                            Spacer(modifier = Modifier.height(2.dp))
+                    } else {
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(Surface3.copy(alpha = 0.4f))
+                                .border(1.dp, BorderSubtle.copy(alpha = 0.3f), RoundedCornerShape(6.dp))
+                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                        ) {
                             Text(
-                                text = desc,
-                                fontFamily = InstrumentSansFontFamily,
-                                fontSize = 12.sp,
-                                lineHeight = 16.sp,
-                                color = if (isActive) TextSecondaryColor else TextMutedColor.copy(alpha = 0.6f)
+                                text = "L$i DORMANT".uppercase(),
+                                fontSize = 9.sp,
+                                fontFamily = DMMonoFontFamily,
+                                fontWeight = FontWeight.Normal,
+                                color = TextMutedColor.copy(alpha = 0.5f)
                             )
                         }
                     }
                 }
             }
+        }
+    }
+}
+
+// ────────────────────────────────────────────────────────────────────────
+// DEEP SYNTHESIS PANEL Composable
+// ────────────────────────────────────────────────────────────────────────
+@Composable
+fun DeepSynthesisPanel(
+    synthesisText: String,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .drawBehind {
+                drawRoundRect(
+                    color = ElectricViolet.copy(alpha = 0.25f),
+                    size = size,
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(16.dp.toPx(), 16.dp.toPx()),
+                    style = Stroke(width = 2.dp.toPx())
+                )
+            },
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = Surface3),
+        border = BorderStroke(1.5.dp, ElectricViolet.copy(alpha = 0.55f))
+    ) {
+        Column(
+            modifier = Modifier.padding(18.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.padding(bottom = 12.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(16.dp)
+                        .background(ElectricViolet.copy(alpha = 0.2f), CircleShape)
+                        .border(1.dp, ElectricViolet, CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(6.dp)
+                            .background(ElectricViolet, CircleShape)
+                    )
+                }
+                Text(
+                    text = "DEEP SYNTHESIS",
+                    fontFamily = DMMonoFontFamily,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = ElectricViolet,
+                    letterSpacing = 1.5.sp
+                )
+            }
+            Text(
+                text = synthesisText,
+                fontSize = 15.sp,
+                fontFamily = InstrumentSansFontFamily,
+                color = TextPrimaryColor,
+                lineHeight = 22.sp,
+                fontWeight = FontWeight.Medium
+            )
         }
     }
 }

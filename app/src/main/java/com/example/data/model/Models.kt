@@ -95,6 +95,7 @@ data class ForecastSummary(
 data class ParsedResponse(
     val introduction: String = "",
     val executiveSummary: String? = null,
+    val deepSynthesis: String? = null,
     val depthLayers: List<DepthLayerInsight> = emptyList(),
     val rootCauseReport: RootCauseReport? = null,
     val humanDrivers: HumanDriversReport? = null,
@@ -107,7 +108,8 @@ data class ParsedResponse(
     val futurePathways: List<FuturePathway> = emptyList(),
     val timelineForecast: TimelineForecast? = null,
     val decisionImpact: DecisionImpact? = null,
-    val forecastSummary: ForecastSummary? = null
+    val forecastSummary: ForecastSummary? = null,
+    val isFollowUp: Boolean = false
 )
 
 data class DepthLayerInsight(

@@ -53,6 +53,7 @@ import com.example.data.repository.ResponseParser
 import com.example.ui.theme.*
 import com.example.ui.components.ThreeDotThinkingIndicator
 import com.example.ui.components.IntelligenceOSVisualizer
+import com.example.ui.components.DeepSynthesisPanel
 import com.example.ui.viewmodel.IntelligenceViewModel
 import kotlinx.coroutines.launch
 import java.util.Calendar
@@ -2672,6 +2673,23 @@ fun DepthLensDiagnosticCard(
     onRegenerate: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    if (parsed.isFollowUp) {
+        Column(
+            modifier = modifier
+                .fillMaxWidth()
+                .padding(bottom = 12.dp)
+        ) {
+            Text(
+                text = parsed.introduction,
+                fontSize = 13.sp,
+                color = TextPrimaryColor,
+                lineHeight = 20.sp,
+                modifier = Modifier.padding(bottom = 12.dp)
+            )
+        }
+        return
+    }
+
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -2686,10 +2704,32 @@ fun DepthLensDiagnosticCard(
         )
         Spacer(modifier = Modifier.height(16.dp))
 
+        val cleanIntroDisplay = remember(parsed.introduction, parsed.executiveSummary) {
+            val summary = parsed.executiveSummary ?: ""
+            val rawIntro = parsed.introduction
+            var intro = rawIntro.trim()
+            if (summary.isNotBlank()) {
+                if (intro == summary) {
+                    ""
+                } else if (intro.contains(summary)) {
+                    intro.replace(summary, "").trim()
+                } else {
+                    val paragraphs = intro.split("\n\n")
+                    val filtered = paragraphs.filter { p ->
+                        val pClean = p.trim()
+                        pClean.isNotBlank() && !summary.contains(pClean) && !pClean.contains(summary)
+                    }
+                    filtered.joinToString("\n\n").trim()
+                }
+            } else {
+                intro
+            }
+        }
+
         // Conversation overview context
-        if (parsed.introduction.isNotEmpty()) {
+        if (cleanIntroDisplay.isNotEmpty()) {
             Text(
-                text = parsed.introduction,
+                text = cleanIntroDisplay,
                 fontSize = 13.sp,
                 color = TextPrimaryColor,
                 lineHeight = 20.sp,
@@ -2697,71 +2737,11 @@ fun DepthLensDiagnosticCard(
             )
         }
 
-        // 1. Executive Summary Panel
-        parsed.executiveSummary?.let { summary ->
-            Card(
-                shape = RoundedCornerShape(12.dp),
-                colors = CardDefaults.cardColors(containerColor = SurfaceCardColor),
-                border = BorderStroke(1.dp, PremiumCyan.copy(alpha = 0.35f)),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 6.dp)
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(
-                                modifier = Modifier
-                                    .size(6.dp)
-                                    .background(PremiumCyan, CircleShape)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                "EXECUTIVE SUMMARY BRIEFING",
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = PremiumCyan,
-                                letterSpacing = 1.sp,
-                                fontFamily = FontFamily.Monospace
-                            )
-                        }
-
-                        parsed.confidence?.let { lvl ->
-                            val color = when (lvl.lowercase()) {
-                                "high" -> SuccessColor
-                                "medium" -> WarningColor
-                                else -> ErrorColor
-                            }
-                            Card(
-                                colors = CardDefaults.cardColors(containerColor = color.copy(alpha = 0.15f)),
-                                border = BorderStroke(1.dp, color.copy(alpha = 0.4f)),
-                                shape = RoundedCornerShape(4.dp)
-                            ) {
-                                Text(
-                                    text = "$lvl confidence".uppercase(),
-                                    fontSize = 7.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = color,
-                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
-                                )
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    Text(
-                        text = summary,
-                        fontSize = 12.sp,
-                        color = TextPrimaryColor,
-                        lineHeight = 18.sp
-                    )
-                }
-            }
+        if (!parsed.deepSynthesis.isNullOrBlank()) {
+            DeepSynthesisPanel(
+                synthesisText = parsed.deepSynthesis,
+                modifier = Modifier.padding(bottom = 16.dp)
+            )
         }
 
         // v4.1.3 Probability Assessment Card
@@ -5090,14 +5070,7 @@ fun ParsedResponse.toShareableText(): String {
         builder.append(summary).append("\n\n")
     }
     
-    if (depthLayers.isNotEmpty()) {
-        builder.append("DEPTH LAYERS (DECONSTRUCTING REALITY)\n")
-        depthLayers.forEach { layer ->
-            builder.append("• LAYER ").append(layer.layerNumber).append(" (").append(layer.layerName.uppercase()).append("): ")
-                .append(layer.description).append("\n")
-        }
-        builder.append("\n")
-    }
+
     
     val rcr = rootCauseReport
     if (rcr != null) {

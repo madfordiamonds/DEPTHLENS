@@ -54,6 +54,7 @@ import com.example.data.repository.ResponseParser
 import com.example.ui.theme.*
 import com.example.ui.components.ThreeDotThinkingIndicator
 import com.example.ui.components.IntelligenceOSVisualizer
+import com.example.ui.components.DeepSynthesisPanel
 import androidx.compose.ui.window.Dialog
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -824,122 +825,56 @@ fun HomeScreen(
                                         modifier = Modifier.fillMaxWidth()
                                     ) {
                                         Column(modifier = Modifier.padding(12.dp)) {
-                                            // Redesigned Future Intelligence Visual Dashboard (Summarizes BEFORE detailed explanations)
-                                            IntelligenceOSVisualizer(
-                                                parsed = parsedResponse, messageId = message.id,
-                                                rawText = message.text,
-                                                onSubmitQuery = onSubmitQuery
-                                            )
-                                            Spacer(modifier = Modifier.height(16.dp))
-
-                                            SelectionContainer {
-                                                Column {
-                                                    if (parsedResponse.introduction.isNotEmpty()) {
-                                                Text(
-                                                    text = stripMarkdown(parsedResponse.introduction),
-                                                    fontSize = 18.sp,
-                                                    color = TextSecondaryColor,
-                                                    lineHeight = 25.sp,
-                                                    fontFamily = InstrumentSansFontFamily,
-                                                    modifier = Modifier.padding(bottom = 10.dp)
+                                            if (!parsedResponse.isFollowUp) {
+                                                // Redesigned Future Intelligence Visual Dashboard (Summarizes BEFORE detailed explanations)
+                                                IntelligenceOSVisualizer(
+                                                    parsed = parsedResponse, messageId = message.id,
+                                                    rawText = message.text,
+                                                    onSubmitQuery = onSubmitQuery
                                                 )
+                                                Spacer(modifier = Modifier.height(16.dp))
                                             }
 
-                                            if (parsedResponse.depthLayers.isNotEmpty()) {
-                                                Text(
-                                                    text = "DEPTH LAYERS",
-                                                    fontSize = 11.sp,
-                                                    letterSpacing = 1.sp,
-                                                    fontFamily = DMMonoFontFamily,
-                                                    fontWeight = FontWeight.Bold,
-                                                    color = TextMutedColor,
-                                                    modifier = Modifier.padding(bottom = 6.dp)
-                                                )
-                                                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                                    parsedResponse.depthLayers.forEach { layer ->
-                                                        val layerColor = when (layer.layerNumber) {
-                                                            1 -> Layer1; 2 -> Layer2; 3 -> Layer3
-                                                            4 -> Layer4; 5 -> Layer5; 6 -> Layer6
-                                                            7 -> Layer7; 8 -> Layer8; 9 -> Layer9
-                                                            else -> Layer10
+                                            val cleanIntroDisplay = remember(parsedResponse.introduction, parsedResponse.executiveSummary) {
+                                                val summary = parsedResponse.executiveSummary ?: ""
+                                                val rawIntro = parsedResponse.introduction
+                                                var intro = rawIntro.trim()
+                                                if (summary.isNotBlank()) {
+                                                    if (intro == summary) {
+                                                        ""
+                                                    } else if (intro.contains(summary)) {
+                                                        intro.replace(summary, "").trim()
+                                                    } else {
+                                                        val paragraphs = intro.split("\n\n")
+                                                        val filtered = paragraphs.filter { p ->
+                                                            val pClean = p.trim()
+                                                            pClean.isNotBlank() && !summary.contains(pClean) && !pClean.contains(summary)
                                                         }
-                                                        var layerExpanded by remember { mutableStateOf(false) }
-                                                        Column(
-                                                            modifier = Modifier
-                                                                .fillMaxWidth()
-                                                                .background(Surface3, RoundedCornerShape(6.dp))
-                                                                .border(1.dp, if (layerExpanded) layerColor.copy(alpha = 0.6f) else BorderSubtle, RoundedCornerShape(6.dp))
-                                                                .clickable { layerExpanded = !layerExpanded }
-                                                                .padding(8.dp)
-                                                        ) {
-                                                            Row(
-                                                                modifier = Modifier.fillMaxWidth(),
-                                                                horizontalArrangement = Arrangement.SpaceBetween,
-                                                                verticalAlignment = Alignment.CenterVertically
-                                                            ) {
-                                                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                                                    Box(modifier = Modifier.size(5.dp).background(layerColor, CircleShape))
-                                                                    Spacer(modifier = Modifier.width(6.dp))
-                                                                    Text(
-                                                                        text = "L${layer.layerNumber} · ${layer.layerName}",
-                                                                        fontSize = 9.5.sp,
-                                                                        fontWeight = FontWeight.Bold,
-                                                                        color = TextPrimaryColor,
-                                                                        fontFamily = DMMonoFontFamily
-                                                                    )
-                                                                }
-                                                                Icon(
-                                                                    imageVector = if (layerExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                                                                    contentDescription = null,
-                                                                    tint = TextMutedColor,
-                                                                    modifier = Modifier.size(12.dp)
-                                                                )
-                                                            }
-                                                            if (layerExpanded) {
-                                                                Spacer(modifier = Modifier.height(4.dp))
-                                                                Text(
-                                                                    text = stripMarkdown(layer.description),
-                                                                    fontSize = 16.sp,
-                                                                    color = TextSecondaryColor,
-                                                                    lineHeight = 22.sp,
-                                                                    fontFamily = InstrumentSansFontFamily
-                                                                )
-                                                                // Multi-level: sub-insights if available
-                                                                if (layer.description.length > 100) {
-                                                                    Spacer(modifier = Modifier.height(6.dp))
-                                                                    Row(
-                                                                        modifier = Modifier
-                                                                            .fillMaxWidth()
-                                                                            .background(layerColor.copy(alpha = 0.06f), RoundedCornerShape(5.dp))
-                                                                            .padding(6.dp),
-                                                                        verticalAlignment = Alignment.CenterVertically
-                                                                    ) {
-                                                                        Box(modifier = Modifier.size(3.dp).background(layerColor, CircleShape))
-                                                                        Spacer(modifier = Modifier.width(5.dp))
-                                                                        Text(
-                                                                            text = "Tap suggested questions below to explore this layer further",
-                                                                            fontSize = 8.sp,
-                                                                            color = layerColor.copy(alpha = 0.8f),
-                                                                            fontFamily = DMMonoFontFamily
-                                                                        )
-                                                                    }
-                                                                }
-                                                            }
-                                                        }
+                                                        filtered.joinToString("\n\n").trim()
                                                     }
+                                                } else {
+                                                    intro
                                                 }
                                             }
 
-                                            if ((parsedResponse.executiveSummary ?: "").isNotEmpty()) {
-                                                Spacer(modifier = Modifier.height(10.dp))
-                                                Text(
-                                                    text = stripMarkdown(parsedResponse.executiveSummary!!),
-                                                    fontSize = 16.sp,
-                                                    color = TextSecondaryColor,
-                                                    lineHeight = 22.sp,
-                                                    fontFamily = InstrumentSansFontFamily
-                                                )
-                                            }
+                                            SelectionContainer {
+                                                Column {
+                                                    if (cleanIntroDisplay.isNotEmpty()) {
+                                                        Text(
+                                                            text = stripMarkdown(cleanIntroDisplay),
+                                                            fontSize = 18.sp,
+                                                            color = TextSecondaryColor,
+                                                            lineHeight = 25.sp,
+                                                            fontFamily = InstrumentSansFontFamily,
+                                                            modifier = Modifier.padding(bottom = 10.dp)
+                                                        )
+                                                    }
+
+                                                    if (!parsedResponse.isFollowUp && !parsedResponse.deepSynthesis.isNullOrBlank()) {
+                                                        Spacer(modifier = Modifier.height(14.dp))
+                                                        DeepSynthesisPanel(synthesisText = parsedResponse.deepSynthesis)
+                                                        Spacer(modifier = Modifier.height(14.dp))
+                                                    }
 
                                             // ── Suggested Questions (after an                                             // ── Dig Deeper Section ────────────────────────
                                              val associatedUserQuery = remember(message.id, activeMessages) {
