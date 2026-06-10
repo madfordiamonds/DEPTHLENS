@@ -910,6 +910,23 @@ fun DashboardScreen(
                         textAlign = TextAlign.Center,
                         lineHeight = 18.sp
                     )
+                    Spacer(modifier = Modifier.height(12.dp))
+
+val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
+Text(
+    text = "WEBSITE",
+    color = PremiumCyan,
+    fontSize = 13.sp,
+    fontWeight = FontWeight.Bold,
+    letterSpacing = 1.5.sp,
+    textAlign = TextAlign.Center,
+    modifier = Modifier
+        .fillMaxWidth()
+        .clickable {
+            uriHandler.openUri("https://guy-with-ideas-uncoded.github.io/DEPTHLENS/")
+        }
+        .padding(vertical = 4.dp)
+)
                 }
             },
             confirmButton = {
