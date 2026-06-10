@@ -328,6 +328,13 @@ class IntelligenceViewModel(application: Application) : AndroidViewModel(applica
     private val _isPrivacyModeEnabled = MutableStateFlow(prefs.getBoolean("privacy_mode_enabled", false))
     val isPrivacyModeEnabled: StateFlow<Boolean> = _isPrivacyModeEnabled.asStateFlow()
 
+    val isDeepThoughtEnabled = MutableStateFlow(prefs.getBoolean("is_deep_thought_enabled", false))
+
+    fun setDeepThoughtEnabled(enabled: Boolean) {
+        isDeepThoughtEnabled.value = enabled
+        prefs.edit().putBoolean("is_deep_thought_enabled", enabled).apply()
+    }
+
     fun setMemoryEnabled(enabled: Boolean) {
         _isMemoryEnabled.value = enabled
     }
@@ -577,11 +584,8 @@ class IntelligenceViewModel(application: Application) : AndroidViewModel(applica
         }
 
         viewModelScope.launch {
-            try {
-                repository.clearAllData()
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
+            // Do NOT clear local data — chats are preserved for re-login sync
+            android.util.Log.d("IntelligenceViewModel", "Sign out: local data preserved for next login")
         }
     }
 

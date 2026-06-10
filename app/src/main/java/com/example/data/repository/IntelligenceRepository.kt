@@ -277,7 +277,8 @@ class IntelligenceRepository(private val context: Context) {
     }
 
     suspend fun clearAllData() = withContext(Dispatchers.IO) {
-        sessionDao.deleteAllSessions()
+        // Only clear memory insights on sign-out, NOT sessions or messages
+        // Sessions and messages are preserved so they sync back on re-login
         memoryInsightDao.deleteAllInsights()
     }
 
@@ -867,9 +868,9 @@ Follow this format meticulously. Wrap each visual module within its respective t
         val categoryFocusInstruction = when (sessionCategory) {
             "Root Cause" -> """
                 CRITICAL MODE: ROOT CAUSE ANALYSIS (RCA)
-                YOUR ROLE: Act as an elite Systems Investigator, Root Cause Analyst, and behavioral psychologist.
-                PURPOSE: Identify the deep underlying drivers, origins, mechanisms, and hidden systemic factors of the situation. Do NOT focus on general synthesized wisdom; focus 100% on causality and diagnostic truth.
-                FOCUS: Why did this happen? What created it? What are the hidden causes, variables, structural bottlenecks, systemic triggers, and cause-effect chains?
+                Tracing back to the origin...
+                YOUR ROLE: Drill into origin points. Ask "why" recursively. Surface the foundational trigger, not surface symptoms. Use causal chain language.
+                Open with (or weave in): "Tracing back to the origin..." or similar causal chain language. Do NOT use generic summaries.
                 REQUIRED XML TAG CONTENTS:
                 You MUST populate the <root_cause> tag with this exact structure (do NOT output any <deep_synthesis> tag):
                 Surface Cause: [Briefly describe the apparent visible symptom]
@@ -878,15 +879,12 @@ Follow this format meticulously. Wrap each visual module within its respective t
                 Core Cause: [The deepest original driving wound, core script, or core system bottleneck]
                 Supporting Evidence: [The logical or behavioral pattern that proves this diagnosis]
                 Root Cause Conclusion: [The final definitive causal diagnosis of the entire pattern]
-                
-                Strictly avoid summarizing perspectives—find the core cause and trace the chain from Surface Cause to Root Cause Conclusion.
             """.trimIndent()
 
             "Deep Synthesis" -> """
                 CRITICAL MODE: DEEP MULTI-PERSPECTIVE SYNTHESIS
-                YOUR ROLE: Act as a Master Philosopher, Systems Synthesizer, and Multi-Perspective Strategic Sage.
-                PURPOSE: Generate high-level wisdom, deep insight, and integrated multi-perspective intelligence. Do NOT focus on diagnosing causes or solving a "problem"; instead, synthesize multiple diverse viewpoints to elevate the user's understanding of the context.
-                FOCUS: Elevate the situation into an integrated cosmic intelligence report. Synthesize reality, incentives, behavior, and philosophy into wisdom.
+                YOUR ROLE: Connect dots across multiple domains. Find non-obvious patterns. Deliver integrated, multi-angle strategic insight.
+                Open with: "Analyzing through a unified synthesis of multiple layers..."
                 REQUIRED XML TAG CONTENTS:
                 You MUST populate the <deep_synthesis> tag (do NOT output any <root_cause> tag). Within <deep_synthesis>...</deep_synthesis>, generate exactly these perspectives, with generous double newlines between them (do NOT use markdown style headers, just plain text headers that look incredibly clean):
                 
@@ -907,18 +905,51 @@ Follow this format meticulously. Wrap each visual module within its respective t
                 META PERSPECTIVE: [What is the ultimate repeating fractal shape or archetypal pattern governing everything here?]
                 
                 INTEGRATED SYNTHESIS: [Combine all perspectives into a single unified synthesis of transcendent wisdom and insight. Focus on generating pristine clarity and deep revelation, not causality.]
-                
-                Ensure that <deep_synthesis> is rich, fully fleshed out, and completely distinct from causal diagnostics.
             """.trimIndent()
 
-            "Psychology" -> "Focus heavily on mapping individual beliefs, defense mechanisms, shadow traits, coping strategies, and psychological barriers."
-            "Systems" -> "Focus heavily on identifying feedback loops, systemic levers, delayed reactions, unintended consequences, and system blind spots."
-            "Probability" -> "Focus heavily on probabilistic outcomes, risk profiles, likelihood estimates, and compounding decision results."
-            "Business" -> "Focus heavily on strategic advantages, industry incentives, game-theory motives, market positions, and financial leverage."
-            "Relationships" -> "Focus heavily on interpersonal dynamics, communication loops, co-dependencies, unexpressed expectations, and emotional safety."
-            "Spiritual" -> "Focus heavily on high-level soul contracts, karmic patterns, energy blocks, alignment hurdles, and spiritual evolution opportunities."
-            "Decision Making" -> "Focus heavily on decision trees, trade-offs, inertia risk vs proactive change gains, and cognitive biases influencing choices."
-            else -> ""
+            "Psychology" -> """
+                CRITICAL MODE: PSYCHOLOGY LENS
+                YOUR ROLE: Unpack hidden motives and individual patterns. Focus heavily on cognitive biases, emotional drivers, subconscious motivations, attachment styles, and conditioned behavioral patterns.
+                Open with: "The underlying motivation here appears to be..." or similar psychological lens phrase.
+                Map defense mechanisms, shadow traits, childhood scripts, and ego protections.
+            """.trimIndent()
+
+            "Systems" -> """
+                CRITICAL MODE: SYSTEMS LENS
+                YOUR ROLE: Map feedback loops, systemic incentive structures, unintended consequences, and second-order effects. Think in flows and equilibria.
+                Open with: "Mapping the systematic flows and secondary feedback loops..." or similar systems language.
+                Identify systemic limits, delayed reactions, status gains/payouts, and core structural levers.
+            """.trimIndent()
+
+            "Probability" -> """
+                CRITICAL MODE: PROBABILITY LENS
+                YOUR ROLE: Frame outcomes as causal likelihoods. Use scenario trees. Quantify uncertainties and branching futures. Always say: "X% likely because..."
+                Open with: "Assessing the probabilistic scenario tree and trajectories..." or similar probabilistic language.
+                Map decision trajectories with estimated likelihood numbers, confidence bounds, risks, and early warning indicators.
+            """.trimIndent()
+
+            "Business" -> """
+                CRITICAL MODE: BUSINESS LENS
+                YOUR ROLE: Apply economic frameworks (SWOT, Porter's Five Forces, unit economics). Focus heavily on competitive advantages, margins, leverage points, and measurable outcomes.
+                Open with: "Analyzing the strategic business landscape and incentives..." or similar business language.
+                Map structural organizational bottlenecks, transaction cost models, and economic game-theoretic alignments.
+            """.trimIndent()
+
+            "Relationships" -> """
+                CRITICAL MODE: RELATIONSHIPS LENS
+                YOUR ROLE: Focus on interpersonal dynamics, repeating loops, unexpressed/covert contracts, and emotional safety of connections.
+                Open with: "Unpacking the interpersonal power dynamics and attachment needs..." or similar relationships lens language.
+                Map co-dependencies, feedback games, communication scripts, power-plays, and deep trust triggers.
+            """.trimIndent()
+
+            "Spiritual" -> """
+                CRITICAL MODE: SPIRITUAL LENS
+                YOUR ROLE: Zoom out to transcendental meaning, purpose, values alignment, and personal growth arcs.
+                Open with: "Zooming out to the spiritual alignment and personal growth arc..." or similar spiritual perspective language.
+                Evaluate high-level soul contracts, karmic lessons, energy blocks, alignment imbalances, and evolution gates.
+            """.trimIndent()
+
+            else -> "Identify the core themes, drivers, and dynamic implications of the context."
         }
 
         var adjustedSystemInstructionText = systemInstructionText
@@ -940,6 +971,9 @@ Follow this format meticulously. Wrap each visual module within its respective t
                 .replace("</root_cause>", "</deep_synthesis>")
         }
 
+        val prefs = context.getSharedPreferences("depthlens_prefs", Context.MODE_PRIVATE)
+        val isDeepThought = prefs.getBoolean("is_deep_thought_enabled", false)
+
         val finalSystemText = customInstructionOverride ?: """
 $adjustedSystemInstructionText
 
@@ -947,11 +981,45 @@ $adjustedSystemInstructionText
 $categoryFocusInstruction
 
 ### INTENDED ANALYSIS DEPTH
-Selected depth rating: $sessionDepth. You MUST adjust your detail levels accordingly:
-- If Quick Insight: Maintain high density but short, concise summaries.
-- If Standard Analysis: Balanced, exhaustive diagnostic coverage.
-- If Deep Analysis: Extremely thoroughly detailed multi-layered assessment, deep dive.
-- If Full Investigation: Elite forecasting, strategic trajectories, game-theoretic analysis.
+Selected depth rating: ${if (isDeepThought) "Full Investigation (Deep Thought Active)" else sessionDepth}. You MUST adjust your detail levels, formatting, and structures accordingly:
+
+- If Quick Insight:
+  * Format: Exactly 3 to 5 clean, punchy bullet points.
+  * Content: Dense, actionable insights with absolutely no introductory filler or conversational fluff.
+  * Length: Short, concise, and direct.
+
+- If Standard Analysis:
+  * Format: Exactly 3 to 4 structured paragraphs.
+  * Content: A balanced, thorough diagnosis of the situation, an depth explanation of the behaviors/systems involved, and clear, practical recommendations.
+  * Length: Medium, balanced depth coverage.
+
+- If Deep Analysis:
+  * Format: Full multi-layered breakdown spanning multiple sections with sub-points and clear behavioral/system schemas.
+  * Content: Highly detailed assessments, mapping out the cognitive/systemic layers in absolute depth.
+  * Length: 600 to 900 words.
+
+- If Full Investigation:
+  * Format: A comprehensive, master-level strategic report with distinct sections.
+  * Content: Strategic feedback loops, game-theory implications, future probabilistic trajectories, and edge cases.
+  * Length: 1000+ words.
+
+### CORE FORMATTING RULES:
+1. Open your response IMMEDIATELY with language signaling the active mode. Do not say "I am in ... mode". Just start with the lens-specific opening, for example:
+   - Root Cause: "Tracing back to the origin..."
+   - Psychology: "The underlying motivation here appears to be..."
+   - Systems: "Mapping the systematic flows and feedback loops..."
+   - Probability: "Assessing the probabilistic scenario trees and trajectories..."
+   - Business: "Analyzing the strategic business landscape and incentives..."
+   - Relationships: "Unpacking the interpersonal dynamics and emotional needs..."
+   - Spiritual: "Zooming out to the spiritual alignment and personal growth arc..."
+   - Deep Synthesis: "Through a unified, multi-perspective synthesis..."
+2. Depth controls LENGTH and STRUCTURE; Mode controls LENS and VOCABULARY. Ensure that if chosen Depth is Quick Insight, you output 3-5 bullet points written through the vocabulary of the chosen Mode.
+3. Never write a generic response that could fit any mode.
+
+${if (isDeepThought) """
+### DEEP THOUGHT REASONING BOOST ACTIVE
+You are operating in DEEP THOUGHT Mode (which increases the default reasoning layers DepthLens uses by default for analysis). You MUST increase the depth, causal rigor, and complexity of your analysis across all 10 reality layers. Do not summarize or cut corners. Use all 10 layers of reality.
+""" else ""}
         """.trimIndent()
 
         val request = GenerateContentRequest(

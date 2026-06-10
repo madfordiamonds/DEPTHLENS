@@ -83,6 +83,7 @@ fun DashboardScreen(
     val isMemoryEnabled by viewModel.isMemoryEnabled.collectAsState()
     val isCollectiveOptIn by viewModel.isCollectiveIntelligenceOptIn.collectAsState()
     val isPrivacyModeEnabled by viewModel.isPrivacyModeEnabled.collectAsState()
+    val isDeepThoughtEnabled by viewModel.isDeepThoughtEnabled.collectAsState()
     val isSystemControlsExpanded by viewModel.isSystemControlsExpanded.collectAsState()
     val notificationsEnabled by viewModel.notificationsEnabled.collectAsState()
     val darkModeEnabled by viewModel.darkModeEnabled.collectAsState()
@@ -1908,6 +1909,8 @@ fun DashboardScreen(
                             onModeSelected = { selectedMode = it; viewModel.setSelectedMode(it) },
                             selectedDepth = selectedDepth,
                             onDepthSelected = { selectedDepth = it; viewModel.setSelectedDepth(it) },
+                            isDeepThoughtEnabled = isDeepThoughtEnabled,
+                            onDeepThoughtToggle = { viewModel.setDeepThoughtEnabled(it) },
                             onSessionSelected = { sessionId -> viewModel.selectSession(sessionId) },
                             onSubmitQuery = { text -> viewModel.sendQuery(text) },
                             onNavigateToChat = { /* no-op: results shown on home */ },

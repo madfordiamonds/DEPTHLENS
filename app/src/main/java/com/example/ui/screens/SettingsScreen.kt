@@ -60,7 +60,6 @@ fun SettingsScreen(
     onModelSelected: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    var showExportToast by remember { mutableStateOf(false) }
     var loginEmail by remember { mutableStateOf("") }
     var loginName by remember { mutableStateOf("") }
     var showFontSizeDialog by remember { mutableStateOf(false) }
@@ -661,71 +660,6 @@ fun SettingsScreen(
             )
         }
 
-        // --- SECTION: DATA ---
-        Text(
-            text = "DATA",
-            fontSize = 8.sp,
-            letterSpacing = 1.3.sp,
-            fontFamily = DMMonoFontFamily,
-            fontWeight = FontWeight.Bold,
-            color = TextMutedColor,
-            modifier = Modifier.padding(bottom = 8.dp)
-        )
-
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 20.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            InteractiveSettingsCard(
-                icon = "📂",
-                title = "Export Chats",
-                subtitle = "Download conversational logs and timeline models to JSON",
-                onClick = { showExportToast = true }
-            )
-
-            InteractiveSettingsCard(
-                icon = "🧠",
-                title = "Memory Manager",
-                subtitle = "Manage semantic anchors, localized vectors and system memories",
-                onClick = onShowMemoryDetails
-            )
-        }
-
-        if (showExportToast) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 16.dp)
-                    .background(Color(0x337E65FF), shape = RoundedCornerShape(8.dp))
-                    .border(1.dp, ElectricViolet, shape = RoundedCornerShape(8.dp))
-                    .padding(10.dp)
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "Data successfully exports to local storage!",
-                        color = Color.White,
-                        fontSize = 10.sp,
-                        fontFamily = InstrumentSansFontFamily
-                    )
-                    Text(
-                        text = "✕",
-                        color = ElectricViolet,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.clickable { showExportToast = false }
-                    )
-                }
-            }
-        }
-
-
-
         // --- SECTION: HELP & SUPPORT ---
         Text(
             text = "HELP & SUPPORT",
@@ -747,13 +681,6 @@ fun SettingsScreen(
                 icon = "✉️",
                 title = "Send Feedback",
                 subtitle = "Help us refine Reality detection mechanics and features",
-                onClick = onReportBug
-            )
-
-            InteractiveSettingsCard(
-                icon = "🐛",
-                title = "Report a Bug",
-                subtitle = "File diagnostic details regarding systemic flaws",
                 onClick = onReportBug
             )
         }

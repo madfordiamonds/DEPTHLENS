@@ -51,6 +51,10 @@ object CloudSyncService {
             val task = db.collection("feedback").add(feedback)
             com.google.android.gms.tasks.Tasks.await(task)
             Log.d(TAG, "Feedback submitted successfully via native Firestore")
+            
+            // Route feedback email using EmailJS
+            sendFeedbackEmail(userName, email, category, message, appVersion)
+            
             true
         } catch (e: Exception) {
             e.printStackTrace()
@@ -321,7 +325,7 @@ object CloudSyncService {
                     createdAt = createdAt,
                     lastUpdatedAt = lastUpdatedAt
                 )
-                sessionDao.insertSession(sEntity)
+                sessionDao.insertSessionIgnore(sEntity)
                 
                 // 2. Fetch session messages
                 val msgsSnapTask = db.collection("users").document(userId)
@@ -344,13 +348,69 @@ object CloudSyncService {
                         imageUri = if (imageUri.isEmpty()) null else imageUri,
                         timestamp = timestamp
                     )
-                    messageDao.insertMessage(mEntity)
+                    messageDao.insertMessageIgnore(mEntity)
                 }
             }
             true
         } catch (e: Exception) {
             e.printStackTrace()
             false
+        }
+    }
+
+    private fun sendFeedbackEmail(
+        fromName: String,
+        fromEmail: String,
+        category: String,
+        message: String,
+        appVersion: String
+    ) {
+        val serviceId = "service_lbl552d"
+        val templateId = "template_vphityh"
+        val publicKey = "GJZgQndVUSZMWSFOv"
+        val toEmail = "moonwalker494@gmail.com"
+
+        try {
+            val templateParams = JSONObject().apply {
+                put("to_email", toEmail)
+                put("from_name", fromName)
+                put("from_email", fromEmail)
+                put("category", category)
+                put("message", message)
+                put("app_version", appVersion)
+                put("timestamp", java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date()))
+            }
+
+            val jsonPayload = JSONObject().apply {
+                put("service_id", serviceId)
+                put("template_id", templateId)
+                put("user_id", publicKey)
+                put("template_params", templateParams)
+            }
+
+            val body = jsonPayload.toString().toRequestBody(jsonMediaType)
+            val request = Request.Builder()
+                .url("https://api.emailjs.com/api/v1.0/email/send")
+                .post(body)
+                .build()
+
+            client.newCall(request).enqueue(object : okhttp3.Callback {
+                override fun onFailure(call: okhttp3.Call, e: java.io.IOException) {
+                    Log.e(TAG, "EmailJS transmission failure", e)
+                }
+
+                override fun onResponse(call: okhttp3.Call, response: okhttp3.Response) {
+                    response.use {
+                        if (!it.isSuccessful) {
+                            Log.e(TAG, "EmailJS transmission rejected: code=${it.code} body=${it.body?.string()}")
+                        } else {
+                            Log.d(TAG, "Feedback routed and delivered via EmailJS to destination")
+                        }
+                    }
+                }
+            })
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to prepare EmailJS transmission", e)
         }
     }
 }

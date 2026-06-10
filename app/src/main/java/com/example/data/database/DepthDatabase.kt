@@ -14,6 +14,9 @@ interface SessionDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertSession(session: SessionEntity)
 
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertSessionIgnore(session: SessionEntity)
+
     @Query("UPDATE sessions SET lastUpdatedAt = :timestamp WHERE id = :sessionId")
     suspend fun updateLastUsed(sessionId: String, timestamp: Long)
 
@@ -34,6 +37,9 @@ interface MessageDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertMessage(message: MessageEntity)
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertMessageIgnore(message: MessageEntity)
 
     @Query("DELETE FROM messages WHERE sessionId = :sessionId")
     suspend fun deleteMessagesForSession(sessionId: String)

@@ -1409,23 +1409,142 @@ fun AnalysisScreen(
                             )
                             Spacer(modifier = Modifier.height(6.dp))
 
+                            var expandedLayers by remember { mutableStateOf(setOf<Int>()) }
+
                             standardLayers.forEach { layer ->
                                 val processedLensText = parsedResponse?.depthLayers?.firstOrNull { it.layerNumber == layer.num }?.description
                                                      ?: "Diagnostic metric offline. Standard reality alignment active."
-                                Text(
-                                    text = "Layer ${layer.num}: ${layer.name}",
-                                    fontSize = 9.sp,
-                                    fontFamily = InstrumentSansFontFamily,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.Black
-                                )
-                                Text(
-                                    text = processedLensText,
-                                    fontSize = 8.5.sp,
-                                    fontFamily = InstrumentSansFontFamily,
-                                    color = Color.DarkGray,
-                                    modifier = Modifier.padding(bottom = 8.dp)
-                                )
+                                val isExpanded = expandedLayers.contains(layer.num)
+                                val layerBgColor = getLayerColor(layer.num)
+
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 4.dp)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(Color(0xFFF9FAFC))
+                                        .border(0.5.dp, if (isExpanded) layerBgColor.copy(alpha = 0.5f) else Color(0xFFE2E8F0), RoundedCornerShape(8.dp))
+                                        .clickable {
+                                            expandedLayers = if (isExpanded) {
+                                                expandedLayers - layer.num
+                                            } else {
+                                                expandedLayers + layer.num
+                                            }
+                                        }
+                                        .animateContentSize()
+                                        .padding(10.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(20.dp)
+                                                .background(layerBgColor.copy(alpha = 0.15f), CircleShape)
+                                                .border(1.dp, layerBgColor.copy(alpha = 0.8f), CircleShape),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Text(
+                                                text = "L${layer.num}",
+                                                fontSize = 8.sp,
+                                                fontFamily = DMMonoFontFamily,
+                                                fontWeight = FontWeight.Bold,
+                                                color = layerBgColor
+                                            )
+                                        }
+
+                                        Spacer(modifier = Modifier.width(8.dp))
+
+                                        Text(
+                                            text = layer.name.uppercase(),
+                                            fontSize = 9.sp,
+                                            fontFamily = DMMonoFontFamily,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color.Black,
+                                            modifier = Modifier.weight(1f)
+                                        )
+
+                                        Icon(
+                                            imageVector = if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                                            contentDescription = "Expand/Collapse details",
+                                            tint = if (isExpanded) layerBgColor else Color.Gray,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+
+                                    if (isExpanded) {
+                                        Spacer(modifier = Modifier.height(8.dp))
+
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min)
+                                        ) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .width(2.5.dp)
+                                                    .fillMaxHeight()
+                                                    .background(layerBgColor, CircleShape)
+                                            )
+
+                                            Spacer(modifier = Modifier.width(8.dp))
+
+                                            Column {
+                                                Text(
+                                                    text = processedLensText,
+                                                    fontSize = 9.sp,
+                                                    fontFamily = InstrumentSansFontFamily,
+                                                    color = Color.DarkGray,
+                                                    lineHeight = 12.sp
+                                                )
+
+                                                Spacer(modifier = Modifier.height(6.dp))
+
+                                                Row(
+                                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    val resolutionScore = when (layer.num) {
+                                                        1, 2 -> "CONFIDENCE: 98% (HIGH)"
+                                                        3, 4 -> "COGNITIVE LOCK: ACTIVE"
+                                                        5, 6 -> "PARADOX RATIO: INTENSE"
+                                                        7, 8 -> "SYSTEMIC IMPACT: SEVERE"
+                                                        else -> "ALIGNMENT: VERIFIED"
+                                                    }
+
+                                                    val subIcon = when (layer.num) {
+                                                        1, 2 -> "🔍"
+                                                        3, 4 -> "🧠"
+                                                        5, 6 -> "⚖️"
+                                                        7, 8 -> "⚙️"
+                                                        else -> "🎯"
+                                                    }
+
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .background(layerBgColor.copy(alpha = 0.08f), RoundedCornerShape(4.dp))
+                                                            .border(0.5.dp, layerBgColor.copy(alpha = 0.25f), RoundedCornerShape(4.dp))
+                                                            .padding(horizontal = 5.dp, vertical = 2.dp)
+                                                    ) {
+                                                        Text(
+                                                            text = "$subIcon $resolutionScore",
+                                                            fontSize = 7.sp,
+                                                            fontFamily = DMMonoFontFamily,
+                                                            fontWeight = FontWeight.Bold,
+                                                            color = layerBgColor
+                                                        )
+                                                    }
+
+                                                    Text(
+                                                        text = "DYNAMIC RANGE: FULL",
+                                                        fontSize = 7.sp,
+                                                        fontFamily = DMMonoFontFamily,
+                                                        color = Color.Gray
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
                             }
 
                             Spacer(modifier = Modifier.height(14.dp))

@@ -73,6 +73,7 @@ import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.draw.scale
 
 @OptIn(ExperimentalLayoutApi::class)
 // Strips raw markdown symbols that Compose Text() cannot render  
@@ -97,6 +98,8 @@ fun HomeScreen(
     onModeSelected: (String) -> Unit,
     selectedDepth: String = "Standard Analysis",
     onDepthSelected: (String) -> Unit = {},
+    isDeepThoughtEnabled: Boolean = false,
+    onDeepThoughtToggle: (Boolean) -> Unit = {},
     onSessionSelected: (String) -> Unit,
     onSubmitQuery: (String) -> Unit,
     onNavigateToChat: () -> Unit,
@@ -581,6 +584,32 @@ fun HomeScreen(
                         color = TextMutedColor,
                         fontFamily = DMMonoFontFamily
                     )
+
+                    // Deep Thought Mode Toggle
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text(
+                            text = "DEEP THOUGHT",
+                            fontSize = 8.sp,
+                            letterSpacing = 1.2.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isDeepThoughtEnabled) ElectricViolet else TextMutedColor,
+                            fontFamily = DMMonoFontFamily
+                        )
+                        androidx.compose.material3.Switch(
+                            checked = isDeepThoughtEnabled,
+                            onCheckedChange = { onDeepThoughtToggle(it) },
+                            modifier = Modifier.scale(0.6f),
+                            colors = androidx.compose.material3.SwitchDefaults.colors(
+                                checkedThumbColor = Color.White,
+                                checkedTrackColor = ElectricViolet,
+                                uncheckedThumbColor = TextMutedColor,
+                                uncheckedTrackColor = Surface2
+                            )
+                        )
+                    }
                 }
 
                 val depthsList = listOf(
