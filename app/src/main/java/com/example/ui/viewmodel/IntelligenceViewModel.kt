@@ -109,6 +109,28 @@ class IntelligenceViewModel(application: Application) : AndroidViewModel(applica
         // Trigger Engine Diagnostics Health Check at Startup
         runEngineDiagnostics()
 
+        // 4. Persist login state between app launches:
+        // Automatically check if there is an active Firebase User session at startup
+        try {
+            val currentFirebaseUser = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
+            if (currentFirebaseUser != null) {
+                onAuthSuccess(currentFirebaseUser, null, isNew = false)
+            } else {
+                // Double-check if we are logged in from cached user_id or simulated Google sign-ins
+                val wasLoggedIn = prefs.getBoolean("is_logged_in", false)
+                val prefUserId = prefs.getString("user_id", "") ?: ""
+                val prefUserName = prefs.getString("user_name", "Guest Explorer") ?: "Guest Explorer"
+                val prefUserEmail = prefs.getString("user_email", "") ?: ""
+                if (wasLoggedIn && prefUserId.isNotEmpty() && (prefUserId.startsWith("google_simulated_") || prefUserId.startsWith("google_"))) {
+                    loginSimulatedGoogle(prefUserId, prefUserEmail, prefUserName)
+                } else {
+                    isLoggedIn.value = false
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+
         // Load deep-dive insights from prefs
         try {
             val allPrefs = prefs.all
@@ -455,41 +477,64 @@ class IntelligenceViewModel(application: Application) : AndroidViewModel(applica
         }
     }
 
-    fun loginWithGoogle(email: String, fullName: String) {
-        val googleId = "google_" + java.util.UUID.randomUUID().toString().substring(0, 8)
-        userId.value = googleId
-        userName.value = fullName
+    fun onAuthSuccess(user: com.google.firebase.auth.FirebaseUser, customName: String?, isNew: Boolean) {
+        val uid = user.uid
+        val email = user.email ?: ""
+        val name = customName ?: user.displayName ?: email.substringBefore("@")
+
+        userId.value = uid
+        userName.value = name
         userEmail.value = email
         isLoggedIn.value = true
         isGuest.value = false
-        
+
         prefs.edit().apply {
             putBoolean("is_logged_in", true)
             putBoolean("is_guest", false)
-            putString("user_id", googleId)
-            putString("user_name", fullName)
+            putString("user_id", uid)
+            putString("user_name", name)
             putString("user_email", email)
             apply()
         }
 
-        // Merge original local Guest sessions to the cloud!
         viewModelScope.launch {
             try {
-                val currentSessions = repository.allSessionsFlow.first()
-                currentSessions.forEach { s ->
-                    com.example.data.network.CloudSyncService.uploadSession(googleId, s.id, s.title, s.isPinned, s.createdAt, s.lastUpdatedAt)
-                    val msgs = repository.getMessagesFlow(s.id).first()
-                    msgs.forEach { m ->
-                        com.example.data.network.CloudSyncService.uploadMessage(googleId, m.id, m.sessionId, m.role, m.text, m.imageUri, m.timestamp)
-                    }
-                }
-                repository.allMemoryInsightsFlow.first().forEach { m ->
-                    com.example.data.network.CloudSyncService.uploadMemoryInsight(googleId, m.id, m.category, m.content, m.timestamp)
-                }
+                com.example.data.network.CloudSyncService.createProfileIfNotExist(uid, email, name)
+                repository.fetchAndSyncFromFirestore(uid)
             } catch (e: Exception) {
                 e.printStackTrace()
             }
         }
+    }
+
+    fun loginSimulatedGoogle(simulatedId: String, email: String, name: String) {
+        userId.value = simulatedId
+        userName.value = name
+        userEmail.value = email
+        isLoggedIn.value = true
+        isGuest.value = false
+
+        prefs.edit().apply {
+            putBoolean("is_logged_in", true)
+            putBoolean("is_guest", false)
+            putString("user_id", simulatedId)
+            putString("user_name", name)
+            putString("user_email", email)
+            apply()
+        }
+
+        viewModelScope.launch {
+            try {
+                com.example.data.network.CloudSyncService.createProfileIfNotExist(simulatedId, email, name)
+                repository.fetchAndSyncFromFirestore(simulatedId)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    fun loginWithGoogle(email: String, fullName: String) {
+        loginSimulatedGoogle("google_simulated_" + java.util.UUID.randomUUID().toString().substring(0, 8), email, fullName)
     }
 
     fun loginAsGuest(fullName: String) {
@@ -510,6 +555,12 @@ class IntelligenceViewModel(application: Application) : AndroidViewModel(applica
     }
 
     fun signOut() {
+        try {
+            com.google.firebase.auth.FirebaseAuth.getInstance().signOut()
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+
         isLoggedIn.value = false
         isGuest.value = false
         userId.value = "guest_local"
@@ -523,6 +574,14 @@ class IntelligenceViewModel(application: Application) : AndroidViewModel(applica
             putString("user_name", "Guest Explorer")
             putString("user_email", "")
             apply()
+        }
+
+        viewModelScope.launch {
+            try {
+                repository.clearAllData()
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
         }
     }
 

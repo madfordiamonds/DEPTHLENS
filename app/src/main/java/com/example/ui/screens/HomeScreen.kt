@@ -55,6 +55,7 @@ import com.example.ui.theme.*
 import com.example.ui.components.ThreeDotThinkingIndicator
 import com.example.ui.components.IntelligenceOSVisualizer
 import com.example.ui.components.DeepSynthesisPanel
+import com.example.ui.components.SummaryOfInquiryPanel
 import androidx.compose.ui.window.Dialog
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -499,13 +500,13 @@ fun HomeScreen(
             ) {
                 val modesList = listOf(
                     Triple("Root Cause", "🔍", "Trace back to the origin of any situation"),
+                    Triple("Deep Synthesis", "⚛️", "Integrated multi-perspective strategic wisdom"),
                     Triple("Psychology", "🧠", "Unpack hidden motives & patterns"),
                     Triple("Systems", "🌐", "Feedback loops & incentives"),
                     Triple("Probability", "📈", "Map timeline outcomes forward"),
                     Triple("Business", "💼", "Corporate models, strategies & goals"),
                     Triple("Relationships", "⚓", "Interpersonal dynamics & attachments"),
-                    Triple("Spiritual", "✨", "Higher principles, purpose & growth"),
-                    Triple("Decision Making", "🎯", "Heuristics, risks & choices")
+                    Triple("Spiritual", "✨", "Higher principles, purpose & growth")
                 )
 
                 for (i in modesList.indices step 2) {
@@ -857,31 +858,33 @@ fun HomeScreen(
                                                 }
                                             }
 
-                                            SelectionContainer {
-                                                Column {
+                                            Column {
                                                     if (cleanIntroDisplay.isNotEmpty()) {
-                                                        Text(
-                                                            text = stripMarkdown(cleanIntroDisplay),
-                                                            fontSize = 18.sp,
-                                                            color = TextSecondaryColor,
-                                                            lineHeight = 25.sp,
-                                                            fontFamily = InstrumentSansFontFamily,
-                                                            modifier = Modifier.padding(bottom = 10.dp)
-                                                        )
+                                                        SelectionContainer {
+                                                            Text(
+                                                                text = stripMarkdown(cleanIntroDisplay),
+                                                                fontSize = 18.sp,
+                                                                color = TextSecondaryColor,
+                                                                lineHeight = 25.sp,
+                                                                fontFamily = InstrumentSansFontFamily,
+                                                                modifier = Modifier.padding(bottom = 10.dp)
+                                                            )
+                                                        }
                                                     }
 
-                                                    if (!parsedResponse.isFollowUp && !parsedResponse.deepSynthesis.isNullOrBlank()) {
+                                                    val associatedUserQuery = remember(message.id, activeMessages) {
+                                                        activeMessages
+                                                            .subList(0, activeMessages.indexOfFirst { it.id == message.id }.coerceAtLeast(0))
+                                                            .findLast { it.role == "user" }?.text ?: ""
+                                                    }
+                                                    if (!parsedResponse.isFollowUp) {
                                                         Spacer(modifier = Modifier.height(14.dp))
-                                                        DeepSynthesisPanel(synthesisText = parsedResponse.deepSynthesis)
+                                                        SummaryOfInquiryPanel(userQuery = associatedUserQuery, introduction = parsedResponse.introduction)
+                                                        if (!parsedResponse.deepSynthesis.isNullOrBlank()) {
+                                                            DeepSynthesisPanel(synthesisText = parsedResponse.deepSynthesis)
+                                                        }
                                                         Spacer(modifier = Modifier.height(14.dp))
                                                     }
-
-                                            // ── Suggested Questions (after an                                             // ── Dig Deeper Section ────────────────────────
-                                             val associatedUserQuery = remember(message.id, activeMessages) {
-                                                 activeMessages
-                                                     .subList(0, activeMessages.indexOfFirst { it.id == message.id }.coerceAtLeast(0))
-                                                     .findLast { it.role == "user" }?.text ?: ""
-                                             }
 
                                              // ── Action Row (Copy, Deeper, Share, Export) ──
                                              val clipboardManager = LocalClipboardManager.current
@@ -1151,7 +1154,6 @@ fun HomeScreen(
                                                   }
                                               }
                                                 }
-                                            }
                                         }
                                     }
                                 }
@@ -1821,28 +1823,54 @@ private fun generatePdfReport(titleText: String, textContent: String): ByteArray
     var canvas = page.canvas
     val paint = android.graphics.Paint()
     
-    // Draw Elegant Header Title
-    paint.textSize = 20f
-    paint.isFakeBoldText = true
-    paint.color = android.graphics.Color.rgb(124, 58, 237) // Modern violet #7C3AED
-    canvas.drawText("DEPTHLENS ANALYSIS REPORT", 40f, 55f, paint)
+    val timestamp = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.getDefault()).format(java.util.Date())
     
-    // Draw details metadata
-    paint.textSize = 10f
-    paint.isFakeBoldText = false
-    paint.color = android.graphics.Color.GRAY
-    val timestamp = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())
-    canvas.drawText("Generated: $timestamp | Version v4.1.5", 40f, 75f, paint)
-    
-    // Divider
-    paint.strokeWidth = 1.2f
-    paint.color = android.graphics.Color.LTGRAY
-    canvas.drawLine(40f, 90f, 555f, 90f, paint)
+    fun drawPageDecorations(canvas: android.graphics.Canvas, pageNum: Int, paint: android.graphics.Paint, timestamp: String) {
+        // Draw elegant high-contrast decorative top band in Electric Violet
+        paint.color = android.graphics.Color.rgb(126, 101, 255) // #7E65FF Electric Violet
+        canvas.drawRect(0f, 0f, 595f, 15f, paint)
+        
+        // Draw elegant accent strip in Premium Cyan
+        paint.color = android.graphics.Color.rgb(0, 229, 255) // Premium Cyan
+        canvas.drawRect(0f, 15f, 595f, 18f, paint)
+        
+        // Header Brand Text
+        paint.textSize = 14f
+        paint.isFakeBoldText = true
+        paint.color = android.graphics.Color.rgb(126, 101, 255)
+        canvas.drawText("DEPTHLENS", 40f, 42f, paint)
+        
+        paint.textSize = 7.5f
+        paint.isFakeBoldText = false
+        paint.color = android.graphics.Color.rgb(0, 229, 255)
+        canvas.drawText("INTELLIGENCE ENGINE", 125f, 38f, paint)
+        
+        // Header thin divider
+        paint.color = android.graphics.Color.rgb(220, 225, 235)
+        paint.strokeWidth = 1f
+        canvas.drawLine(40f, 53f, 555f, 53f, paint)
+        
+        // Footer thin divider
+        canvas.drawLine(40f, 795f, 555f, 795f, paint)
+        
+        // Footer details
+        paint.textSize = 8f
+        paint.isFakeBoldText = false
+        paint.color = android.graphics.Color.GRAY
+        canvas.drawText("Generated by DepthLens Intelligence Engine  |  $timestamp", 40f, 812f, paint)
+        
+        // Page Number to the right
+        canvas.drawText("Page $pageNum", 520f, 812f, paint)
+    }
+
+    var pageNum = 1
+    // Draw decorations of the first page
+    drawPageDecorations(canvas, pageNum, paint, timestamp)
     
     // Render text with pages pagination
-    var currentY = 120f
-    val margin = 40f
-    val maxWidth = 515f
+    var currentY = 85f
+    val margin = 45f
+    val maxWidth = 505f
     paint.color = android.graphics.Color.BLACK
     paint.textSize = 10.5f
     
@@ -1853,23 +1881,32 @@ private fun generatePdfReport(titleText: String, textContent: String): ByteArray
             continue
         }
         
-        if (section.startsWith("###") || section.startsWith("##") || section.startsWith("#")) {
+        if (section.startsWith("=== DEPTHLENS") || section.startsWith("===") || section.startsWith("==================")) {
+            // Skips raw separator lines to keep look premium
+            continue
+        }
+        
+        if (section.startsWith("###") || section.startsWith("##") || section.startsWith("#") || 
+            section.equals("INTRODUCTION") || section.equals("EXECUTIVE SUMMARY") || section.equals("DEEP SYNTHESIS (INTEGRATED VISIONS)") || 
+            section.startsWith("ROOT CAUSE REPORT") || section.startsWith("HUMAN DRIVERS") || section.startsWith("FUTURE SCENARIOS")) {
             paint.isFakeBoldText = true
-            paint.textSize = 12f
-            paint.color = android.graphics.Color.rgb(88, 28, 135)
+            paint.textSize = 11.5f
+            paint.color = android.graphics.Color.rgb(88, 28, 135) // Deep purple section header
             val cleanSec = section.replace("#", "").trim()
-            if (currentY > 790) {
+            if (currentY > 775f) {
                 pdfDocument.finishPage(page)
-                page = pdfDocument.startPage(android.graphics.pdf.PdfDocument.PageInfo.Builder(595, 842, pdfDocument.pages.size + 1).create())
+                pageNum++
+                page = pdfDocument.startPage(android.graphics.pdf.PdfDocument.PageInfo.Builder(595, 842, pageNum).create())
                 canvas = page.canvas
-                currentY = 50f
+                drawPageDecorations(canvas, pageNum, paint, timestamp)
+                currentY = 85f
             }
             canvas.drawText(cleanSec, margin, currentY, paint)
             currentY += 22f
             continue
         } else {
             paint.isFakeBoldText = false
-            paint.textSize = 10f
+            paint.textSize = 9.5f
             paint.color = android.graphics.Color.BLACK
         }
         
@@ -1880,26 +1917,67 @@ private fun generatePdfReport(titleText: String, textContent: String): ByteArray
             if (paint.measureText(line.toString() + spaceText) < maxWidth) {
                 line.append(spaceText)
             } else {
-                if (currentY > 790) {
+                if (currentY > 775f) {
                     pdfDocument.finishPage(page)
-                    page = pdfDocument.startPage(android.graphics.pdf.PdfDocument.PageInfo.Builder(595, 842, pdfDocument.pages.size + 1).create())
+                    pageNum++
+                    page = pdfDocument.startPage(android.graphics.pdf.PdfDocument.PageInfo.Builder(595, 842, pageNum).create())
                     canvas = page.canvas
-                    currentY = 50f
+                    drawPageDecorations(canvas, pageNum, paint, timestamp)
+                    currentY = 85f
                 }
-                canvas.drawText(line.toString(), margin, currentY, paint)
+                
+                // If it is a list item or field-label, color the starting tag beautifully
+                val lineStr = line.toString()
+                if (lineStr.trim().startsWith("-") || lineStr.trim().startsWith("*")) {
+                    paint.color = android.graphics.Color.rgb(126, 101, 255)
+                    canvas.drawText(lineStr.take(1), margin, currentY, paint)
+                    paint.color = android.graphics.Color.BLACK
+                    canvas.drawText(lineStr.drop(1), margin + 12f, currentY, paint)
+                } else if (lineStr.contains(":")) {
+                    val label = lineStr.substringBefore(":") + ":"
+                    val value = lineStr.substringAfter(":")
+                    paint.isFakeBoldText = true
+                    paint.color = android.graphics.Color.rgb(126, 101, 255) // Electric Violet label
+                    canvas.drawText(label, margin, currentY, paint)
+                    
+                    paint.isFakeBoldText = false
+                    paint.color = android.graphics.Color.BLACK
+                    val offset = paint.measureText(label) + 4f
+                    canvas.drawText(value, margin + offset, currentY, paint)
+                } else {
+                    canvas.drawText(lineStr, margin, currentY, paint)
+                }
+                
                 currentY += 16f
                 line.setLength(0)
                 line.append(word)
             }
         }
         if (line.isNotEmpty()) {
-            if (currentY > 790) {
+            if (currentY > 775f) {
                 pdfDocument.finishPage(page)
-                page = pdfDocument.startPage(android.graphics.pdf.PdfDocument.PageInfo.Builder(595, 842, pdfDocument.pages.size + 1).create())
+                pageNum++
+                page = pdfDocument.startPage(android.graphics.pdf.PdfDocument.PageInfo.Builder(595, 842, pageNum).create())
                 canvas = page.canvas
-                currentY = 50f
+                drawPageDecorations(canvas, pageNum, paint, timestamp)
+                currentY = 85f
             }
-            canvas.drawText(line.toString(), margin, currentY, paint)
+            
+            val lineStr = line.toString()
+            if (lineStr.contains(":")) {
+                val label = lineStr.substringBefore(":") + ":"
+                val value = lineStr.substringAfter(":")
+                paint.isFakeBoldText = true
+                paint.color = android.graphics.Color.rgb(126, 101, 255) // Electric Violet label
+                canvas.drawText(label, margin, currentY, paint)
+                
+                paint.isFakeBoldText = false
+                paint.color = android.graphics.Color.BLACK
+                val offset = paint.measureText(label) + 4f
+                canvas.drawText(value, margin + offset, currentY, paint)
+            } else {
+                canvas.drawText(lineStr, margin, currentY, paint)
+            }
             currentY += 18f
         }
     }

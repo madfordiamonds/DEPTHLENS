@@ -90,13 +90,12 @@ fun IntelligenceOSVisualizer(
         chips.toList()
     }
 
-    androidx.compose.foundation.text.selection.SelectionContainer {
-        Column(
-            modifier = modifier
-                .fillMaxWidth()
-                .padding(vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
             // 1. EXECUTIVE SUMMARY CARD (Always visible summary brief)
             ExecutiveSummaryCard(
                 summaryText = parsed.executiveSummary?.ifBlank { null } ?: calculatedData.executiveSummary
@@ -499,7 +498,6 @@ fun IntelligenceOSVisualizer(
                 }
             }
         }
-    }
 }
 
 // ────────────────────────────────────────────────────────────────────────
@@ -767,11 +765,60 @@ fun RealityLayerActivationPanel(
 // ────────────────────────────────────────────────────────────────────────
 // DEEP SYNTHESIS PANEL Composable
 // ────────────────────────────────────────────────────────────────────────
+data class PerspectiveInsight(val title: String, val content: String)
+
 @Composable
 fun DeepSynthesisPanel(
     synthesisText: String,
     modifier: Modifier = Modifier
 ) {
+    val parsedPerspectives = remember(synthesisText) {
+        val headers = listOf(
+            "PRACTICAL PERSPECTIVE",
+            "STRATEGIC PERSPECTIVE",
+            "PSYCHOLOGICAL PERSPECTIVE",
+            "BUSINESS PERSPECTIVE",
+            "PHILOSOPHICAL PERSPECTIVE",
+            "LONG-TERM PERSPECTIVE",
+            "CONTRARIAN PERSPECTIVE",
+            "META PERSPECTIVE",
+            "INTEGRATED SYNTHESIS",
+            "INTRODUCTION"
+        )
+        
+        val result = mutableListOf<PerspectiveInsight>()
+        var currentTitle: String? = null
+        val currentContent = StringBuilder()
+        
+        val lines = synthesisText.split("\n")
+        for (line in lines) {
+            val trimmedLine = line.trim()
+            val foundHeader = headers.firstOrNull { trimmedLine.startsWith(it, ignoreCase = true) }
+            if (foundHeader != null) {
+                if (currentTitle != null && currentContent.isNotEmpty()) {
+                    result.add(PerspectiveInsight(currentTitle, currentContent.toString().trim()))
+                    currentContent.setLength(0)
+                }
+                currentTitle = foundHeader
+                val rest = trimmedLine.removePrefix(foundHeader).trim().removePrefix(":").trim()
+                if (rest.isNotEmpty()) {
+                    currentContent.append(rest).append("\n")
+                }
+            } else {
+                if (currentTitle != null) {
+                    currentContent.append(line).append("\n")
+                } else if (trimmedLine.isNotEmpty()) {
+                    currentTitle = "INTRODUCTION"
+                    currentContent.append(line).append("\n")
+                }
+            }
+        }
+        if (currentTitle != null && currentContent.isNotEmpty()) {
+            result.add(PerspectiveInsight(currentTitle, currentContent.toString().trim()))
+        }
+        result.filter { it.content.isNotEmpty() }
+    }
+
     Card(
         modifier = modifier
             .fillMaxWidth()
@@ -788,12 +835,13 @@ fun DeepSynthesisPanel(
         border = BorderStroke(1.5.dp, ElectricViolet.copy(alpha = 0.55f))
     ) {
         Column(
-            modifier = Modifier.padding(18.dp)
+            modifier = Modifier.padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.padding(bottom = 12.dp)
+                modifier = Modifier.padding(bottom = 4.dp)
             ) {
                 Box(
                     modifier = Modifier
@@ -809,20 +857,178 @@ fun DeepSynthesisPanel(
                     )
                 }
                 Text(
-                    text = "DEEP SYNTHESIS",
+                    text = "DEEP MULTI-PERSPECTIVE SYNTHESIS",
                     fontFamily = DMMonoFontFamily,
-                    fontSize = 12.sp,
+                    fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
                     color = ElectricViolet,
                     letterSpacing = 1.5.sp
                 )
             }
+
+            if (parsedPerspectives.isEmpty()) {
+                Text(
+                    text = synthesisText,
+                    fontSize = 15.sp,
+                    fontFamily = InstrumentSansFontFamily,
+                    color = TextPrimaryColor,
+                    lineHeight = 22.sp,
+                    fontWeight = FontWeight.Medium
+                )
+            } else {
+                parsedPerspectives.forEach { p ->
+                    val (accentColor, titleText) = when (p.title.uppercase()) {
+                        "INTRODUCTION" -> Pair(TextSecondaryColor, "CONTEXT BRIEF")
+                        "PRACTICAL PERSPECTIVE" -> Pair(Color(0xFF00D4FF), "PRACTICAL GROUNDING")
+                        "STRATEGIC PERSPECTIVE" -> Pair(Color(0xFF7E65FF), "STRATEGIC LEVERAGE")
+                        "PSYCHOLOGICAL PERSPECTIVE" -> Pair(Color(0xFFFF5E8A), "PSYCHOLOGICAL MOTIVES")
+                        "BUSINESS PERSPECTIVE" -> Pair(Color(0xFFFFAA40), "ECONOMIC STRUCTURE")
+                        "PHILOSOPHICAL PERSPECTIVE" -> Pair(Color(0xFFA855F7), "PHILOSOPHICAL MEANING")
+                        "LONG-TERM PERSPECTIVE" -> Pair(Color(0xFF60A5FA), "LONG-TERM TRAJECTORY")
+                        "CONTRARIAN PERSPECTIVE" -> Pair(Color(0xFFFF3366), "CONTRARIAN SHIFT")
+                        "META PERSPECTIVE" -> Pair(Color(0xFF2EE8A0), "META REPEATING FRACTAL")
+                        "INTEGRATED SYNTHESIS" -> Pair(ElectricViolet, "INTEGRATED COGNITIVE SYNTHESIS")
+                        else -> Pair(PremiumCyan, p.title)
+                    }
+
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(RichNavy.copy(alpha = 0.4f), RoundedCornerShape(8.dp))
+                            .border(BorderStroke(1.dp, accentColor.copy(alpha = 0.25f)), RoundedCornerShape(8.dp))
+                            .padding(12.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            modifier = Modifier.padding(bottom = 6.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(6.dp)
+                                    .background(accentColor, CircleShape)
+                            )
+                            Text(
+                                text = titleText,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = accentColor,
+                                letterSpacing = 1.sp,
+                                fontFamily = DMMonoFontFamily
+                            )
+                        }
+                        Text(
+                            text = p.content,
+                            fontSize = 13.5.sp,
+                            fontFamily = InstrumentSansFontFamily,
+                            color = TextPrimaryColor,
+                            lineHeight = 20.sp,
+                            fontWeight = FontWeight.Normal
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ────────────────────────────────────────────────────────────────────────
+// SUMMARY OF INQUIRY Composable (short / medium Summary relating to users question)
+// ────────────────────────────────────────────────────────────────────────
+@Composable
+fun SummaryOfInquiryPanel(
+    userQuery: String,
+    introduction: String,
+    modifier: Modifier = Modifier
+) {
+    val cleanQuery = remember(userQuery) {
+        val trimmed = userQuery.trim()
+        if (trimmed.isBlank()) {
+            "Initial diagnostic scan and telemetry calibration request."
+        } else if (trimmed.length > 120) {
+            trimmed.take(117) + "..."
+        } else {
+            trimmed
+        }
+    }
+
+    val cleanSummaryText = remember(introduction, userQuery) {
+        val cleanIntro = introduction.trim()
+        val sentences = cleanIntro.split(Regex("(?<=[.!?])\\s+"))
+        val summaryCandidate = sentences.take(2).joinToString(" ").trim()
+        if (summaryCandidate.length in 20..220) {
+            summaryCandidate
+        } else if (cleanIntro.length > 10) {
+            if (cleanIntro.length > 200) {
+                cleanIntro.take(197) + "..."
+            } else {
+                cleanIntro
+            }
+        } else {
+            "Strategic analysis of the defined context, evaluating core drivers, behavioral patterns, and leverage vectors."
+        }
+    }
+
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .drawBehind {
+                drawRoundRect(
+                    color = PremiumCyan.copy(alpha = 0.25f),
+                    size = size,
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(16.dp.toPx(), 16.dp.toPx()),
+                    style = Stroke(width = 2.dp.toPx())
+                )
+            },
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = Surface3),
+        border = BorderStroke(1.5.dp, PremiumCyan.copy(alpha = 0.55f))
+    ) {
+        Column(
+            modifier = Modifier.padding(18.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.padding(bottom = 12.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(16.dp)
+                        .background(PremiumCyan.copy(alpha = 0.2f), CircleShape)
+                        .border(1.dp, PremiumCyan, CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(6.dp)
+                            .background(PremiumCyan, CircleShape)
+                    )
+                }
+                Text(
+                    text = "SUMMARY OF INQUIRY",
+                    fontFamily = DMMonoFontFamily,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = PremiumCyan,
+                    letterSpacing = 1.5.sp
+                )
+            }
             Text(
-                text = synthesisText,
-                fontSize = 15.sp,
+                text = "“$cleanQuery”",
+                fontSize = 13.sp,
+                fontFamily = DMMonoFontFamily,
+                color = TextSecondaryColor,
+                lineHeight = 18.sp,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+            Text(
+                text = cleanSummaryText,
+                fontSize = 14.sp,
                 fontFamily = InstrumentSansFontFamily,
                 color = TextPrimaryColor,
-                lineHeight = 22.sp,
+                lineHeight = 20.sp,
                 fontWeight = FontWeight.Medium
             )
         }

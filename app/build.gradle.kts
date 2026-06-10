@@ -133,12 +133,112 @@ secrets {
   defaultPropertiesFileName = ".env.example"
 }
 
+tasks.register("generateFirebaseConfigs") {
+    val rootEnvFile = rootProject.file(".env")
+    val targetJsonFile = file("google-services.json")
+
+    doFirst {
+        var envApiKey = ""
+        var envProjectId = ""
+        var envAppId = ""
+        
+        if (rootEnvFile.exists()) {
+            val lines = rootEnvFile.readLines()
+            for (line in lines) {
+                val trimmed = line.trim()
+                if (trimmed.startsWith("FIREBASE_API_KEY=")) {
+                    envApiKey = trimmed.substringAfter("FIREBASE_API_KEY=").trim().removeSurrounding("\"").removeSurrounding("'")
+                }
+                if (trimmed.startsWith("FIREBASE_PROJECT_ID=")) {
+                    envProjectId = trimmed.substringAfter("FIREBASE_PROJECT_ID=").trim().removeSurrounding("\"").removeSurrounding("'")
+                }
+                if (trimmed.startsWith("FIREBASE_APP_ID=")) {
+                    envAppId = trimmed.substringAfter("FIREBASE_APP_ID=").trim().removeSurrounding("\"").removeSurrounding("'")
+                }
+            }
+        }
+        
+        if (envApiKey.isEmpty()) envApiKey = System.getenv("FIREBASE_API_KEY") ?: ""
+        if (envProjectId.isEmpty()) envProjectId = System.getenv("FIREBASE_PROJECT_ID") ?: ""
+        if (envAppId.isEmpty()) envAppId = System.getenv("FIREBASE_APP_ID") ?: ""
+
+        val targetFile = targetJsonFile
+        var shouldOverwrite = !targetFile.exists()
+
+        if (targetFile.exists()) {
+            val content = targetFile.readText()
+            if (content.contains("AIzaSyMockKeyForCompilationOnly123456") || content.contains("PLACEHOLDER_FIREBASE_API_KEY") || content.trim().isEmpty()) {
+                if (envApiKey.isNotEmpty()) {
+                    shouldOverwrite = true
+                }
+            }
+        }
+
+        if (shouldOverwrite) {
+            val finalApiKey = if (envApiKey.isNotEmpty()) envApiKey else "PLACEHOLDER_FIREBASE_API_KEY"
+            val finalProjectId = if (envProjectId.isNotEmpty()) envProjectId else "com-aistudio-depthlens-uqmzkx"
+            val finalAppId = if (envAppId.isNotEmpty()) envAppId else "1:123456789012:android:abcdef1234567890"
+
+            println("generateFirebaseConfigs: finalApiKey length = ${finalApiKey.length}, starts with = ${if (finalApiKey.length > 5) finalApiKey.substring(0, 5) else "N/A"}")
+            println("generateFirebaseConfigs: finalProjectId = $finalProjectId")
+            println("generateFirebaseConfigs: finalAppId = $finalAppId")
+
+            val jsonTemplate = """
+            {
+              "project_info": {
+                "project_number": "123456789012",
+                "project_id": "$finalProjectId",
+                "storage_bucket": "$finalProjectId.appspot.com"
+              },
+              "client": [
+                {
+                  "client_info": {
+                    "mobilesdk_app_id": "$finalAppId",
+                    "android_client_info": {
+                      "package_name": "com.aistudio.depthlens.uqmzkx"
+                    }
+                  },
+                  "oauth_client": [
+                    {
+                      "client_id": "123456789012-abcdefghijklmnopqrstuvwxyz.apps.googleusercontent.com",
+                      "client_type": 3
+                    }
+                  ],
+                  "api_key": [
+                    {
+                      "current_key": "$finalApiKey"
+                    }
+                  ],
+                  "services": {
+                    "appinvite_service": {
+                      "other_platform_oauth_client": []
+                    }
+                  }
+                }
+              ],
+              "configuration_version": "1"
+            }
+            """.trimIndent()
+            targetFile.writeText(jsonTemplate)
+            println("Dynamically resolved /app/google-services.json contents")
+        }
+    }
+}
+
+// Ensure processGoogleServices depends on generateFirebaseConfigs
+tasks.matching { it.name.contains("GoogleServices") }.configureEach {
+    dependsOn("generateFirebaseConfigs")
+}
+
 // Some unused dependencies are commented out below instead of being removed.
 // This makes it easy to add them back in the future if needed.
 dependencies {
   implementation(platform(libs.androidx.compose.bom))
   implementation(platform(libs.firebase.bom))
   implementation("com.google.firebase:firebase-analytics")
+  implementation("com.google.firebase:firebase-auth")
+  implementation("com.google.firebase:firebase-firestore")
+  implementation("com.google.android.gms:play-services-auth:21.2.0")
   // implementation(libs.accompanist.permissions)
   implementation(libs.androidx.activity.compose)
   // implementation(libs.androidx.camera.camera2)

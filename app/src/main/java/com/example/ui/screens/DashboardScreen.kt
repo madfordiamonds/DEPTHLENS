@@ -54,6 +54,7 @@ import com.example.ui.theme.*
 import com.example.ui.components.ThreeDotThinkingIndicator
 import com.example.ui.components.IntelligenceOSVisualizer
 import com.example.ui.components.DeepSynthesisPanel
+import com.example.ui.components.SummaryOfInquiryPanel
 import com.example.ui.viewmodel.IntelligenceViewModel
 import kotlinx.coroutines.launch
 import java.util.Calendar
@@ -1477,6 +1478,14 @@ fun DashboardScreen(
         )
     }
 
+    if (!isLoggedIn && !isGuest) {
+        LoginScreen(
+            viewModel = viewModel,
+            modifier = Modifier.fillMaxSize()
+        )
+        return
+    }
+
     // Beautiful Premium Sidebar Redesign completely disabled for Bottom Nav ONLY
     ModalNavigationDrawer(
         drawerState = drawerState,
@@ -2095,14 +2104,13 @@ fun DashboardScreen(
                             )
                         } else {
                             // Comfortably padded scrolling Chat Feed
-                            androidx.compose.foundation.text.selection.SelectionContainer {
-                                LazyColumn(
-                                    state = listState,
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentPadding = PaddingValues(16.dp, 12.dp, 16.dp, 90.dp),
-                                    verticalArrangement = Arrangement.spacedBy(16.dp)
-                                ) {
-                                    items(activeMessages) { message ->
+                            LazyColumn(
+                                state = listState,
+                                modifier = Modifier.fillMaxSize(),
+                                contentPadding = PaddingValues(16.dp, 12.dp, 16.dp, 90.dp),
+                                verticalArrangement = Arrangement.spacedBy(16.dp)
+                            ) {
+                                items(activeMessages, key = { it.id }) { message ->
                                         if (message.role == "user") {
                                             UserMessageBubble(message)
                                         } else {
@@ -2145,8 +2153,14 @@ fun DashboardScreen(
                                                         modifier = Modifier.fillMaxWidth()
                                                     ) {
                                                         Column(modifier = Modifier.padding(12.dp)) {
+                                                            val associatedUserQuery = remember(message.id, activeMessages) {
+                                                                activeMessages
+                                                                    .subList(0, activeMessages.indexOfFirst { it.id == message.id }.coerceAtLeast(0))
+                                                                    .findLast { it.role == "user" }?.text ?: ""
+                                                            }
                                                             DepthLensDiagnosticCard(
                                                                 parsed = parsed,
+                                                                userQuery = associatedUserQuery,
                                                                 onPromptSelected = { query -> viewModel.sendQuery(query) },
                                                                 messageId = message.id,
                                                                 onRegenerate = { viewModel.regenerateLastAnalysis(message.id) }
@@ -2160,7 +2174,6 @@ fun DashboardScreen(
                                 }
                             }
                         }
-                    }
 
                     // Dynamic non-blocking Inline Loading State
                     if (isLoading && activeMessages.isNotEmpty()) {
@@ -2641,14 +2654,16 @@ fun UserMessageBubble(
                     border = BorderStroke(1.dp, Color(0x667E65FF)),
                     modifier = Modifier.padding(bottom = 2.dp)
                 ) {
-                    Text(
-                        text = message.text,
-                        fontSize = 11.5.sp,
-                        color = Color(0xFFF0EEFF),
-                        fontFamily = InstrumentSansFontFamily,
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
-                        lineHeight = 16.sp
-                    )
+                    androidx.compose.foundation.text.selection.SelectionContainer {
+                        Text(
+                            text = message.text,
+                            fontSize = 11.5.sp,
+                            color = Color(0xFFF0EEFF),
+                            fontFamily = InstrumentSansFontFamily,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
+                            lineHeight = 16.sp
+                        )
+                    }
                 }
 
                 Text(
@@ -2671,7 +2686,8 @@ fun DepthLensDiagnosticCard(
     onPromptSelected: (String) -> Unit,
     messageId: String,
     onRegenerate: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    userQuery: String = ""
 ) {
     if (parsed.isFollowUp) {
         Column(
@@ -2679,13 +2695,15 @@ fun DepthLensDiagnosticCard(
                 .fillMaxWidth()
                 .padding(bottom = 12.dp)
         ) {
-            Text(
-                text = parsed.introduction,
-                fontSize = 13.sp,
-                color = TextPrimaryColor,
-                lineHeight = 20.sp,
-                modifier = Modifier.padding(bottom = 12.dp)
-            )
+            androidx.compose.foundation.text.selection.SelectionContainer {
+                Text(
+                    text = parsed.introduction,
+                    fontSize = 13.sp,
+                    color = TextPrimaryColor,
+                    lineHeight = 20.sp,
+                    modifier = Modifier.padding(bottom = 12.dp)
+                )
+            }
         }
         return
     }
@@ -2728,14 +2746,22 @@ fun DepthLensDiagnosticCard(
 
         // Conversation overview context
         if (cleanIntroDisplay.isNotEmpty()) {
-            Text(
-                text = cleanIntroDisplay,
-                fontSize = 13.sp,
-                color = TextPrimaryColor,
-                lineHeight = 20.sp,
-                modifier = Modifier.padding(bottom = 12.dp)
-            )
+            androidx.compose.foundation.text.selection.SelectionContainer {
+                Text(
+                    text = cleanIntroDisplay,
+                    fontSize = 13.sp,
+                    color = TextPrimaryColor,
+                    lineHeight = 20.sp,
+                    modifier = Modifier.padding(bottom = 12.dp)
+                )
+            }
         }
+
+        SummaryOfInquiryPanel(
+            userQuery = userQuery,
+            introduction = parsed.introduction,
+            modifier = Modifier.padding(bottom = 16.dp)
+        )
 
         if (!parsed.deepSynthesis.isNullOrBlank()) {
             DeepSynthesisPanel(
@@ -3667,7 +3693,7 @@ fun BottomInputPanel(
     modifier: Modifier = Modifier
 ) {
     var rawText by remember { mutableStateOf("") }
-    val modes = listOf("Root Cause", "Psychology", "Systems", "Probability", "Multi-Layer")
+    val modes = listOf("Root Cause", "Deep Synthesis", "Psychology", "Systems", "Probability", "Multi-Layer")
     var selectedMode by remember { mutableStateOf("Root Cause") }
 
     var isListeningForSpeech by remember { mutableStateOf(false) }
@@ -5059,15 +5085,38 @@ fun InlineLoadingIndicator() {
 fun ParsedResponse.toShareableText(): String {
     val builder = java.lang.StringBuilder()
     builder.append("=== DEPTHLENS STRATEGIC RECONSTRUCTION REPORT ===\n\n")
-    if (introduction.isNotBlank()) {
+    
+    // Custom robust sanitizer helper
+    fun sanitize(input: String): String {
+        var text = input.trim()
+        text = text.replace(Regex("""<questions>[\s\S]*?</questions>""", RegexOption.IGNORE_CASE), "")
+        text = text.replace(Regex("""<exploration>[\s\S]*?</exploration>""", RegexOption.IGNORE_CASE), "")
+        text = text.replace(Regex("""<memory_insight>[\s\S]*?</memory_insight>""", RegexOption.IGNORE_CASE), "")
+        text = text.replace(Regex("""System Instructions[\s\S]*?(?=\n\n|\z)""", RegexOption.IGNORE_CASE), "")
+        text = text.replace(Regex("""SYSTEM_PROMPT[\s\S]*?(?=\n\n|\z)""", RegexOption.IGNORE_CASE), "")
+        text = text.replace(Regex("""Developer Config[\s\S]*?(?=\n\n|\z)""", RegexOption.IGNORE_CASE), "")
+        text = text.replace(Regex("""<[^>]+>"""), "")
+        text = text.replace(Regex("""applicationId\s*=[\s\S]*?(?=\n|\z)""", RegexOption.IGNORE_CASE), "")
+        text = text.replace(Regex("""BuildConfig[\s\S]*?(?=\n|\z)""", RegexOption.IGNORE_CASE), "")
+        return text.trim()
+    }
+
+    val cleanIntro = sanitize(introduction)
+    if (cleanIntro.isNotBlank()) {
         builder.append("INTRODUCTION\n")
-        builder.append(introduction).append("\n\n")
+        builder.append(cleanIntro).append("\n\n")
     }
     
-    val summary = executiveSummary
+    val summary = executiveSummary?.let { sanitize(it) }
     if (!summary.isNullOrBlank()) {
         builder.append("EXECUTIVE SUMMARY\n")
         builder.append(summary).append("\n\n")
+    }
+
+    val ds = deepSynthesis?.let { sanitize(it) }
+    if (!ds.isNullOrBlank()) {
+        builder.append("DEEP SYNTHESIS (INTEGRATED VISIONS)\n")
+        builder.append(ds).append("\n\n")
     }
     
 
@@ -5075,14 +5124,14 @@ fun ParsedResponse.toShareableText(): String {
     val rcr = rootCauseReport
     if (rcr != null) {
         builder.append("ROOT CAUSE REPORT (THE 'WHY')\n")
-        builder.append("Symptom: ").append(rcr.symptom).append("\n")
-        builder.append("Immediate Cause: ").append(rcr.immediateCause).append("\n")
-        builder.append("Underlying Cause: ").append(rcr.underlyingCause).append("\n")
-        builder.append("Deeper Cause: ").append(rcr.deeperCause).append("\n")
-        builder.append("Root Cause Estimate: ").append(rcr.rootCauseEstimate).append("\n")
-        builder.append("Supporting Evidence: ").append(rcr.supportingEvidence).append("\n")
+        builder.append("Surface Cause: ").append(sanitize(rcr.symptom)).append("\n")
+        builder.append("Immediate Cause: ").append(sanitize(rcr.immediateCause)).append("\n")
+        builder.append("Underlying Cause: ").append(sanitize(rcr.underlyingCause)).append("\n")
+        builder.append("Deeper Cause: ").append(sanitize(rcr.deeperCause)).append("\n")
+        builder.append("Root Cause Conclusion: ").append(sanitize(rcr.rootCauseEstimate)).append("\n")
+        builder.append("Supporting Evidence: ").append(sanitize(rcr.supportingEvidence)).append("\n")
         if (rcr.alternativeExplanation.isNotBlank()) {
-            builder.append("Alternative Explanation: ").append(rcr.alternativeExplanation).append("\n")
+            builder.append("Alternative Explanation: ").append(sanitize(rcr.alternativeExplanation)).append("\n")
         }
         builder.append("\n")
     }
@@ -5090,13 +5139,13 @@ fun ParsedResponse.toShareableText(): String {
     val hd = humanDrivers
     if (hd != null) {
         builder.append("HUMAN DRIVERS (PSYCHOMOTIVE ANATOMY)\n")
-        builder.append("Surface Intention: ").append(hd.surfaceIntention).append("\n")
-        builder.append("Emotional Driver: ").append(hd.emotionalDriver).append("\n")
-        builder.append("Core Need: ").append(hd.needDriver).append("\n")
-        builder.append("Core Fear: ").append(hd.fearDriver).append("\n")
-        builder.append("Incentives: ").append(hd.incentiveDriver).append("\n")
-        builder.append("Identity Alignment: ").append(hd.identityDriver).append("\n")
-        builder.append("Hidden Motives: ").append(hd.hiddenMotives).append("\n")
+        builder.append("Surface Intention: ").append(sanitize(hd.surfaceIntention)).append("\n")
+        builder.append("Emotional Driver: ").append(sanitize(hd.emotionalDriver)).append("\n")
+        builder.append("Core Need: ").append(sanitize(hd.needDriver)).append("\n")
+        builder.append("Core Fear: ").append(sanitize(hd.fearDriver)).append("\n")
+        builder.append("Incentives: ").append(sanitize(hd.incentiveDriver)).append("\n")
+        builder.append("Identity Alignment: ").append(sanitize(hd.identityDriver)).append("\n")
+        builder.append("Hidden Motives: ").append(sanitize(hd.hiddenMotives)).append("\n")
         builder.append("\n")
     }
     
@@ -5104,11 +5153,11 @@ fun ParsedResponse.toShareableText(): String {
         builder.append("FUTURE SCENARIOS & PROBABILITIES\n")
         futureScenarios.forEach { scenario ->
             builder.append("- ").append(scenario.codeName.uppercase()).append(" - ").append(scenario.displayName).append(" (Prob: ").append(scenario.probability).append("%)\n")
-            builder.append("  Outcome: ").append(scenario.impactText).append("\n")
+            builder.append("  Outcome: ").append(sanitize(scenario.impactText)).append("\n")
             if (scenario.earlyWarningSigns.isNotEmpty()) {
                 builder.append("  Early Warning Signs:\n")
                 scenario.earlyWarningSigns.forEach { sign ->
-                    builder.append("    * ").append(sign).append("\n")
+                    builder.append("    * ").append(sanitize(sign)).append("\n")
                 }
             }
         }
@@ -5117,7 +5166,7 @@ fun ParsedResponse.toShareableText(): String {
     
     val conf = confidence
     if (!conf.isNullOrBlank()) {
-        builder.append("Confidence Level: ").append(conf).append("\n")
+        builder.append("Confidence Level: ").append(sanitize(conf)).append("\n")
     }
     builder.append("=================================================")
     return builder.toString()
@@ -5273,28 +5322,54 @@ private fun generatePdfReport(titleText: String, textContent: String): ByteArray
     var canvas = page.canvas
     val paint = android.graphics.Paint()
     
-    // Draw Elegant Header Title
-    paint.textSize = 20f
-    paint.isFakeBoldText = true
-    paint.color = android.graphics.Color.rgb(124, 58, 237) // Modern violet #7C3AED
-    canvas.drawText("DEPTHLENS REPORT", 40f, 55f, paint)
+    val timestamp = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.getDefault()).format(java.util.Date())
     
-    // Draw details metadata
-    paint.textSize = 10f
-    paint.isFakeBoldText = false
-    paint.color = android.graphics.Color.GRAY
-    val timestamp = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())
-    canvas.drawText("Generated: $timestamp | Version v4.1.6", 40f, 75f, paint)
-    
-    // Divider
-    paint.strokeWidth = 1.2f
-    paint.color = android.graphics.Color.LTGRAY
-    canvas.drawLine(40f, 90f, 555f, 90f, paint)
+    fun drawPageDecorations(canvas: android.graphics.Canvas, pageNum: Int, paint: android.graphics.Paint, timestamp: String) {
+        // Draw elegant high-contrast decorative top band in Electric Violet
+        paint.color = android.graphics.Color.rgb(126, 101, 255) // #7E65FF Electric Violet
+        canvas.drawRect(0f, 0f, 595f, 15f, paint)
+        
+        // Draw elegant accent strip in Premium Cyan
+        paint.color = android.graphics.Color.rgb(0, 229, 255) // Premium Cyan
+        canvas.drawRect(0f, 15f, 595f, 18f, paint)
+        
+        // Header Brand Text
+        paint.textSize = 14f
+        paint.isFakeBoldText = true
+        paint.color = android.graphics.Color.rgb(126, 101, 255)
+        canvas.drawText("DEPTHLENS", 40f, 42f, paint)
+        
+        paint.textSize = 7.5f
+        paint.isFakeBoldText = false
+        paint.color = android.graphics.Color.rgb(0, 229, 255)
+        canvas.drawText("INTELLIGENCE ENGINE", 125f, 38f, paint)
+        
+        // Header thin divider
+        paint.color = android.graphics.Color.rgb(220, 225, 235)
+        paint.strokeWidth = 1f
+        canvas.drawLine(40f, 53f, 555f, 53f, paint)
+        
+        // Footer thin divider
+        canvas.drawLine(40f, 795f, 555f, 795f, paint)
+        
+        // Footer details
+        paint.textSize = 8f
+        paint.isFakeBoldText = false
+        paint.color = android.graphics.Color.GRAY
+        canvas.drawText("Generated by DepthLens Intelligence Engine  |  $timestamp", 40f, 812f, paint)
+        
+        // Page Number to the right
+        canvas.drawText("Page $pageNum", 520f, 812f, paint)
+    }
+
+    var pageNum = 1
+    // Draw decorations of the first page
+    drawPageDecorations(canvas, pageNum, paint, timestamp)
     
     // Render text with pages pagination
-    var currentY = 120f
-    val margin = 40f
-    val maxWidth = 515f
+    var currentY = 85f
+    val margin = 45f
+    val maxWidth = 505f
     paint.color = android.graphics.Color.BLACK
     paint.textSize = 10.5f
     
@@ -5305,23 +5380,32 @@ private fun generatePdfReport(titleText: String, textContent: String): ByteArray
             continue
         }
         
-        if (section.startsWith("###") || section.startsWith("##") || section.startsWith("#")) {
+        if (section.startsWith("=== DEPTHLENS") || section.startsWith("===") || section.startsWith("==================")) {
+            // Skips raw separator lines to keep look premium
+            continue
+        }
+        
+        if (section.startsWith("###") || section.startsWith("##") || section.startsWith("#") || 
+            section.equals("INTRODUCTION") || section.equals("EXECUTIVE SUMMARY") || section.equals("DEEP SYNTHESIS (INTEGRATED VISIONS)") || 
+            section.startsWith("ROOT CAUSE REPORT") || section.startsWith("HUMAN DRIVERS") || section.startsWith("FUTURE SCENARIOS")) {
             paint.isFakeBoldText = true
-            paint.textSize = 12f
-            paint.color = android.graphics.Color.rgb(88, 28, 135)
+            paint.textSize = 11.5f
+            paint.color = android.graphics.Color.rgb(88, 28, 135) // Deep purple section header
             val cleanSec = section.replace("#", "").trim()
-            if (currentY > 790) {
+            if (currentY > 775f) {
                 pdfDocument.finishPage(page)
-                page = pdfDocument.startPage(android.graphics.pdf.PdfDocument.PageInfo.Builder(595, 842, pdfDocument.pages.size + 1).create())
+                pageNum++
+                page = pdfDocument.startPage(android.graphics.pdf.PdfDocument.PageInfo.Builder(595, 842, pageNum).create())
                 canvas = page.canvas
-                currentY = 50f
+                drawPageDecorations(canvas, pageNum, paint, timestamp)
+                currentY = 85f
             }
             canvas.drawText(cleanSec, margin, currentY, paint)
             currentY += 22f
             continue
         } else {
             paint.isFakeBoldText = false
-            paint.textSize = 10f
+            paint.textSize = 9.5f
             paint.color = android.graphics.Color.BLACK
         }
         
@@ -5332,26 +5416,67 @@ private fun generatePdfReport(titleText: String, textContent: String): ByteArray
             if (paint.measureText(line.toString() + spaceText) < maxWidth) {
                 line.append(spaceText)
             } else {
-                if (currentY > 790) {
+                if (currentY > 775f) {
                     pdfDocument.finishPage(page)
-                    page = pdfDocument.startPage(android.graphics.pdf.PdfDocument.PageInfo.Builder(595, 842, pdfDocument.pages.size + 1).create())
+                    pageNum++
+                    page = pdfDocument.startPage(android.graphics.pdf.PdfDocument.PageInfo.Builder(595, 842, pageNum).create())
                     canvas = page.canvas
-                    currentY = 50f
+                    drawPageDecorations(canvas, pageNum, paint, timestamp)
+                    currentY = 85f
                 }
-                canvas.drawText(line.toString(), margin, currentY, paint)
+                
+                // If it is a list item or field-label, color the starting tag beautifully
+                val lineStr = line.toString()
+                if (lineStr.trim().startsWith("-") || lineStr.trim().startsWith("*")) {
+                    paint.color = android.graphics.Color.rgb(126, 101, 255)
+                    canvas.drawText(lineStr.take(1), margin, currentY, paint)
+                    paint.color = android.graphics.Color.BLACK
+                    canvas.drawText(lineStr.drop(1), margin + 12f, currentY, paint)
+                } else if (lineStr.contains(":")) {
+                    val label = lineStr.substringBefore(":") + ":"
+                    val value = lineStr.substringAfter(":")
+                    paint.isFakeBoldText = true
+                    paint.color = android.graphics.Color.rgb(126, 101, 255) // Electric Violet label
+                    canvas.drawText(label, margin, currentY, paint)
+                    
+                    paint.isFakeBoldText = false
+                    paint.color = android.graphics.Color.BLACK
+                    val offset = paint.measureText(label) + 4f
+                    canvas.drawText(value, margin + offset, currentY, paint)
+                } else {
+                    canvas.drawText(lineStr, margin, currentY, paint)
+                }
+                
                 currentY += 16f
                 line.setLength(0)
                 line.append(word)
             }
         }
         if (line.isNotEmpty()) {
-            if (currentY > 790) {
+            if (currentY > 775f) {
                 pdfDocument.finishPage(page)
-                page = pdfDocument.startPage(android.graphics.pdf.PdfDocument.PageInfo.Builder(595, 842, pdfDocument.pages.size + 1).create())
+                pageNum++
+                page = pdfDocument.startPage(android.graphics.pdf.PdfDocument.PageInfo.Builder(595, 842, pageNum).create())
                 canvas = page.canvas
-                currentY = 50f
+                drawPageDecorations(canvas, pageNum, paint, timestamp)
+                currentY = 85f
             }
-            canvas.drawText(line.toString(), margin, currentY, paint)
+            
+            val lineStr = line.toString()
+            if (lineStr.contains(":")) {
+                val label = lineStr.substringBefore(":") + ":"
+                val value = lineStr.substringAfter(":")
+                paint.isFakeBoldText = true
+                paint.color = android.graphics.Color.rgb(126, 101, 255) // Electric Violet label
+                canvas.drawText(label, margin, currentY, paint)
+                
+                paint.isFakeBoldText = false
+                paint.color = android.graphics.Color.BLACK
+                val offset = paint.measureText(label) + 4f
+                canvas.drawText(value, margin + offset, currentY, paint)
+            } else {
+                canvas.drawText(lineStr, margin, currentY, paint)
+            }
             currentY += 18f
         }
     }

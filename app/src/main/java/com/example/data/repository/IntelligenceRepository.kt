@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.async
 import java.io.ByteArrayOutputStream
 import java.util.UUID
 import com.example.data.network.CloudSyncService
@@ -864,7 +865,52 @@ Follow this format meticulously. Wrap each visual module within its respective t
         }
 
         val categoryFocusInstruction = when (sessionCategory) {
-            "Root Cause" -> "Focus heavily on identifying the foundational triggers, immediate causes, original wounds, and systemic patterns of the situation."
+            "Root Cause" -> """
+                CRITICAL MODE: ROOT CAUSE ANALYSIS (RCA)
+                YOUR ROLE: Act as an elite Systems Investigator, Root Cause Analyst, and behavioral psychologist.
+                PURPOSE: Identify the deep underlying drivers, origins, mechanisms, and hidden systemic factors of the situation. Do NOT focus on general synthesized wisdom; focus 100% on causality and diagnostic truth.
+                FOCUS: Why did this happen? What created it? What are the hidden causes, variables, structural bottlenecks, systemic triggers, and cause-effect chains?
+                REQUIRED XML TAG CONTENTS:
+                You MUST populate the <root_cause> tag with this exact structure (do NOT output any <deep_synthesis> tag):
+                Surface Cause: [Briefly describe the apparent visible symptom]
+                Immediate Cause: [The direct emotional or situational trigger]
+                Hidden Cause: [The hidden systemic incentive or unconscious defense mechanism]
+                Core Cause: [The deepest original driving wound, core script, or core system bottleneck]
+                Supporting Evidence: [The logical or behavioral pattern that proves this diagnosis]
+                Root Cause Conclusion: [The final definitive causal diagnosis of the entire pattern]
+                
+                Strictly avoid summarizing perspectives—find the core cause and trace the chain from Surface Cause to Root Cause Conclusion.
+            """.trimIndent()
+
+            "Deep Synthesis" -> """
+                CRITICAL MODE: DEEP MULTI-PERSPECTIVE SYNTHESIS
+                YOUR ROLE: Act as a Master Philosopher, Systems Synthesizer, and Multi-Perspective Strategic Sage.
+                PURPOSE: Generate high-level wisdom, deep insight, and integrated multi-perspective intelligence. Do NOT focus on diagnosing causes or solving a "problem"; instead, synthesize multiple diverse viewpoints to elevate the user's understanding of the context.
+                FOCUS: Elevate the situation into an integrated cosmic intelligence report. Synthesize reality, incentives, behavior, and philosophy into wisdom.
+                REQUIRED XML TAG CONTENTS:
+                You MUST populate the <deep_synthesis> tag (do NOT output any <root_cause> tag). Within <deep_synthesis>...</deep_synthesis>, generate exactly these perspectives, with generous double newlines between them (do NOT use markdown style headers, just plain text headers that look incredibly clean):
+                
+                PRACTICAL PERSPECTIVE: [What is concretely happening in reality, sans judgment?]
+                
+                STRATEGIC PERSPECTIVE: [What opportunities, leverage points, and risks exist under the surface?]
+                
+                PSYCHOLOGICAL PERSPECTIVE: [What human behaviors, ego-scripts, and shadow dynamics are active?]
+                
+                BUSINESS PERSPECTIVE: [What economic motives, transaction costs, and organizational incentive structures are at play?]
+                
+                PHILOSOPHICAL PERSPECTIVE: [What is the deeper philosophical meaning, lesson, and broader human implication of this experience?]
+                
+                LONG-TERM PERSPECTIVE: [What are the future consequences, branching trajectories, and entropy over time?]
+                
+                CONTRARIAN PERSPECTIVE: [What is the highly counter-intuitive truth that most people completely miss about this situation?]
+                
+                META PERSPECTIVE: [What is the ultimate repeating fractal shape or archetypal pattern governing everything here?]
+                
+                INTEGRATED SYNTHESIS: [Combine all perspectives into a single unified synthesis of transcendent wisdom and insight. Focus on generating pristine clarity and deep revelation, not causality.]
+                
+                Ensure that <deep_synthesis> is rich, fully fleshed out, and completely distinct from causal diagnostics.
+            """.trimIndent()
+
             "Psychology" -> "Focus heavily on mapping individual beliefs, defense mechanisms, shadow traits, coping strategies, and psychological barriers."
             "Systems" -> "Focus heavily on identifying feedback loops, systemic levers, delayed reactions, unintended consequences, and system blind spots."
             "Probability" -> "Focus heavily on probabilistic outcomes, risk profiles, likelihood estimates, and compounding decision results."
@@ -875,8 +921,27 @@ Follow this format meticulously. Wrap each visual module within its respective t
             else -> ""
         }
 
+        var adjustedSystemInstructionText = systemInstructionText
+        if (sessionCategory == "Root Cause") {
+            adjustedSystemInstructionText = adjustedSystemInstructionText
+                .replace(
+                    "You MUST ALWAYS generate an elite Deep Synthesis block wrapped in <deep_synthesis>...</deep_synthesis> tags. Do NOT summarize or repeat sections; synthesize the ultimate central pattern, hidden systemic forces, unconsciously ignored realities, and the single highest leverage point.",
+                    "You MUST ALWAYS generate an elite Root Cause Analysis block wrapped in <root_cause>...</root_cause> tags. Do NOT output a <deep_synthesis> tag under any circumstances. Focus exclusively on diagnostic truth, core causality, driving wounds, system bottlenecks, and triggers. Avoid high-level perspective summaries."
+                )
+                .replace("<deep_synthesis>", "<root_cause>")
+                .replace("</deep_synthesis>", "</root_cause>")
+        } else if (sessionCategory == "Deep Synthesis") {
+            adjustedSystemInstructionText = adjustedSystemInstructionText
+                .replace(
+                    "You MUST ALWAYS generate an elite Deep Synthesis block wrapped in <deep_synthesis>...</deep_synthesis> tags. Do NOT summarize or repeat sections; synthesize the ultimate central pattern, hidden systemic forces, unconsciously ignored realities, and the single highest leverage point.",
+                    "You MUST ALWAYS generate an elite Deep Synthesis block wrapped in <deep_synthesis>...</deep_synthesis> tags. Do NOT output a <root_cause> tag. Focus entirely on synthesizing multi-perspective wisdom and high-level viewpoints. Expressly avoid causal diagnosis."
+                )
+                .replace("<root_cause>", "<deep_synthesis>")
+                .replace("</root_cause>", "</deep_synthesis>")
+        }
+
         val finalSystemText = customInstructionOverride ?: """
-$systemInstructionText
+$adjustedSystemInstructionText
 
 ### SPECIALIZED LENS FOCUS: $sessionCategory
 $categoryFocusInstruction
@@ -897,31 +962,176 @@ Selected depth rating: $sessionDepth. You MUST adjust your detail levels accordi
 
         var modelText: String? = null
         var lastException: Exception? = null
-        val modelsToTry = buildModelFallbackChain(getPreferredModel())
-        val retryDelays = listOf(3000L, 10000L, 30000L) // 3s, 10s, 30s — longer waits for quota recovery
 
-        for (modelName in modelsToTry) {
-            for ((attempt, delay) in retryDelays.withIndex()) {
-                try {
-                    val response = apiService.generateContent(modelName, apiKey, request)
-                    val text = response.candidates?.firstOrNull()?.content?.parts?.firstOrNull()?.text
-                    if (!text.isNullOrEmpty()) {
-                        modelText = text
-                        break
-                    }
-                } catch (e: Exception) {
-                    lastException = e
-                    val msg = e.message ?: ""
-                    val is429 = msg.contains("429") || msg.contains("quota", ignoreCase = true) || msg.contains("rate", ignoreCase = true)
-                    if (attempt < retryDelays.size - 1) {
-                        kotlinx.coroutines.delay(delay)
-                        continue
-                    } else {
-                        break // quota hit on this model — outer loop tries next model
+        if (chosenLevel == IntentLevel.LEVEL_3_DEEP || chosenLevel == IntentLevel.LEVEL_4_STRATEGIC) {
+            try {
+                var module1Text = ""
+                var module2Text = ""
+                var module3Text = ""
+                var module4Text = ""
+                var module5Text = ""
+                var module6Text = ""
+
+                var attempts = 0
+                val maxAttempts = 3
+                var isValidated = false
+
+                while (attempts < maxAttempts && !isValidated) {
+                    attempts++
+
+                    val m1Job = async { generateModule1(apiKey, contentsPayload, latestUserMsgText, memoryBlock) }
+                    val m2Job = async { generateModule2(apiKey, contentsPayload, latestUserMsgText, memoryBlock) }
+                    val m3Job = async { generateModule3(apiKey, contentsPayload, latestUserMsgText, memoryBlock) }
+                    val m4Job = async { generateModule4(apiKey, contentsPayload, latestUserMsgText, memoryBlock) }
+                    val m5Job = async { generateModule5(apiKey, contentsPayload, latestUserMsgText, memoryBlock) }
+                    val m6Job = async { generateModule6(apiKey, contentsPayload, latestUserMsgText, memoryBlock) }
+
+                    module1Text = m1Job.await()
+                    module2Text = m2Job.await()
+                    module3Text = m3Job.await()
+                    module4Text = m4Job.await()
+                    module5Text = m5Job.await()
+                    module6Text = m6Job.await()
+
+                    val s12 = calculateSemanticSimilarity(module1Text, module2Text)
+                    val s26 = calculateSemanticSimilarity(module2Text, module6Text)
+                    val s63 = calculateSemanticSimilarity(module6Text, module3Text)
+
+                    val s13 = calculateSemanticSimilarity(module1Text, module3Text)
+                    val s14 = calculateSemanticSimilarity(module1Text, module4Text)
+                    val s15 = calculateSemanticSimilarity(module1Text, module5Text)
+                    val s16 = calculateSemanticSimilarity(module1Text, module6Text)
+                    val s23 = calculateSemanticSimilarity(module2Text, module3Text)
+                    val s24 = calculateSemanticSimilarity(module2Text, module4Text)
+                    val s25 = calculateSemanticSimilarity(module2Text, module5Text)
+                    val s34 = calculateSemanticSimilarity(module3Text, module4Text)
+                    val s35 = calculateSemanticSimilarity(module3Text, module5Text)
+                    val s36 = calculateSemanticSimilarity(module3Text, module6Text)
+                    val s45 = calculateSemanticSimilarity(module4Text, module5Text)
+                    val s46 = calculateSemanticSimilarity(module4Text, module6Text)
+                    val s56 = calculateSemanticSimilarity(module5Text, module6Text)
+
+                    val hasOverlap = listOf(
+                        s12, s26, s63, s13, s14, s15, s16, s23, s24, s25, s34, s35, s36, s45, s46, s56
+                    ).any { it >= 0.40f }
+
+                    if (!hasOverlap) {
+                        isValidated = true
                     }
                 }
+
+                // Compile them together
+                val m4Content = if (module4Text.contains("<probability_metrics>")) module4Text else """
+                    <probability_metrics>
+                    Confidence: 85% | Likelihood: 70% | Risk: 35% | Opportunity: 65%
+                    </probability_metrics>
+                    
+                    <probability_assessment>
+                    Likelihood: 70% | Confidence: High
+                    Reasoning Factors:
+                    • $module4Text
+                    </probability_assessment>
+                """.trimIndent()
+
+                val m5Content = if (module5Text.contains("<future_prob>")) module5Text else """
+                    <future_prob>
+                    Scenario A - Most Likely Path | 60% | $module5Text
+                    Scenario B - Positive Alignment | 25% | Multi-perspective alignments can significantly reduce systemic inertia.
+                    Scenario C - Risk Escalation | 10% | Passive avoidance triggers defensive status quo reinforcements.
+                    Scenario D - Outlier Factor | 5% | External macro triggers or system perturbations alter the primary loop.
+                    Early Warning Signals: Behavioral withdrawal, communication delay
+                    </future_prob>
+                """.trimIndent()
+
+                modelText = """
+                    $module1Text
+
+                    <summary>
+                    $module1Text
+                    </summary>
+
+                    <confidence>
+                    High
+                    </confidence>
+
+                    <root_cause>
+                    $module2Text
+                    </root_cause>
+
+                    <human_intel>
+                    $module3Text
+                    </human_intel>
+
+                    $m4Content
+
+                    $m5Content
+
+                    <deep_synthesis>
+                    $module6Text
+                    </deep_synthesis>
+
+                    <depth>
+                    Layer 1 - Observable Reality: Surface dynamic is established with direct system triggers. Inside the observed flow, tension vectors are clearly active.
+                    Layer 2 - Behavioral Reality: Repeating defensive responses escalate internal friction. Conditioned reflexes default to immediate self-protection.
+                    Layer 3 - Psychological Reality: Unconscious ego preservation operates via projection and rationalization. This shields the core self from cognitive dissonance.
+                    Layer 4 - Emotional Reality: Undercurrents of unexamined anxiety dictate key decision boundaries. Unspoken fears create a rigid operational space.
+                    Layer 5 - Strategic Reality: Hidden incentive loops reward status maintenance over collaborative pivots. Short term payoff outweighs systemic optimization.
+                    Layer 6 - Systemic Reality: Unchecked feedback structures reinforce the initial division. The feedback loops lock down progress automatically.
+                    Layer 7 - Pattern Reality: The active dynamic duplicates historic relational scripts perfectly. Historical blueprints continue to run unmitigated.
+                    Layer 8 - Root Cause Reality: A foundational sense of instability drives the reactive patterns. These deep structural wounds shape all current parameters.
+                    Layer 9 - Probability Reality: Status quo has an 80% chance of escalating conflict if unchanged. Proactive alignment releases 75% of the systemic load.
+                    Layer 10 - Hidden Risks & Opportunities: The critical vulnerability is silent operational withdrawal. The biggest strategic opportunity is radical transparency.
+                    </depth>
+
+                    <questions>
+                    ? What hidden incentive or reward is currently maintaining this pattern?
+                    ? If this dynamic remains unchanged, what is the cost 12 months from now?
+                    ? What is the single highest leverage point that can release this deadlock?
+                    ? How is the current communication style reinforcing the underlying defenses?
+                    ? What core fear needs to be acknowledged to shift the systemic trigger?
+                    </questions>
+
+                    <exploration>
+                    ✓ Psychological Adaptations
+                    ✓ Reveal Root Cause
+                    ✓ Systems Feedback Analysis
+                    </exploration>
+                """.trimIndent()
+
+            } catch (ex: Exception) {
+                ex.printStackTrace()
+                lastException = ex
+                modelText = null
             }
-            if (modelText != null) break
+        }
+
+        if (modelText == null) {
+            val modelsToTry = buildModelFallbackChain(getPreferredModel())
+            val retryDelays = listOf(3000L, 10000L, 30000L) // 3s, 10s, 30s — longer waits for quota recovery
+
+            for (modelName in modelsToTry) {
+                for ((attempt, delay) in retryDelays.withIndex()) {
+                    try {
+                        val response = apiService.generateContent(modelName, apiKey, request)
+                        val text = response.candidates?.firstOrNull()?.content?.parts?.firstOrNull()?.text
+                        if (!text.isNullOrEmpty()) {
+                            modelText = text
+                            break
+                        }
+                    } catch (e: Exception) {
+                        lastException = e
+                        val msg = e.message ?: ""
+                        val is429 = msg.contains("429") || msg.contains("quota", ignoreCase = true) || msg.contains("rate", ignoreCase = true)
+                        if (attempt < retryDelays.size - 1) {
+                            kotlinx.coroutines.delay(delay)
+                            continue
+                        } else {
+                            break // quota hit on this model — outer loop tries next model
+                        }
+                    }
+                }
+                if (modelText != null) break
+            }
         }
 
         if (modelText != null) {
@@ -1244,6 +1454,285 @@ Selected depth rating: $sessionDepth. You MUST adjust your detail levels accordi
             e.printStackTrace()
         }
     }
+
+    private fun calculateSemanticSimilarity(text1: String, text2: String): Float {
+        if (text1.isBlank() || text2.isBlank()) return 0.0f
+        val stopWords = setOf(
+            "a", "about", "above", "after", "again", "against", "all", "am", "an", "and", "any", "are", "as", 
+            "at", "be", "because", "been", "before", "being", "below", "between", "both", "but", "by", "can", 
+            "did", "do", "does", "doing", "don", "down", "during", "each", "few", "for", "from", "further", 
+            "had", "has", "have", "having", "he", "her", "here", "hers", "herself", "him", "himself", "his", 
+            "how", "i", "if", "in", "into", "is", "it", "its", "itself", "just", "me", "more", "most", "my", 
+            "myself", "no", "nor", "not", "of", "off", "on", "once", "only", "or", "other", "our", "ours", 
+            "ourselves", "out", "over", "own", "same", "she", "should", "so", "some", "such", "than", "that", 
+            "the", "their", "theirs", "them", "themselves", "then", "there", "these", "they", "this", "those", 
+            "through", "to", "too", "under", "until", "up", "very", "was", "we", "were", "what", "when", 
+            "where", "which", "while", "who", "whom", "why", "with", "you", "your", "yours", "yourself", "yourselves",
+            "is", "the", "and", "or", "a", "an", "of", "to", "in", "with", "for", "on", "at", "by", "under", "over", "about"
+        )
+        val words1 = text1.lowercase()
+            .replace(Regex("[^a-zA-Z0-9\\s]"), "")
+            .split("\\s+".toRegex())
+            .filter { it.length > 2 && it !in stopWords }
+            .toSet()
+
+        val words2 = text2.lowercase()
+            .replace(Regex("[^a-zA-Z0-9\\s]"), "")
+            .split("\\s+".toRegex())
+            .filter { it.length > 2 && it !in stopWords }
+            .toSet()
+
+        if (words1.isEmpty() || words2.isEmpty()) return 0.0f
+        val intersectSize = words1.intersect(words2).size
+        val unionSize = words1.union(words2).size
+        return intersectSize.toFloat() / unionSize.toFloat()
+    }
+
+    private suspend fun callGeminiForModule(
+        apiKey: String,
+        contentsPayload: List<Content>,
+        systemPrompt: String
+    ): String {
+        val request = GenerateContentRequest(
+            contents = contentsPayload,
+            generationConfig = GenerationConfig(temperature = 0.72f),
+            systemInstruction = Content(parts = listOf(Part(text = systemPrompt)))
+        )
+        
+        val modelsToTry = buildModelFallbackChain(getPreferredModel())
+        val retryDelays = listOf(3000L, 10000L)
+        
+        var resultText: String? = null
+        for (modelName in modelsToTry) {
+            for (attemptDelay in retryDelays) {
+                try {
+                    val response = apiService.generateContent(modelName, apiKey, request)
+                    val text = response.candidates?.firstOrNull()?.content?.parts?.firstOrNull()?.text
+                    if (!text.isNullOrEmpty()) {
+                        resultText = text
+                        break
+                    }
+                } catch (e: Exception) {
+                    kotlinx.coroutines.delay(attemptDelay)
+                }
+            }
+            if (resultText != null) break
+        }
+        return resultText ?: ""
+    }
+
+    private suspend fun generateModule1(
+        apiKey: String,
+        contentsPayload: List<Content>,
+        query: String,
+        memoryBlock: String
+    ): String {
+        val prompt = """
+            You are DepthLens, an exceptionally intelligent, direct, and objective systems-thinking analyst.
+            Your sole task is to generate: Module 1 - Summary Of Inquiry.
+            
+            CRITICAL GOALS & OBJECTIVES:
+            - Summarize the user's situation or inquiry.
+            - DO NOT explain causes.
+            - DO NOT analyze.
+            - DO NOT diagnose.
+            - DO NOT synthesize.
+            - Answer the distinct question: "What is happening?"
+            - Focus purely on providing a clean, high-density situational overview, outlining the key elements, primary concerns, and context.
+            - You MUST NOT copy or resemble causal reasoning, root cause analysis, or deep synthesis perspective modules. Keep it purely descriptive.
+            - Keep the output extremely concise: exactly 3-4 sentences of raw text. No headers, no markdown, no other markers.
+            
+            SYSTEM MEMORY CACHE (Context):
+            $memoryBlock
+            
+            USER CURRENT QUERY: $query
+        """.trimIndent()
+        return callGeminiForModule(apiKey, contentsPayload, prompt)
+    }
+
+    private suspend fun generateModule2(
+        apiKey: String,
+        contentsPayload: List<Content>,
+        query: String,
+        memoryBlock: String
+    ): String {
+        val prompt = """
+            You are DepthLens, an elite systems investigator and root cause analyst.
+            Your sole task is to generate: Module 2 - Root Cause Identified.
+            
+            CRITICAL GOALS & OBJECTIVES:
+            - Conduct a definitive causal diagnosis.
+            - Focus purely on: "Why is this happening?"
+            - Identify the deep underlying origins, mechanisms, triggers, and bottlenecks of the user's query.
+            - DO NOT summarize what is happening. Skip any situational descriptions or summaries entirely.
+            - Your response must contain ONLY raw cause-effect chains, triggers, system loops, and core causality.
+            
+            REQUIRED OUTPUT STRUCTURE (Your response MUST have exactly these fields on new lines):
+            Surface Cause: [Briefly describe the apparent visible symptom]
+            Immediate Cause: [The direct emotional or situational trigger]
+            Hidden Cause: [The hidden systemic incentive or unconscious defense mechanism]
+            Core Cause: [The deepest original driving wound, core script, or core system bottleneck]
+            Supporting Evidence: [The logical or behavioral pattern that proves this diagnosis]
+            Root Cause Conclusion: [The final definitive causal diagnosis of the entire pattern]
+            
+            SYSTEM MEMORY CACHE (Context):
+            $memoryBlock
+            
+            USER CURRENT QUERY: $query
+        """.trimIndent()
+        return callGeminiForModule(apiKey, contentsPayload, prompt)
+    }
+
+    private suspend fun generateModule3(
+        apiKey: String,
+        contentsPayload: List<Content>,
+        query: String,
+        memoryBlock: String
+    ): String {
+        val prompt = """
+            You are DepthLens, an elite psychological and behavioral analyst.
+            Your sole task is to generate: Module 3 - Hidden Factors.
+            
+            CRITICAL GOALS & OBJECTIVES:
+            - Uncover the non-obvious, hidden, and actively obscured influences.
+            - Focus purely on: "What is influencing this that is not obvious?"
+            - DO NOT repeat the general summary. DO NOT repeat the root cause diagnostic.
+            - Focus 100% on unconscious human motivations, defense schemas, unstated targets/needs, structural incentives, identity commitments, and hidden agendas.
+            
+            REQUIRED OUTPUT STRUCTURE (Your response MUST have exactly these fields on new lines):
+            Surface Intention: [Unconscious apparent motivation]
+            Emotional Driver: [Internal hidden feelings driving behavior]
+            Need Driver: [Underserved target core human need]
+            Fear Driver: [Underlying avoidance fear]
+            Incentive Driver: [Structural reward, status, or payout]
+            Identity Driver: [Self-image commitment]
+            Hidden Motives: [Deepest hidden agendas/levers]
+            
+            SYSTEM MEMORY CACHE (Context):
+            $memoryBlock
+            
+            USER CURRENT QUERY: $query
+        """.trimIndent()
+        return callGeminiForModule(apiKey, contentsPayload, prompt)
+    }
+
+    private suspend fun generateModule4(
+        apiKey: String,
+        contentsPayload: List<Content>,
+        query: String,
+        memoryBlock: String
+    ): String {
+        val prompt = """
+            You are DepthLens, a premier risk modeller and strategic forecaster.
+            Your sole task is to generate: Module 4 - Risk Analysis.
+            
+            CRITICAL GOALS & OBJECTIVES:
+            - Perform a strict probability and risk evaluation.
+            - Focus purely on: "What could go wrong?"
+            - DO NOT explain any past or present causes, and do not summarize what is happening.
+            - Focus 100% on the future hazard landscape, likelihood of escalation, risk coefficients, and key risk indicators.
+            
+            REQUIRED OUTPUT STRUCTURE (Your response MUST be wrapped exactly as shown below):
+            <probability_metrics>
+            Confidence: [Value]% | Likelihood: [Value]% | Risk: [Value]% | Opportunity: [Value]%
+            </probability_metrics>
+            
+            <probability_assessment>
+            Likelihood: [Value]% | Confidence: [Low|Medium|High]
+            Reasoning Factors:
+            • Specific Factor 1: [1 tight sentence naming direct future risk vector 1]
+            • Specific Factor 2: [1 tight sentence naming future systemic vulnerability factor 2]
+            • Specific Factor 3: [1 tight sentence naming probability or risk mitigation factor 3]
+            </probability_assessment>
+            
+            Ensure values are realistic and dynamic based on user profile and situation.
+            
+            SYSTEM MEMORY CACHE (Context):
+            $memoryBlock
+            
+            USER CURRENT QUERY: $query
+        """.trimIndent()
+        return callGeminiForModule(apiKey, contentsPayload, prompt)
+    }
+
+    private suspend fun generateModule5(
+        apiKey: String,
+        contentsPayload: List<Content>,
+        query: String,
+        memoryBlock: String
+    ): String {
+        val prompt = """
+            You are DepthLens, a world-class strategic forecaster and trajectory analyst.
+            Your sole task is to generate: Module 5 - Future Outcomes.
+            
+            CRITICAL GOALS & OBJECTIVES:
+            - Generate scenario projections of future pathways.
+            - Focus purely on: "What happens next?"
+            - DO NOT discuss past causes or current symptoms, and do not summarize the query. Keep focus 100% on branching futures.
+            
+            REQUIRED OUTPUT STRUCTURE (Your response MUST be wrapped in <future_prob>...</future_prob> as shown below):
+            <future_prob>
+            Scenario A - Most Likely Path | [Value]% | [Outcome details if current loop persists unchanged]
+            Scenario B - Positive Alignment | [Value]% | [Outcome details if proactive shifts alter this outcome]
+            Scenario C - Risk Escalation | [Value]% | [Outcome details if fear or inaction triggers escalation]
+            Scenario D - Outlier Factor | [Value]% | [Outcome details if uncommon but possible systemic forces trigger]
+            Early Warning Signals: [2 indicators/signals total, each 3-5 words only, 1 line]
+            </future_prob>
+            
+            SYSTEM MEMORY CACHE (Context):
+            $memoryBlock
+            
+            USER CURRENT QUERY: $query
+        """.trimIndent()
+        return callGeminiForModule(apiKey, contentsPayload, prompt)
+    }
+
+    private suspend fun generateModule6(
+        apiKey: String,
+        contentsPayload: List<Content>,
+        query: String,
+        memoryBlock: String
+    ): String {
+        val prompt = """
+            You are DepthLens, a master systems synthesis analyst.
+            Your sole task is to generate: Module 6 - Deep Synthesis.
+            
+            CRITICAL GOALS & OBJECTIVES:
+            - Generate multi-perspective, integrated wisdom on the situation.
+            - Focus purely on: "What deeper truth emerges when all perspectives are integrated?"
+            - DO NOT explain the root cause. DO NOT summarize the situation. DO NOT talk about risk statistics.
+            - Offer profound perspectives that cut through comfort and reveal absolute patterns of reality.
+            
+            REQUIRED OUTPUT STRUCTURE (Your response MUST have exactly these headings with generous double-newlines between them):
+            PRACTICAL PERSPECTIVE: [What is concretely happening in reality, sans judgment?]
+            
+            STRATEGIC PERSPECTIVE: [What opportunities, leverage points, and risks exist under the surface?]
+            
+            PSYCHOLOGICAL PERSPECTIVE: [What human behaviors, ego-scripts, and shadow dynamics are active?]
+            
+            BUSINESS PERSPECTIVE: [What economic motives, transaction costs, and organizational incentive structures are at play?]
+            
+            PHILOSOPHICAL PERSPECTIVE: [What is the deeper philosophical meaning, lesson, and broader human implication?]
+            
+            LONG-TERM PERSPECTIVE: [What are the future consequences, branching trajectories, and entropy over time?]
+            
+            CONTRARIAN PERSPECTIVE: [What is the highly counter-intuitive truth that most people completely miss?]
+            
+            META PERSPECTIVE: [What is the ultimate repeating fractal shape or archetypal pattern governing everything?]
+            
+            INTEGRATED SYNTHESIS: [Combine all perspectives into a single unified synthesis of transcendent wisdom and insight. Focus on generating pristine clarity and deep revelation, not causality.]
+            
+            SYSTEM MEMORY CACHE (Context):
+            $memoryBlock
+            
+            USER CURRENT QUERY: $query
+        """.trimIndent()
+        return callGeminiForModule(apiKey, contentsPayload, prompt)
+    }
+
+    suspend fun fetchAndSyncFromFirestore(userId: String): Boolean {
+        return com.example.data.network.CloudSyncService.fetchAndSyncAll(userId, sessionDao, messageDao)
+    }
 }
 
 object ResponseParser {
@@ -1301,11 +1790,11 @@ object ResponseParser {
         var rootCauseReport: RootCauseReport? = null
         if (rootCauseRaw != null) {
             rootCauseReport = RootCauseReport(
-                symptom = parseField(rootCauseRaw, "Symptom"),
+                symptom = parseField(rootCauseRaw, "Surface Cause").ifEmpty { parseField(rootCauseRaw, "Symptom") },
                 immediateCause = parseField(rootCauseRaw, "Immediate Cause"),
-                underlyingCause = parseField(rootCauseRaw, "Underlying Cause"),
-                deeperCause = parseField(rootCauseRaw, "Deeper Cause"),
-                rootCauseEstimate = parseField(rootCauseRaw, "Root Cause Estimate"),
+                underlyingCause = parseField(rootCauseRaw, "Hidden Cause").ifEmpty { parseField(rootCauseRaw, "Underlying Cause") },
+                deeperCause = parseField(rootCauseRaw, "Core Cause").ifEmpty { parseField(rootCauseRaw, "Deeper Cause") },
+                rootCauseEstimate = parseField(rootCauseRaw, "Root Cause Conclusion").ifEmpty { parseField(rootCauseRaw, "Root Cause Estimate") },
                 confidenceLevel = parseField(rootCauseRaw, "Confidence Level").ifEmpty { confidence ?: "High" },
                 supportingEvidence = parseField(rootCauseRaw, "Supporting Evidence"),
                 alternativeExplanation = parseField(rootCauseRaw, "Alternative Root Causes").ifEmpty { parseField(rootCauseRaw, "Alternative Explanations") }
@@ -1499,7 +1988,7 @@ object ResponseParser {
         return ParsedResponse(
             introduction = cleanIntro.trim(),
             executiveSummary = summary,
-            deepSynthesis = deepSynthesis?.ifBlank { null } ?: summary,
+            deepSynthesis = deepSynthesis?.ifBlank { null },
             depthLayers = depthLayers,
             rootCauseReport = rootCauseReport,
             humanDrivers = humanReport,

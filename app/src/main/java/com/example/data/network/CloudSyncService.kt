@@ -1,16 +1,15 @@
 package com.example.data.network
 
-import android.content.Context
-import android.os.Build
 import android.util.Log
 import com.example.BuildConfig
+import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.SetOptions
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
-import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.util.UUID
@@ -27,18 +26,8 @@ object CloudSyncService {
 
     private val jsonMediaType = "application/json; charset=utf-8".toMediaType()
 
-    // Helper to get configuration
-    private fun getFirebaseApiKey(): String {
-        val key = BuildConfig.GEMINI_API_KEY
-        return if (key.isNotEmpty() && key != "MY_GEMINI_API_KEY") key else ""
-    }
-
-    private fun getProjectId(): String {
-        return "depthlens-prod" // Default fallback project ID
-    }
-
     /**
-     * Submit feedback to Firestore
+     * Submit feedback to Firestore natively
      */
     suspend fun submitFeedback(
         userId: String,
@@ -48,50 +37,29 @@ object CloudSyncService {
         appVersion: String,
         category: String
     ): Boolean = withContext(Dispatchers.IO) {
-        val apiKey = getFirebaseApiKey()
-        val projectId = getProjectId()
-        if (apiKey.isEmpty()) {
-            Log.e(TAG, "Missing API Key for Firestore submittal")
-            return@withContext false
-        }
-
         try {
-            val url = "https://firestore.googleapis.com/v1/projects/$projectId/databases/(default)/documents/feedback?key=$apiKey"
-            
-            val json = JSONObject().apply {
-                val fields = JSONObject().apply {
-                    put("userId", JSONObject().put("stringValue", userId))
-                    put("userName", JSONObject().put("stringValue", userName))
-                    put("email", JSONObject().put("stringValue", email))
-                    put("message", JSONObject().put("stringValue", message))
-                    put("timestamp", JSONObject().put("integerValue", System.currentTimeMillis().toString()))
-                    put("appVersion", JSONObject().put("stringValue", appVersion))
-                    put("category", JSONObject().put("stringValue", category))
-                }
-                put("fields", fields)
-            }
-
-            val request = Request.Builder()
-                .url(url)
-                .post(json.toString().toRequestBody(jsonMediaType))
-                .build()
-
-            client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) {
-                    Log.e(TAG, "Firestore write failed: ${response.code} ${response.message}")
-                    return@withContext false
-                }
-                Log.d(TAG, "Feedback submitted successfully to Firestore")
-                return@withContext true
-            }
+            val db = FirebaseFirestore.getInstance()
+            val feedback = mapOf(
+                "userId" to userId,
+                "userName" to userName,
+                "email" to email,
+                "message" to message,
+                "timestamp" to System.currentTimeMillis(),
+                "appVersion" to appVersion,
+                "category" to category
+            )
+            val task = db.collection("feedback").add(feedback)
+            com.google.android.gms.tasks.Tasks.await(task)
+            Log.d(TAG, "Feedback submitted successfully via native Firestore")
+            true
         } catch (e: Exception) {
             e.printStackTrace()
-            return@withContext false
+            false
         }
     }
 
     /**
-     * Submit bug report to Firestore
+     * Submit bug report to Firestore natively
      */
     suspend fun submitBugReport(
         userId: String,
@@ -102,42 +70,25 @@ object CloudSyncService {
         androidVersion: String,
         appVersion: String
     ): Boolean = withContext(Dispatchers.IO) {
-        val apiKey = getFirebaseApiKey()
-        val projectId = getProjectId()
-        if (apiKey.isEmpty()) return@withContext false
-
         try {
-            val url = "https://firestore.googleapis.com/v1/projects/$projectId/databases/(default)/documents/bug_reports?key=$apiKey"
-
-            val json = JSONObject().apply {
-                val fields = JSONObject().apply {
-                    put("userId", JSONObject().put("stringValue", userId))
-                    put("userName", JSONObject().put("stringValue", userName))
-                    put("email", JSONObject().put("stringValue", email))
-                    put("description", JSONObject().put("stringValue", description))
-                    put("deviceInfo", JSONObject().put("stringValue", deviceInfo))
-                    put("androidVersion", JSONObject().put("stringValue", androidVersion))
-                    put("appVersion", JSONObject().put("stringValue", appVersion))
-                    put("timestamp", JSONObject().put("integerValue", System.currentTimeMillis().toString()))
-                }
-                put("fields", fields)
-            }
-
-            val request = Request.Builder()
-                .url(url)
-                .post(json.toString().toRequestBody(jsonMediaType))
-                .build()
-
-            client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) {
-                    Log.e(TAG, "Firestore bug report failed: ${response.code}")
-                    return@withContext false
-                }
-                return@withContext true
-            }
+            val db = FirebaseFirestore.getInstance()
+            val bugReport = mapOf(
+                "userId" to userId,
+                "userName" to userName,
+                "email" to email,
+                "description" to description,
+                "deviceInfo" to deviceInfo,
+                "androidVersion" to androidVersion,
+                "appVersion" to appVersion,
+                "timestamp" to System.currentTimeMillis()
+            )
+            val task = db.collection("bug_reports").add(bugReport)
+            com.google.android.gms.tasks.Tasks.await(task)
+            Log.d(TAG, "Bug report submitted successfully via native Firestore")
+            true
         } catch (e: Exception) {
             e.printStackTrace()
-            return@withContext false
+            false
         }
     }
 
@@ -146,7 +97,7 @@ object CloudSyncService {
      */
     suspend fun submitGithubIssue(
         token: String,
-        repoOwnerAndName: String, // e.g. "myname/myrepo"
+        repoOwnerAndName: String,
         title: String,
         bodyText: String
     ): Boolean = withContext(Dispatchers.IO) {
@@ -169,11 +120,7 @@ object CloudSyncService {
                 .build()
 
             client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) {
-                    Log.e(TAG, "GitHub Issue failed: ${response.code}")
-                    return@withContext false
-                }
-                return@withContext true
+                return@withContext response.isSuccessful
             }
         } catch (e: Exception) {
             e.printStackTrace()
@@ -182,13 +129,13 @@ object CloudSyncService {
     }
 
     /**
-     * Upload File to Firebase Storage
+     * Placeholder File Upload to Firebase Storage REST (unused in general code)
      */
     suspend fun uploadToFirebaseStorage(
         localFile: File,
         mimeType: String
     ): String? = withContext(Dispatchers.IO) {
-        val projectId = getProjectId()
+        val projectId = "depthlens-prod"
         val bucketName = "$projectId.appspot.com"
         val fileName = "uploads/${UUID.randomUUID()}_${localFile.name}"
         
@@ -202,15 +149,10 @@ object CloudSyncService {
                 .build()
 
             client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) {
-                    Log.e(TAG, "Storage upload failed: ${response.code}")
-                    return@withContext null
-                }
+                if (!response.isSuccessful) return@withContext null
                 val bodyStr = response.body?.string() ?: return@withContext null
                 val responseJson = JSONObject(bodyStr)
                 val downloadToken = responseJson.optString("downloadTokens", "")
-                
-                // Return accessible download URL
                 return@withContext "https://firebasestorage.googleapis.com/v0/b/$bucketName/o/${java.net.URLEncoder.encode(fileName, "UTF-8")}?alt=media&token=$downloadToken"
             }
         } catch (e: Exception) {
@@ -220,224 +162,195 @@ object CloudSyncService {
     }
 
     /**
-     * Synchronize a Session to Firestore
+     * Create user profile in Firestore if not exist
      */
-    suspend fun uploadSession(userId: String, sessionId: String, title: String, isPinned: Boolean, createdAt: Long, updatedAt: Long): Boolean = withContext(Dispatchers.IO) {
-        val apiKey = getFirebaseApiKey()
-        val projectId = getProjectId()
-        if (apiKey.isEmpty() || userId.isEmpty()) return@withContext false
-
+    suspend fun createProfileIfNotExist(userId: String, email: String, name: String): Boolean = withContext(Dispatchers.IO) {
         try {
-            val url = "https://firestore.googleapis.com/v1/projects/$projectId/databases/(default)/documents/users/$userId/sessions/$sessionId?key=$apiKey"
-            
-            val json = JSONObject().apply {
-                val fields = JSONObject().apply {
-                    put("id", JSONObject().put("stringValue", sessionId))
-                    put("title", JSONObject().put("stringValue", title))
-                    put("isPinned", JSONObject().put("booleanValue", isPinned))
-                    put("createdAt", JSONObject().put("integerValue", createdAt.toString()))
-                    put("lastUpdatedAt", JSONObject().put("integerValue", updatedAt.toString()))
-                }
-                put("fields", fields)
+            val db = FirebaseFirestore.getInstance()
+            val userRef = db.collection("users").document(userId)
+            val docSnap = com.google.android.gms.tasks.Tasks.await(userRef.get())
+            if (!docSnap.exists()) {
+                val profile = mapOf(
+                    "uid" to userId,
+                    "email" to email,
+                    "name" to name,
+                    "createdAt" to System.currentTimeMillis()
+                )
+                com.google.android.gms.tasks.Tasks.await(userRef.set(profile))
+                Log.d(TAG, "Profile created successfully on first login.")
             }
-
-            val request = Request.Builder()
-                .url(url)
-                .patch(json.toString().toRequestBody(jsonMediaType)) // Use PATCH to create/overwrite
-                .build()
-
-            client.newCall(request).execute().use { response ->
-                return@withContext response.isSuccessful
-            }
+            true
         } catch (e: Exception) {
             e.printStackTrace()
-            return@withContext false
+            false
         }
     }
 
     /**
-     * Synchronize a Message to Firestore
+     * Synchronize a Session (chat meta) natively to Firestore
+     * Matches collection path /users/{userId}/chats/{sessionId}
      */
-    suspend fun uploadMessage(userId: String, messageId: String, sessionId: String, role: String, text: String, imageUri: String?, timestamp: Long): Boolean = withContext(Dispatchers.IO) {
-        val apiKey = getFirebaseApiKey()
-        val projectId = getProjectId()
-        if (apiKey.isEmpty() || userId.isEmpty()) return@withContext false
-
+    suspend fun uploadSession(
+        userId: String,
+        sessionId: String,
+        title: String,
+        isPinned: Boolean,
+        createdAt: Long,
+        updatedAt: Long
+    ): Boolean = withContext(Dispatchers.IO) {
         try {
-            val url = "https://firestore.googleapis.com/v1/projects/$projectId/databases/(default)/documents/users/$userId/messages/$messageId?key=$apiKey"
-            
-            val json = JSONObject().apply {
-                val fields = JSONObject().apply {
-                    put("id", JSONObject().put("stringValue", messageId))
-                    put("sessionId", JSONObject().put("stringValue", sessionId))
-                    put("role", JSONObject().put("stringValue", role))
-                    put("text", JSONObject().put("stringValue", text))
-                    put("imageUri", JSONObject().put("stringValue", imageUri ?: ""))
-                    put("timestamp", JSONObject().put("integerValue", timestamp.toString()))
-                }
-                put("fields", fields)
-            }
-
-            val request = Request.Builder()
-                .url(url)
-                .patch(json.toString().toRequestBody(jsonMediaType))
-                .build()
-
-            client.newCall(request).execute().use { response ->
-                return@withContext response.isSuccessful
-            }
+            val db = FirebaseFirestore.getInstance()
+            val data = mapOf(
+                "id" to sessionId,
+                "title" to title,
+                "isPinned" to isPinned,
+                "createdAt" to createdAt,
+                "lastUpdatedAt" to updatedAt
+            )
+            val task = db.collection("users").document(userId)
+                .collection("chats").document(sessionId)
+                .set(data, SetOptions.merge())
+            com.google.android.gms.tasks.Tasks.await(task)
+            true
         } catch (e: Exception) {
             e.printStackTrace()
-            return@withContext false
+            false
+        }
+    }
+
+    /**
+     * Synchronize a Message natively to Firestore
+     * Matches collection path /users/{userId}/chats/{sessionId}/messages/{messageId}
+     */
+    suspend fun uploadMessage(
+        userId: String,
+        messageId: String,
+        sessionId: String,
+        role: String,
+        text: String,
+        imageUri: String?,
+        timestamp: Long
+    ): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val db = FirebaseFirestore.getInstance()
+            val data = mapOf(
+                "id" to messageId,
+                "sessionId" to sessionId,
+                "role" to role,
+                "text" to text,
+                "imageUri" to (imageUri ?: ""),
+                "timestamp" to timestamp
+            )
+            val task = db.collection("users").document(userId)
+                .collection("chats").document(sessionId)
+                .collection("messages").document(messageId)
+                .set(data, SetOptions.merge())
+            
+            // Touch chat lastUpdatedAt
+            try {
+                val touchTask = db.collection("users").document(userId)
+                    .collection("chats").document(sessionId)
+                    .update("lastUpdatedAt", timestamp)
+                com.google.android.gms.tasks.Tasks.await(touchTask)
+            } catch (e: Exception) {}
+
+            com.google.android.gms.tasks.Tasks.await(task)
+            true
+        } catch (e: Exception) {
+            e.printStackTrace()
+            false
         }
     }
 
     /**
      * Synchronize a Memory insight to Firestore
      */
-    suspend fun uploadMemoryInsight(userId: String, insightId: Long, category: String, content: String, timestamp: Long): Boolean = withContext(Dispatchers.IO) {
-        val apiKey = getFirebaseApiKey()
-        val projectId = getProjectId()
-        if (apiKey.isEmpty() || userId.isEmpty()) return@withContext false
-
+    suspend fun uploadMemoryInsight(
+        userId: String,
+        insightId: Long,
+        category: String,
+        content: String,
+        timestamp: Long
+    ): Boolean = withContext(Dispatchers.IO) {
         try {
-            val url = "https://firestore.googleapis.com/v1/projects/$projectId/databases/(default)/documents/users/$userId/memories/$insightId?key=$apiKey"
+            val db = FirebaseFirestore.getInstance()
+            val data = mapOf(
+                "id" to insightId,
+                "category" to category,
+                "content" to content,
+                "timestamp" to timestamp
+            )
+            val task = db.collection("users").document(userId)
+                .collection("memories").document(insightId.toString())
+                .set(data, SetOptions.merge())
+            com.google.android.gms.tasks.Tasks.await(task)
+            true
+        } catch (e: Exception) {
+            e.printStackTrace()
+            false
+        }
+    }
+
+    /**
+     * Load previous chats (sessions + messages) automatically when user logs in, saving to local Room
+     */
+    suspend fun fetchAndSyncAll(
+        userId: String,
+        sessionDao: com.example.data.database.SessionDao,
+        messageDao: com.example.data.database.MessageDao
+    ): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val db = FirebaseFirestore.getInstance()
             
-            val json = JSONObject().apply {
-                val fields = JSONObject().apply {
-                    put("id", JSONObject().put("integerValue", insightId.toString()))
-                    put("category", JSONObject().put("stringValue", category))
-                    put("content", JSONObject().put("stringValue", content))
-                    put("timestamp", JSONObject().put("integerValue", timestamp.toString()))
-                }
-                put("fields", fields)
-            }
-
-            val request = Request.Builder()
-                .url(url)
-                .patch(json.toString().toRequestBody(jsonMediaType))
-                .build()
-
-            client.newCall(request).execute().use { response ->
-                return@withContext response.isSuccessful
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
-            return@withContext false
-        }
-    }
-
-    /**
-     * Retrieve all messages synced in Firebase
-     */
-    suspend fun fetchCloudMessages(userId: String): List<JSONObject> = withContext(Dispatchers.IO) {
-        val apiKey = getFirebaseApiKey()
-        val projectId = getProjectId()
-        if (apiKey.isEmpty() || userId.isEmpty()) return@withContext emptyList()
-
-        try {
-            val url = "https://firestore.googleapis.com/v1/projects/$projectId/databases/(default)/documents/users/$userId/messages?key=$apiKey"
-            val request = Request.Builder().url(url).get().build()
+            // 1. Fetch user's chats
+            val chatsSnapTask = db.collection("users").document(userId).collection("chats").get()
+            val chatsSnap = com.google.android.gms.tasks.Tasks.await(chatsSnapTask)
             
-            client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) return@withContext emptyList()
-                val bodyStr = response.body?.string() ?: return@withContext emptyList()
-                val responseJson = JSONObject(bodyStr)
-                val documents = responseJson.optJSONArray("documents") ?: return@withContext emptyList()
-                val result = mutableListOf<JSONObject>()
-                for (i in 0 until documents.length()) {
-                    val doc = documents.getJSONObject(i)
-                    val fields = doc.getJSONObject("fields")
-                    val message = JSONObject().apply {
-                        put("id", fields.getJSONObject("id").getString("stringValue"))
-                        put("sessionId", fields.getJSONObject("sessionId").getString("stringValue"))
-                        put("role", fields.getJSONObject("role").getString("stringValue"))
-                        put("text", fields.getJSONObject("text").getString("stringValue"))
-                        put("imageUri", fields.optJSONObject("imageUri")?.optString("stringValue", "") ?: "")
-                        put("timestamp", fields.getJSONObject("timestamp").getString("integerValue").toLong())
-                    }
-                    result.add(message)
+            for (doc in chatsSnap.documents) {
+                val sessionId = doc.id
+                val title = doc.getString("title") ?: "Saved Session"
+                val isPinned = doc.getBoolean("isPinned") ?: false
+                val createdAt = doc.getLong("createdAt") ?: System.currentTimeMillis()
+                val lastUpdatedAt = doc.getLong("lastUpdatedAt") ?: System.currentTimeMillis()
+                
+                // Room update
+                val sEntity = com.example.data.model.SessionEntity(
+                    id = sessionId,
+                    title = title,
+                    isPinned = isPinned,
+                    createdAt = createdAt,
+                    lastUpdatedAt = lastUpdatedAt
+                )
+                sessionDao.insertSession(sEntity)
+                
+                // 2. Fetch session messages
+                val msgsSnapTask = db.collection("users").document(userId)
+                    .collection("chats").document(sessionId)
+                    .collection("messages").get()
+                val msgsSnap = com.google.android.gms.tasks.Tasks.await(msgsSnapTask)
+                
+                for (msgDoc in msgsSnap.documents) {
+                    val msgId = msgDoc.id
+                    val role = msgDoc.getString("role") ?: "user"
+                    val text = msgDoc.getString("text") ?: ""
+                    val imageUri = msgDoc.getString("imageUri") ?: ""
+                    val timestamp = msgDoc.getLong("timestamp") ?: System.currentTimeMillis()
+                    
+                    val mEntity = com.example.data.model.MessageEntity(
+                        id = msgId,
+                        sessionId = sessionId,
+                        role = role,
+                        text = text,
+                        imageUri = if (imageUri.isEmpty()) null else imageUri,
+                        timestamp = timestamp
+                    )
+                    messageDao.insertMessage(mEntity)
                 }
-                return@withContext result
             }
+            true
         } catch (e: Exception) {
             e.printStackTrace()
-            return@withContext emptyList()
-        }
-    }
-
-    /**
-     * Retrieve all sessions synced in Firebase
-     */
-    suspend fun fetchCloudSessions(userId: String): List<JSONObject> = withContext(Dispatchers.IO) {
-        val apiKey = getFirebaseApiKey()
-        val projectId = getProjectId()
-        if (apiKey.isEmpty() || userId.isEmpty()) return@withContext emptyList()
-
-        try {
-            val url = "https://firestore.googleapis.com/v1/projects/$projectId/databases/(default)/documents/users/$userId/sessions?key=$apiKey"
-            val request = Request.Builder().url(url).get().build()
-
-            client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) return@withContext emptyList()
-                val bodyStr = response.body?.string() ?: return@withContext emptyList()
-                val responseJson = JSONObject(bodyStr)
-                val documents = responseJson.optJSONArray("documents") ?: return@withContext emptyList()
-                val result = mutableListOf<JSONObject>()
-                for (i in 0 until documents.length()) {
-                    val doc = documents.getJSONObject(i)
-                    val fields = doc.getJSONObject("fields")
-                    val session = JSONObject().apply {
-                        put("id", fields.getJSONObject("id").getString("stringValue"))
-                        put("title", fields.getJSONObject("title").getString("stringValue"))
-                        put("isPinned", fields.getJSONObject("isPinned").getBoolean("booleanValue"))
-                        put("createdAt", fields.getJSONObject("createdAt").getString("integerValue").toLong())
-                        put("lastUpdatedAt", fields.getJSONObject("lastUpdatedAt").getString("integerValue").toLong())
-                    }
-                    result.add(session)
-                }
-                return@withContext result
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
-            return@withContext emptyList()
-        }
-    }
-
-    /**
-     * Retrieve all memory insights synced in Firebase
-     */
-    suspend fun fetchCloudMemoryInsights(userId: String): List<JSONObject> = withContext(Dispatchers.IO) {
-        val apiKey = getFirebaseApiKey()
-        val projectId = getProjectId()
-        if (apiKey.isEmpty() || userId.isEmpty()) return@withContext emptyList()
-
-        try {
-            val url = "https://firestore.googleapis.com/v1/projects/$projectId/databases/(default)/documents/users/$userId/memories?key=$apiKey"
-            val request = Request.Builder().url(url).get().build()
-
-            client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) return@withContext emptyList()
-                val bodyStr = response.body?.string() ?: return@withContext emptyList()
-                val responseJson = JSONObject(bodyStr)
-                val documents = responseJson.optJSONArray("documents") ?: return@withContext emptyList()
-                val result = mutableListOf<JSONObject>()
-                for (i in 0 until documents.length()) {
-                    val doc = documents.getJSONObject(i)
-                    val fields = doc.getJSONObject("fields")
-                    val insight = JSONObject().apply {
-                        put("id", fields.getJSONObject("id").getString("integerValue").toLong())
-                        put("category", fields.getJSONObject("category").getString("stringValue"))
-                        put("content", fields.getJSONObject("content").getString("stringValue"))
-                        put("timestamp", fields.getJSONObject("timestamp").getString("integerValue").toLong())
-                    }
-                    result.add(insight)
-                }
-                return@withContext result
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
-            return@withContext emptyList()
+            false
         }
     }
 }

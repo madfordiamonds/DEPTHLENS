@@ -1,6 +1,7 @@
 # Allow AI Studio build artifacts
 !*.apk
 !build_info.json
+
 *.iml
 .gradle
 .kotlin
@@ -19,3 +20,6 @@
 local.properties
 .env
 debug.keystore.base64
+
+# Firebase - never commit this
+app/google-services.json
