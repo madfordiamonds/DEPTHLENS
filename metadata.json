@@ -2,5 +2,8 @@
   "name": "DepthLens",
   "description": "Reality Intelligence Operating System to explore beneath the surface of decisions, relationships, systems, and psychology.",
   "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API",
+    "MAJOR_CAPABILITY_ANDROID"
+  ]
 }

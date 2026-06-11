@@ -1,3 +1,5 @@
+import java.util.Base64
+
 plugins {
   alias(libs.plugins.android.application)
   alias(libs.plugins.kotlin.compose)
@@ -289,4 +291,49 @@ dependencies {
   debugImplementation(libs.androidx.compose.ui.tooling)
   "ksp"(libs.androidx.room.compiler)
   "ksp"(libs.moshi.kotlin.codegen)
+}
+val projectBuildDir = project.layout.buildDirectory.asFile.get()
+val projectRootDir = project.rootDir
+
+androidComponents {
+    onVariants { variant ->
+        val variantName = variant.name.replaceFirstChar { it.uppercaseChar() }
+        val vName = variant.name
+        tasks.register<Copy>("copyApkToBuildOutputs${variantName}") {
+            dependsOn("assemble${variantName}")
+            from(File(projectBuildDir, "outputs/apk/$vName")) {
+                include("**/*.apk")
+                rename { "app-$vName.apk" }
+            }
+            into(File(projectRootDir, "build-outputs"))
+        }
+        tasks.matching { it.name == "assemble${variantName}" }.configureEach {
+            finalizedBy("copyApkToBuildOutputs${variantName}")
+        }
+    }
+}
+
+tasks.register("encodeKeystoreToBase64") {
+    doLast {
+        val keystoreFile = File(projectRootDir, "debug.keystore")
+        val base64File = File(projectRootDir, "debug.keystore.base64")
+        if (keystoreFile.exists()) {
+            val bytes = keystoreFile.readBytes()
+            val base64 = Base64.getEncoder().encodeToString(bytes)
+            base64File.writeText(base64)
+            println("Encoded debug.keystore to debug.keystore.base64 successfully!")
+        } else {
+            println("debug.keystore does not exist in rootDir!")
+            val homeDir = System.getProperty("user.home")
+            val defaultKey = File(homeDir, ".android/debug.keystore")
+            if (defaultKey.exists()) {
+                val bytes = defaultKey.readBytes()
+                val base64 = Base64.getEncoder().encodeToString(bytes)
+                base64File.writeText(base64)
+                println("Encoded default ~/.android/debug.keystore to debug.keystore.base64!")
+            } else {
+                println("Also could not find ~/.android/debug.keystore")
+            }
+        }
+    }
 }
