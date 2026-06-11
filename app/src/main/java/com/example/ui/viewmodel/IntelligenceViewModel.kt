@@ -102,6 +102,52 @@ class IntelligenceViewModel(application: Application) : AndroidViewModel(applica
     private val _diagnostics = MutableStateFlow(EngineDiagnostics())
     val diagnostics: StateFlow<EngineDiagnostics> = _diagnostics.asStateFlow()
 
+    private val _syncStatus = MutableStateFlow("Offline")
+    val syncStatus: StateFlow<String> = _syncStatus.asStateFlow()
+
+    private val _lastSyncedTime = MutableStateFlow<String?>(null)
+    val lastSyncedTime: StateFlow<String?> = _lastSyncedTime.asStateFlow()
+
+    private val _chatsSyncedCount = MutableStateFlow(0)
+    val chatsSyncedCount: StateFlow<Int> = _chatsSyncedCount.asStateFlow()
+
+    private val _pendingUploadsCount = MutableStateFlow(0)
+    val pendingUploadsCount: StateFlow<Int> = _pendingUploadsCount.asStateFlow()
+
+    fun runStartupSyncTest() {
+        val uid = userId.value
+        if (uid.isEmpty() || uid == "guest_local") {
+            _syncStatus.value = "Offline"
+            _lastSyncedTime.value = null
+            _chatsSyncedCount.value = 0
+            _pendingUploadsCount.value = 0
+            return
+        }
+
+        _syncStatus.value = "Syncing..."
+        viewModelScope.launch {
+            try {
+                val dbInstance = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                
+                // Firestore write
+                val testDocRef = dbInstance.collection("users").document(uid).collection("sync_test").document("ping")
+                val testData = mapOf("timestamp" to System.currentTimeMillis(), "client" to "Android App")
+                com.google.android.gms.tasks.Tasks.await(testDocRef.set(testData))
+                
+                // Firestore read
+                com.google.android.gms.tasks.Tasks.await(testDocRef.get())
+                
+                _syncStatus.value = "Active"
+                _lastSyncedTime.value = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())
+                _chatsSyncedCount.value = sessions.value.size
+                _pendingUploadsCount.value = 0
+            } catch (e: Exception) {
+                e.printStackTrace()
+                _syncStatus.value = "Error"
+            }
+        }
+    }
+
     init {
         // Always open the Home Screen on app launch / entry
         _activeSessionId.value = null
@@ -130,6 +176,8 @@ class IntelligenceViewModel(application: Application) : AndroidViewModel(applica
         } catch (e: Exception) {
             e.printStackTrace()
         }
+
+        runStartupSyncTest()
 
         // Load deep-dive insights from prefs
         try {
@@ -508,8 +556,10 @@ class IntelligenceViewModel(application: Application) : AndroidViewModel(applica
             try {
                 com.example.data.network.CloudSyncService.createProfileIfNotExist(uid, email, name)
                 repository.fetchAndSyncFromFirestore(uid)
+                runStartupSyncTest()
             } catch (e: Exception) {
                 e.printStackTrace()
+                _syncStatus.value = "Error"
             }
         }
     }
@@ -534,8 +584,10 @@ class IntelligenceViewModel(application: Application) : AndroidViewModel(applica
             try {
                 com.example.data.network.CloudSyncService.createProfileIfNotExist(simulatedId, email, name)
                 repository.fetchAndSyncFromFirestore(simulatedId)
+                runStartupSyncTest()
             } catch (e: Exception) {
                 e.printStackTrace()
+                _syncStatus.value = "Error"
             }
         }
     }

@@ -1623,7 +1623,7 @@ fun AnalysisScreen(
         }
         }
 
-        // Floating scroll arrow premium glass buttons (v5.8.9.x)
+        // Floating scroll arrow premium glass buttons (v5.8.9.x1)
         AnimatedVisibility(
             visible = showScrollButtonState != "none",
             enter = scaleIn(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) + fadeIn(),

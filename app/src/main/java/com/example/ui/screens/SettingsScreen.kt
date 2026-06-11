@@ -58,6 +58,10 @@ fun SettingsScreen(
     onRefreshDiagnostics: () -> Unit = {},
     selectedModel: String = com.example.data.repository.IntelligenceRepository.DEFAULT_MODEL,
     onModelSelected: (String) -> Unit = {},
+    syncStatus: String = "Offline",
+    lastSyncedTime: String? = null,
+    chatsSyncedCount: Int = 0,
+    pendingUploadsCount: Int = 0,
     modifier: Modifier = Modifier
 ) {
     var loginEmail by remember { mutableStateOf("") }
@@ -158,30 +162,70 @@ fun SettingsScreen(
 
                         Divider(color = BorderSubtle, thickness = 0.8.dp)
 
-                        Row(
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Column(
                             modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Text(
-                                text = "Cloud Synchronization",
-                                fontSize = 10.5.sp,
-                                fontFamily = InstrumentSansFontFamily,
-                                color = TextSecondaryColor
-                            )
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(5.dp)
-                                        .background(SuccessColor, CircleShape)
-                                )
-                                Spacer(modifier = Modifier.width(5.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
                                 Text(
-                                    text = "ACTIVE",
-                                    fontSize = 9.sp,
+                                    text = "Cloud Sync",
+                                    fontSize = 11.sp,
+                                    fontFamily = InstrumentSansFontFamily,
+                                    fontWeight = FontWeight.Bold,
+                                    color = TextPrimaryColor
+                                )
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    val (color, text) = when (syncStatus) {
+                                        "Syncing..." -> PremiumCyan to "Syncing..."
+                                        "Active" -> SuccessColor to "Active"
+                                        "Offline" -> TextMutedColor to "Offline"
+                                        else -> ErrorColor to syncStatus
+                                    }
+                                    Box(
+                                        modifier = Modifier
+                                            .size(6.dp)
+                                            .background(color, CircleShape)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = text,
+                                        fontSize = 10.sp,
+                                        fontFamily = DMMonoFontFamily,
+                                        color = color,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                            
+                            if (lastSyncedTime != null) {
+                                Text(
+                                    text = "Last Synced: $lastSyncedTime",
+                                    fontSize = 10.sp,
+                                    fontFamily = InstrumentSansFontFamily,
+                                    color = TextMutedColor
+                                )
+                            }
+                            
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(16.dp)
+                            ) {
+                                Text(
+                                    text = "Chats Synced: $chatsSyncedCount",
+                                    fontSize = 10.sp,
                                     fontFamily = DMMonoFontFamily,
-                                    color = SuccessColor,
-                                    fontWeight = FontWeight.Bold
+                                    color = TextSecondaryColor
+                                )
+                                Text(
+                                    text = "Pending Uploads: $pendingUploadsCount",
+                                    fontSize = 10.sp,
+                                    fontFamily = DMMonoFontFamily,
+                                    color = TextSecondaryColor
                                 )
                             }
                         }
@@ -919,7 +963,7 @@ fun SettingsScreen(
         InteractiveSettingsCard(
             icon = "✕",
             title = "About DepthLens",
-            subtitle = "View software license details and dynamic credits · v5.8.9.x",
+            subtitle = "View software license details and dynamic credits · v5.8.9.x1",
             onClick = onShowAbout
         )
 

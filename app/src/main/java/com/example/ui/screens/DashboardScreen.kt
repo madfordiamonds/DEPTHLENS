@@ -101,6 +101,11 @@ fun DashboardScreen(
     val diagnostics by viewModel.diagnostics.collectAsState()
     val selectedModel by viewModel.selectedModel.collectAsState()
 
+    val syncStatus by viewModel.syncStatus.collectAsState()
+    val lastSyncedTime by viewModel.lastSyncedTime.collectAsState()
+    val chatsSyncedCount by viewModel.chatsSyncedCount.collectAsState()
+    val pendingUploadsCount by viewModel.pendingUploadsCount.collectAsState()
+
     val continuityBrief by viewModel.continuityBrief.collectAsState()
     val continuityBriefStatus by viewModel.continuityBriefStatus.collectAsState()
 
@@ -1985,7 +1990,11 @@ Text(
                             diagnostics = diagnostics,
                             onRefreshDiagnostics = { viewModel.refreshDiagnostics() },
                             selectedModel = selectedModel,
-                            onModelSelected = { viewModel.setSelectedModel(it) }
+                            onModelSelected = { viewModel.setSelectedModel(it) },
+                            syncStatus = syncStatus,
+                            lastSyncedTime = lastSyncedTime,
+                            chatsSyncedCount = chatsSyncedCount,
+                            pendingUploadsCount = pendingUploadsCount
                         )
                     }
                 }
@@ -5103,93 +5112,7 @@ fun InlineLoadingIndicator() {
 }
 
 fun ParsedResponse.toShareableText(): String {
-    val builder = java.lang.StringBuilder()
-    builder.append("=== DEPTHLENS STRATEGIC RECONSTRUCTION REPORT ===\n\n")
-    
-    // Custom robust sanitizer helper
-    fun sanitize(input: String): String {
-        var text = input.trim()
-        text = text.replace(Regex("""<questions>[\s\S]*?</questions>""", RegexOption.IGNORE_CASE), "")
-        text = text.replace(Regex("""<exploration>[\s\S]*?</exploration>""", RegexOption.IGNORE_CASE), "")
-        text = text.replace(Regex("""<memory_insight>[\s\S]*?</memory_insight>""", RegexOption.IGNORE_CASE), "")
-        text = text.replace(Regex("""System Instructions[\s\S]*?(?=\n\n|\z)""", RegexOption.IGNORE_CASE), "")
-        text = text.replace(Regex("""SYSTEM_PROMPT[\s\S]*?(?=\n\n|\z)""", RegexOption.IGNORE_CASE), "")
-        text = text.replace(Regex("""Developer Config[\s\S]*?(?=\n\n|\z)""", RegexOption.IGNORE_CASE), "")
-        text = text.replace(Regex("""<[^>]+>"""), "")
-        text = text.replace(Regex("""applicationId\s*=[\s\S]*?(?=\n|\z)""", RegexOption.IGNORE_CASE), "")
-        text = text.replace(Regex("""BuildConfig[\s\S]*?(?=\n|\z)""", RegexOption.IGNORE_CASE), "")
-        return text.trim()
-    }
-
-    val cleanIntro = sanitize(introduction)
-    if (cleanIntro.isNotBlank()) {
-        builder.append("INTRODUCTION\n")
-        builder.append(cleanIntro).append("\n\n")
-    }
-    
-    val summary = executiveSummary?.let { sanitize(it) }
-    if (!summary.isNullOrBlank()) {
-        builder.append("EXECUTIVE SUMMARY\n")
-        builder.append(summary).append("\n\n")
-    }
-
-    val ds = deepSynthesis?.let { sanitize(it) }
-    if (!ds.isNullOrBlank()) {
-        builder.append("DEEP SYNTHESIS (INTEGRATED VISIONS)\n")
-        builder.append(ds).append("\n\n")
-    }
-    
-
-    
-    val rcr = rootCauseReport
-    if (rcr != null) {
-        builder.append("ROOT CAUSE REPORT (THE 'WHY')\n")
-        builder.append("Surface Cause: ").append(sanitize(rcr.symptom)).append("\n")
-        builder.append("Immediate Cause: ").append(sanitize(rcr.immediateCause)).append("\n")
-        builder.append("Underlying Cause: ").append(sanitize(rcr.underlyingCause)).append("\n")
-        builder.append("Deeper Cause: ").append(sanitize(rcr.deeperCause)).append("\n")
-        builder.append("Root Cause Conclusion: ").append(sanitize(rcr.rootCauseEstimate)).append("\n")
-        builder.append("Supporting Evidence: ").append(sanitize(rcr.supportingEvidence)).append("\n")
-        if (rcr.alternativeExplanation.isNotBlank()) {
-            builder.append("Alternative Explanation: ").append(sanitize(rcr.alternativeExplanation)).append("\n")
-        }
-        builder.append("\n")
-    }
-    
-    val hd = humanDrivers
-    if (hd != null) {
-        builder.append("HUMAN DRIVERS (PSYCHOMOTIVE ANATOMY)\n")
-        builder.append("Surface Intention: ").append(sanitize(hd.surfaceIntention)).append("\n")
-        builder.append("Emotional Driver: ").append(sanitize(hd.emotionalDriver)).append("\n")
-        builder.append("Core Need: ").append(sanitize(hd.needDriver)).append("\n")
-        builder.append("Core Fear: ").append(sanitize(hd.fearDriver)).append("\n")
-        builder.append("Incentives: ").append(sanitize(hd.incentiveDriver)).append("\n")
-        builder.append("Identity Alignment: ").append(sanitize(hd.identityDriver)).append("\n")
-        builder.append("Hidden Motives: ").append(sanitize(hd.hiddenMotives)).append("\n")
-        builder.append("\n")
-    }
-    
-    if (futureScenarios.isNotEmpty()) {
-        builder.append("FUTURE SCENARIOS & PROBABILITIES\n")
-        futureScenarios.forEach { scenario ->
-            builder.append("- ").append(scenario.codeName.uppercase()).append(" - ").append(scenario.displayName).append(" (Prob: ").append(scenario.probability).append("%)\n")
-            builder.append("  Outcome: ").append(sanitize(scenario.impactText)).append("\n")
-            if (scenario.earlyWarningSigns.isNotEmpty()) {
-                builder.append("  Early Warning Signs:\n")
-                scenario.earlyWarningSigns.forEach { sign ->
-                    builder.append("    * ").append(sanitize(sign)).append("\n")
-                }
-            }
-        }
-        builder.append("\n")
-    }
-    
-    val conf = confidence
-    if (!conf.isNullOrBlank()) {
-        builder.append("Confidence Level: ").append(sanitize(conf)).append("\n")
-    }
-    builder.append("=================================================")
-    return builder.toString()
+    return this.exportText()
 }
 
 @Composable

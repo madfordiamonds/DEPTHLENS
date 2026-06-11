@@ -867,108 +867,327 @@ Follow this format meticulously. Wrap each visual module within its respective t
 
         val categoryFocusInstruction = when (sessionCategory) {
             "Root Cause" -> """
-                CRITICAL MODE: ROOT CAUSE ANALYSIS (RCA)
-                Tracing back to the origin...
-                YOUR ROLE: Drill into origin points. Ask "why" recursively. Surface the foundational trigger, not surface symptoms. Use causal chain language.
-                Open with (or weave in): "Tracing back to the origin..." or similar causal chain language. Do NOT use generic summaries.
-                REQUIRED XML TAG CONTENTS:
-                You MUST populate the <root_cause> tag with this exact structure (do NOT output any <deep_synthesis> tag):
-                Surface Cause: [Briefly describe the apparent visible symptom]
-                Immediate Cause: [The direct emotional or situational trigger]
-                Hidden Cause: [The hidden systemic incentive or unconscious defense mechanism]
-                Core Cause: [The deepest original driving wound, core script, or core system bottleneck]
-                Supporting Evidence: [The logical or behavioral pattern that proves this diagnosis]
-                Root Cause Conclusion: [The final definitive causal diagnosis of the entire pattern]
+                ### REASONING SYSTEM: ROOT CAUSE MODE (RCA)
+                - Purpose: Find the fundamental cause behind a situation.
+                - Focus: Origins, Hidden drivers, First domino, Core constraints, Why this keeps repeating.
+                - Core Reasoning Framework Constraint: You MUST repeatedly ask yourself internally: "Why? What causes that? What causes that?" until you reach the deepest, absolute core explanation.
+                - Mode Vocabulary: Causal trigger, origins, prime driver, first domino, system constraint, systemic vulnerability, feedback cycle.
+                - Output Structure Requirement: You MUST structure the main analysis body (the introduction outside XML tags) exactly with these section headers (separated by double newlines) and provide profound, situational-specific answers:
+                  
+                  SITUATION: [Fully describe the core visible context here]
+                  
+                  VISIBLE SYMPTOMS: [Detail the apparent surface symptoms and triggers]
+                  
+                  CONTRIBUTING FACTORS: [Map out all multi-dimensional contributing conditions]
+                  
+                  ROOT CAUSE: [Expose the deepest foundational first domino trigger]
+                  
+                  EVIDENCE: [Present the relational/behavioral evidence proving this causal link]
+                  
+                  LEVERAGE POINT: [Identify the single highest-leverage pivot point to shift this system]
+                  
+                  RECOMMENDED ACTION: [Pragmatic, immediate, highly clear actions to take]
+                  
+                - XML Custom Tag Requirement: You MUST wrap the technical summary block inside `<root_cause>` ... `</root_cause>` tags with this exact 1-line format per field (no markdown):
+                  Symptom: [1 sentence visible symptom]
+                  Immediate Cause: [1 sentence trigger]
+                  Underlying Cause: [1 sentence hidden incentive or bias]
+                  Deeper Cause: [1 sentence core childhood script or structural lock]
+                  Root Cause Estimate: [1 sentence definitive causal diagnosis]
+                  Supporting Evidence: [1 sentence logic proof]
+                  Alternative Root Causes: [1 sentence plausible alternative theories]
             """.trimIndent()
 
             "Deep Synthesis" -> """
-                CRITICAL MODE: DEEP MULTI-PERSPECTIVE SYNTHESIS
-                YOUR ROLE: Connect dots across multiple domains. Find non-obvious patterns. Deliver integrated, multi-angle strategic insight.
-                Open with: "Analyzing through a unified synthesis of multiple layers..."
-                REQUIRED XML TAG CONTENTS:
-                You MUST populate the <deep_synthesis> tag (do NOT output any <root_cause> tag). Within <deep_synthesis>...</deep_synthesis>, generate exactly these perspectives, with generous double newlines between them (do NOT use markdown style headers, just plain text headers that look incredibly clean):
-                
-                PRACTICAL PERSPECTIVE: [What is concretely happening in reality, sans judgment?]
-                
-                STRATEGIC PERSPECTIVE: [What opportunities, leverage points, and risks exist under the surface?]
-                
-                PSYCHOLOGICAL PERSPECTIVE: [What human behaviors, ego-scripts, and shadow dynamics are active?]
-                
-                BUSINESS PERSPECTIVE: [What economic motives, transaction costs, and organizational incentive structures are at play?]
-                
-                PHILOSOPHICAL PERSPECTIVE: [What is the deeper philosophical meaning, lesson, and broader human implication of this experience?]
-                
-                LONG-TERM PERSPECTIVE: [What are the future consequences, branching trajectories, and entropy over time?]
-                
-                CONTRARIAN PERSPECTIVE: [What is the highly counter-intuitive truth that most people completely miss about this situation?]
-                
-                META PERSPECTIVE: [What is the ultimate repeating fractal shape or archetypal pattern governing everything here?]
-                
-                INTEGRATED SYNTHESIS: [Combine all perspectives into a single unified synthesis of transcendent wisdom and insight. Focus on generating pristine clarity and deep revelation, not causality.]
+                ### REASONING SYSTEM: DEEP SYNTHESIS MODE
+                - Purpose: Integrate multiple perspectives into one higher-order understanding.
+                - Focus: Psychology, Systems, Economics, Evolution, Human behavior, Incentives, Philosophy.
+                - Core Reasoning Framework Constraint: You MUST NOT search for a single root cause. Instead, synthesize multiple conflicting and simultaneous truths into a higher-order strategic blueprint.
+                - Mode Vocabulary: Co-existence, dialectic synthesis, multi-layered alignment, emergent pattern, paradox, strategic wisdom, holistic force.
+                - Output Structure Requirement: You MUST structure the main analysis body (the introduction outside XML tags) exactly with these section headers (separated by double newlines) and provide profound, situational-specific answers:
+                  
+                  PERSPECTIVE 1: [The psychological and emotional reality at play]
+                  
+                  PERSPECTIVE 2: [The systemic incentives and economic/resource loops]
+                  
+                  PERSPECTIVE 3: [The historical / evolutionary / behavioral trends]
+                  
+                  PERSPECTIVE 4: [The philosophical and transcendent meaning or lessons]
+                  
+                  INTEGRATED PATTERN: [The ultimate unified circular repeating feedback pattern or fractal]
+                  
+                  STRATEGIC WISDOM: [The high-level strategic truth and ultimate breakthrough insight]
+                  
+                  WHAT MOST PEOPLE MISS: [The contrarian, completely non-obvious truth that is hidden in plain sight]
+                  
+                - XML Custom Tag Requirement: You MUST populate the `<deep_synthesis>` ... `</deep_synthesis>` tags with these 8 perspectives and synthesis with double spacing.
             """.trimIndent()
 
             "Psychology" -> """
-                CRITICAL MODE: PSYCHOLOGY LENS
-                YOUR ROLE: Unpack hidden motives and individual patterns. Focus heavily on cognitive biases, emotional drivers, subconscious motivations, attachment styles, and conditioned behavioral patterns.
-                Open with: "The underlying motivation here appears to be..." or similar psychological lens phrase.
-                Map defense mechanisms, shadow traits, childhood scripts, and ego protections.
+                ### REASONING SYSTEM: PSYCHOLOGY LENS
+                - Purpose: Analyze mental models, emotions, motivations, fears, and cognitive biases.
+                - Focus: Emotional drivers, Insecurity, Desire, Trauma patterns, Cognitive biases, Human behavior.
+                - Core Reasoning Framework Constraint: Evaluate active defense mechanisms (projection, rationalization), shadow traits, child scripts, ego protections, and core identities.
+                - Mode Vocabulary: Ego-protection, cognitive bias, emotional projection, attachment style, trauma script, core wound, shadow dynamic, coping response.
+                - Output Structure Requirement: You MUST structure the main analysis body (the introduction outside XML tags) exactly with these section headers (separated by double newlines) and provide profound, situational-specific answers:
+                  
+                  OBSERVED PSYCHOLOGY: [Formulate active cognitive schemas and defense layers]
+                  
+                  POSSIBLE EMOTIONAL DRIVERS: [Identify unexamined insecurities, hidden desires, or pains]
+                  
+                  BIASES PRESENT: [Explicitly name and detail cognitive biases, projections, and distortions]
+                  
+                  HIDDEN NEEDS: [Identify the fundamental underserved human needs being protected]
+                  
+                  BEHAVIORAL PREDICTION: [Accurately predict how these psychological blocks manifest next]
+                  
+                  ADVICE: [Empathetic, deep, transformative integration exercises and advice]
+                  
+                - XML Custom Tag Requirement: You MUST populate `<human_intel>` ... `</human_intel>` tags with:
+                  Surface Intention: [apparent motive]
+                  Emotional Driver: [suppressed feeling]
+                  Need Driver: [core need]
+                  Fear Driver: [avoided fear]
+                  Incentive Driver: [gain/payout]
+                  Identity Driver: [guarded self-image]
+                  Hidden Motives: [hidden agenda]
             """.trimIndent()
 
             "Systems" -> """
-                CRITICAL MODE: SYSTEMS LENS
-                YOUR ROLE: Map feedback loops, systemic incentive structures, unintended consequences, and second-order effects. Think in flows and equilibria.
-                Open with: "Mapping the systematic flows and secondary feedback loops..." or similar systems language.
-                Identify systemic limits, delayed reactions, status gains/payouts, and core structural levers.
+                ### REASONING SYSTEM: SYSTEMS LENS
+                - Purpose: Analyze feedback loops and systemic interactions.
+                - Focus: Cause/effect loops, Reinforcing loops, Bottlenecks, Incentives, Emergent behavior.
+                - Core Reasoning Framework Constraint: Map circular feedback, delays, systemic leverage, and resource boundaries. Avoid linear causal explanations.
+                - Mode Vocabulary: Feedback loop, reinforcing loop, balancing mechanism, system bottleneck, secondary effect, systemic limits, dynamic equilibrium.
+                - Output Structure Requirement: You MUST structure the main analysis body (the introduction outside XML tags) exactly with these section headers (separated by double newlines) and provide profound, situational-specific answers:
+                  
+                  SYSTEM COMPONENTS: [Enumerate stakeholders, boundaries, and variables]
+                  
+                  FEEDBACK LOOPS: [Diagram and detail circular reinforcing and balancing loops]
+                  
+                  BOTTLENECKS: [Name the choke points, capacity constraints, and operational filters]
+                  
+                  SECOND ORDER EFFECTS: [Detail the cascading secondary and third-order unintended consequences]
+                  
+                  SYSTEM MAP: [Trace how elements connect through pathways other than direct links]
+                  
+                  INTERVENTION POINTS: [Specify the highest impact systemic leverage point to shift the loop]
+                  
+                - XML Custom Tag Requirement: You MUST populate `<probability_assessment>` and `<timeline_forecast>` tags with custom systemic risk calculations.
             """.trimIndent()
 
             "Probability" -> """
-                CRITICAL MODE: PROBABILITY LENS
-                YOUR ROLE: Frame outcomes as causal likelihoods. Use scenario trees. Quantify uncertainties and branching futures. Always say: "X% likely because..."
-                Open with: "Assessing the probabilistic scenario tree and trajectories..." or similar probabilistic language.
-                Map decision trajectories with estimated likelihood numbers, confidence bounds, risks, and early warning indicators.
+                ### REASONING SYSTEM: PROBABILITY LENS
+                - Purpose: Estimate likely future outcomes.
+                - Focus: Scenario planning, Risk assessment, Expected outcomes, Decision trees.
+                - Core Reasoning Framework Constraint: Express all outcomes as branching probability trees. You MUST estimate and explicitly state realistic probabilities (% values) for every scenario based on situational factors and behaviors. No absolute predictions.
+                - Mode Vocabulary: Branching trajectory, probability interval, risk coefficient, expected value, sensitivity factor, warning signal, tail risk.
+                - Output Structure Requirement: You MUST structure the main analysis body (the introduction outside XML tags) exactly with these section headers (separated by double newlines) and provide profound, situational-specific answers:
+                  
+                  SCENARIO A: [Detail the most likely status-quo persistent path]
+                  PROBABILITY: [Value]% (Always include calculated probability % representing current loop inertia)
+                  
+                  SCENARIO B: [Detail the alternative constructive alignment/breakthrough track]
+                  PROBABILITY: [Value]% (Always include calculated probability % representing a targeted pivot)
+                  
+                  SCENARIO C: [Detail the tail risk/vulnerability or risk escalation outlier branch]
+                  PROBABILITY: [Value]% (Always include calculated probability % representing worst case scenarios)
+                  
+                  KEY VARIABLES: [Identify dynamic cues, sensitivities, and early warning indicators]
+                  
+                  MOST LIKELY OUTCOME: [Deliver a definitive, reasoned probable forecast prediction]
+                  
+                - XML Custom Tag Requirement: You MUST populate `<future_prob>` and `<probability_metrics>` tags with these scenarios and signals.
             """.trimIndent()
 
             "Business" -> """
-                CRITICAL MODE: BUSINESS LENS
-                YOUR ROLE: Apply economic frameworks (SWOT, Porter's Five Forces, unit economics). Focus heavily on competitive advantages, margins, leverage points, and measurable outcomes.
-                Open with: "Analyzing the strategic business landscape and incentives..." or similar business language.
-                Map structural organizational bottlenecks, transaction cost models, and economic game-theoretic alignments.
+                ### REASONING SYSTEM: BUSINESS LENS
+                - Purpose: Think like an investor, operator, and strategist.
+                - Focus: Revenue, Market dynamics, Competitive advantage, Incentives, Scaling.
+                - Core Reasoning Framework Constraint: Apply rigorous economic, financial, and competitive strategy tools (SWOT, Moats, unit economics, value chains).
+                - Mode Vocabulary: Value chain, competitive moat, unit economics, incentive alignment, market force, scale barrier, transaction cost.
+                - Output Structure Requirement: You MUST structure the main analysis body (the introduction outside XML tags) exactly with these section headers (separated by double newlines) and provide profound, situational-specific answers:
+                  
+                  BUSINESS REALITY: [Overview of business/work reality, customer motives, and unit economics]
+                  
+                  MARKET FORCES: [Map the competitive landscape, suppliers, competitors, and industry pressures]
+                  
+                  STRENGTHS: [Identify core competencies, brand capitals, or dynamic strategic assets]
+                  
+                  WEAKNESSES: [Detail internal operational bottlenecks, leakages, or resource deficiencies]
+                  
+                  OPPORTUNITIES: [Target market expansions, alternative revenue streams, and leverage points]
+                  
+                  THREATS: [Outline external risks, hostile competitors, or regulatory cliffs]
+                  
+                  STRATEGIC RECOMMENDATION: [State the highest leverage structural strategy for scaling and moat building]
+                  
+                - XML Custom Tag Requirement: You MUST populate `<decision_impact>` and `<forecast_summary>` reflecting these business trade-offs and pay-offs.
             """.trimIndent()
 
             "Relationships" -> """
-                CRITICAL MODE: RELATIONSHIPS LENS
-                YOUR ROLE: Focus on interpersonal dynamics, repeating loops, unexpressed/covert contracts, and emotional safety of connections.
-                Open with: "Unpacking the interpersonal power dynamics and attachment needs..." or similar relationships lens language.
-                Map co-dependencies, feedback games, communication scripts, power-plays, and deep trust triggers.
+                ### REASONING SYSTEM: RELATIONSHIPS LENS
+                - Purpose: Analyze interpersonal dynamics.
+                - Focus: Attachment styles, Boundaries, Communication, Emotional needs, Power dynamics.
+                - Core Reasoning Framework Constraint: Map circular relational dances, unexpressed covert contracts, codependencies, boundaries, and safety thresholds.
+                - Mode Vocabulary: Relational dance, attachment trigger, covert contract, boundary leak, power symmetry, deep trust threshold, emotional safety loop.
+                - Output Structure Requirement: You MUST structure the main analysis body (the introduction outside XML tags) exactly with these section headers (separated by double newlines) and provide profound, situational-specific answers:
+                  
+                  RELATIONSHIP DYNAMIC: [Describe the codependent loops or circular friction dances]
+                  
+                  PERSON A PERSPECTIVE: [Outline the attachment triggers, unmet needs, and defensive behavior of Person A]
+                  
+                  PERSON B PERSPECTIVE: [Outline the attachment triggers, unmet needs, and defensive behavior of Person B]
+                  
+                  HIDDEN TENSIONS: [Expose unexpressed covert contracts, resentments, and hidden loyalty/trust traps]
+                  
+                  LIKELY OUTCOME: [Predict the relationship development trajectory if boundaries remain unchanged]
+                  
+                  RECOMMENDED APPROACH: [Actionable paths to repair trust, set clean boundaries, and re-establish safety]
+                  
+                - XML Custom Tag Requirement: You MUST populate `<human_intel>` and `<decision_impact>` maps matching these relational parties.
             """.trimIndent()
 
             "Spiritual" -> """
-                CRITICAL MODE: SPIRITUAL LENS
-                YOUR ROLE: Zoom out to transcendental meaning, purpose, values alignment, and personal growth arcs.
-                Open with: "Zooming out to the spiritual alignment and personal growth arc..." or similar spiritual perspective language.
-                Evaluate high-level soul contracts, karmic lessons, energy blocks, alignment imbalances, and evolution gates.
+                ### REASONING SYSTEM: SPIRITUAL LENS
+                - Purpose: Explore meaning, awareness, growth, and consciousness.
+                - Focus: Identity, Ego, Awareness, Purpose, Presence.
+                - Core Reasoning Framework Constraint: Zoom out to transcendental meaning and personal growth. You MUST avoid giving generic mystical, fuzzy, or esoteric cliches. Keep your insights practical, high-integrity, and highly grounded in lived experience.
+                - Mode Vocabulary: Ego identity, conscious awareness, transcendent presence, evolutionary growth, values flow, shadow integration, purpose gate.
+                - Output Structure Requirement: You MUST structure the main analysis body (the introduction outside XML tags) exactly with these section headers (separated by double newlines) and provide profound, situational-specific answers:
+                  
+                  SURFACE SITUATION: [Overview of the surface-level mundane conflict or scenario]
+                  
+                  DEEPER LESSON: [Highlight what growth or evolution opportunities are embedded in this friction]
+                  
+                  EGO PERSPECTIVE: [Reveal how fear, pride, and self-protection misinterpret the events]
+                  
+                  AWARENESS PERSPECTIVE: [View the scenario from a state of calm, non-judgmental presence]
+                  
+                  GROWTH OPPORTUNITY: [How this issue can expand self-understanding and break static habits]
+                  
+                  REFLECTION: [Grounded contemplations, practical self-inquiries, or mindful actions]
+                  
+                - XML Custom Tag Requirement: You MUST populate `<deep_synthesis>` or `<depth>` reflecting these higher-order growth vectors.
             """.trimIndent()
 
             else -> "Identify the core themes, drivers, and dynamic implications of the context."
         }
 
+        val depthReasoningFramework = when (sessionDepth) {
+            "Quick Insight" -> """
+                ### DEPTH REASONING FRAMEWORK: QUICK INSIGHT
+                - Objective: Rapid, high-density, action-oriented bullet vectors.
+                - Style: Under 5 seconds of cognitive load. Zero filler or introductions.
+                - Detail Structure: Exactly 3 to 5 highly concise, spacing-optimized, bullet points written through the vocabulary of the chosen Mode.
+                - Active Tags Constraint: Output ONLY these tags: <summary>, <confidence>, <exploration>. DO NOT generate other tags or sections.
+                - Mobile Brevity: Each bullet point must be a single powerful sentence max.
+            """.trimIndent()
+
+            "Standard Analysis" -> """
+                ### DEPTH REASONING FRAMEWORK: STANDARD ANALYSIS
+                - Objective: Balanced, structured, highly clear systems-thinking and behavioral explanation.
+                - Style: Professional, concise, and structured.
+                - Detail Structure: Exactly 3 to 4 structured, dense paragraphs covering surface symptoms, systemic loops, psychological drivers, and immediate pivots.
+                - Active Tags Constraint: Output ONLY these tags: <summary>, <confidence>, <root_cause>, <exploration>.
+            """.trimIndent()
+
+            "Deep Analysis" -> """
+                ### DEPTH REASONING FRAMEWORK: DEEP ANALYSIS
+                - Objective: Exhaustive, multi-layered deconstruction of the situation.
+                - Style: Rigorous, clinical, multi-perspective.
+                - Detail Structure: A detailed introductory overview followed by a comprehensive, 10-layer progressive reality mapping block.
+                - Active Tags Constraint: Output ONLY: <summary>, <confidence>, <depth>, <memory_insight>, <exploration>.
+                - Rules for <depth> Tag: Identify the situation across all 10 Layers of Reality, writing exactly 2 sentences per layer. Layer X - Name: Explanation.
+            """.trimIndent()
+
+            "Full Investigation" -> """
+                ### DEPTH REASONING FRAMEWORK: FULL INVESTIGATION
+                - Objective: Sovereign strategic intelligence, risk predictions, and branching scenario modeling.
+                - Style: Elite, comprehensive, strategic advisory report.
+                - Detail Structure: Map out the macro-strategic systems, stakeholder games, unintended feedback loops, timelines, and decision trade-offs.
+                - Active Tags Constraint: Output all advanced forecasting modules: <summary>, <confidence>, <probability_metrics>, <probability_assessment>, <future_pathways>, <timeline_forecast>, <decision_impact>, <forecast_summary>, <future_prob>, <memory_insight>, <questions>, <exploration>.
+                - Probability estimates: Express all scenario forecasts as reasoned percentages (e.g. 60%, 25%) based on loop stability constants.
+            """.trimIndent()
+
+            else -> """
+                ### DEPTH REASONING FRAMEWORK: STANDARD ANALYSIS
+                - Core constraints: Focus on the diagnostic depth requested by the user, and select relevant XML-like tags to build a structured report.
+            """.trimIndent()
+        }
+
         var adjustedSystemInstructionText = systemInstructionText
-        if (sessionCategory == "Root Cause") {
-            adjustedSystemInstructionText = adjustedSystemInstructionText
-                .replace(
-                    "You MUST ALWAYS generate an elite Deep Synthesis block wrapped in <deep_synthesis>...</deep_synthesis> tags. Do NOT summarize or repeat sections; synthesize the ultimate central pattern, hidden systemic forces, unconsciously ignored realities, and the single highest leverage point.",
-                    "You MUST ALWAYS generate an elite Root Cause Analysis block wrapped in <root_cause>...</root_cause> tags. Do NOT output a <deep_synthesis> tag under any circumstances. Focus exclusively on diagnostic truth, core causality, driving wounds, system bottlenecks, and triggers. Avoid high-level perspective summaries."
-                )
-                .replace("<deep_synthesis>", "<root_cause>")
-                .replace("</deep_synthesis>", "</root_cause>")
-        } else if (sessionCategory == "Deep Synthesis") {
-            adjustedSystemInstructionText = adjustedSystemInstructionText
-                .replace(
-                    "You MUST ALWAYS generate an elite Deep Synthesis block wrapped in <deep_synthesis>...</deep_synthesis> tags. Do NOT summarize or repeat sections; synthesize the ultimate central pattern, hidden systemic forces, unconsciously ignored realities, and the single highest leverage point.",
-                    "You MUST ALWAYS generate an elite Deep Synthesis block wrapped in <deep_synthesis>...</deep_synthesis> tags. Do NOT output a <root_cause> tag. Focus entirely on synthesizing multi-perspective wisdom and high-level viewpoints. Expressly avoid causal diagnosis."
-                )
-                .replace("<root_cause>", "<deep_synthesis>")
-                .replace("</root_cause>", "</deep_synthesis>")
+        when (sessionCategory) {
+            "Root Cause" -> {
+                adjustedSystemInstructionText = adjustedSystemInstructionText
+                    .replace(
+                        "You MUST ALWAYS generate an elite Deep Synthesis block wrapped in <deep_synthesis>...</deep_synthesis> tags. Do NOT summarize or repeat sections; synthesize the ultimate central pattern, hidden systemic forces, unconsciously ignored realities, and the single highest leverage point.",
+                        "You MUST ALWAYS generate an elite Root Cause Analysis block wrapped in <root_cause>...</root_cause> tags. Do NOT output a <deep_synthesis> tag under any circumstances. Focus exclusively on diagnostic truth, core causality, driving wounds, system bottlenecks, and triggers. Avoid high-level perspective summaries."
+                    )
+                    .replace("<deep_synthesis>", "<root_cause>")
+                    .replace("</deep_synthesis>", "</root_cause>")
+            }
+            "Deep Synthesis" -> {
+                adjustedSystemInstructionText = adjustedSystemInstructionText
+                    .replace(
+                        "You MUST ALWAYS generate an elite Deep Synthesis block wrapped in <deep_synthesis>...</deep_synthesis> tags. Do NOT summarize or repeat sections; synthesize the ultimate central pattern, hidden systemic forces, unconsciously ignored realities, and the single highest leverage point.",
+                        "You MUST ALWAYS generate an elite Deep Synthesis block wrapped in <deep_synthesis>...</deep_synthesis> tags. Do NOT output a <root_cause> tag. Focus entirely on synthesizing multi-perspective wisdom and high-level viewpoints. Expressly avoid causal diagnosis."
+                    )
+                    .replace("<root_cause>", "<deep_synthesis>")
+                    .replace("</root_cause>", "</deep_synthesis>")
+            }
+            "Psychology" -> {
+                adjustedSystemInstructionText = adjustedSystemInstructionText
+                    .replace(
+                        "You MUST ALWAYS generate an elite Deep Synthesis block wrapped in <deep_synthesis>...</deep_synthesis> tags. Do NOT summarize or repeat sections; synthesize the ultimate central pattern, hidden systemic forces, unconsciously ignored realities, and the single highest leverage point.",
+                        "You MUST ALWAYS generate an elite psychological deconstruction block wrapped in <human_intel>...</human_intel> tags. Focus entirely on exposing ego-protections, child-scripts, attachment-triggers and unexamined self-image defense models. Avoid generic advice."
+                    )
+                    .replace("<deep_synthesis>", "<human_intel>")
+                    .replace("</deep_synthesis>", "</human_intel>")
+            }
+            "Systems" -> {
+                adjustedSystemInstructionText = adjustedSystemInstructionText
+                    .replace(
+                        "You MUST ALWAYS generate an elite Deep Synthesis block wrapped in <deep_synthesis>...</deep_synthesis> tags. Do NOT summarize or repeat sections; synthesize the ultimate central pattern, hidden systemic forces, unconsciously ignored realities, and the single highest leverage point.",
+                        "You MUST ALWAYS generate systemic loop analysis metrics wrapped in <probability_assessment>...</probability_assessment> and <timeline_forecast>...</timeline_forecast> tags. Analyze stakeholders, reinforcing/balancing feedback loops, bottlenecks, and game-theoretic secondary effects."
+                    )
+                    .replace("<deep_synthesis>", "<probability_assessment>")
+                    .replace("</deep_synthesis>", "</probability_assessment>")
+            }
+            "Probability" -> {
+                adjustedSystemInstructionText = adjustedSystemInstructionText
+                    .replace(
+                        "You MUST ALWAYS generate an elite Deep Synthesis block wrapped in <deep_synthesis>...</deep_synthesis> tags. Do NOT summarize or repeat sections; synthesize the ultimate central pattern, hidden systemic forces, unconsciously ignored realities, and the single highest leverage point.",
+                        "You MUST ALWAYS generate branching scenario forecast streams wrapped in <future_prob>...</future_prob> and <probability_metrics>...</probability_metrics> tags. Model status-quo loop persistence vs alternative breakthrough tracks, tail risks, outlier factors, and early warning signals."
+                    )
+                    .replace("<deep_synthesis>", "<future_prob>")
+                    .replace("</deep_synthesis>", "</future_prob>")
+            }
+            "Business" -> {
+                adjustedSystemInstructionText = adjustedSystemInstructionText
+                    .replace(
+                        "You MUST ALWAYS generate an elite Deep Synthesis block wrapped in <deep_synthesis>...</deep_synthesis> tags. Do NOT summarize or repeat sections; synthesize the ultimate central pattern, hidden systemic forces, unconsciously ignored realities, and the single highest leverage point.",
+                        "You MUST ALWAYS generate corporate strategy assessment streams wrapped in <decision_impact>...</decision_impact> and <forecast_summary>...</forecast_summary> tags. Map unit-economics, transaction costs, competitive moats, market-forces, SWOT alignments, and scaling barriers."
+                    )
+                    .replace("<deep_synthesis>", "<decision_impact>")
+                    .replace("</deep_synthesis>", "</decision_impact>")
+            }
+            "Relationships" -> {
+                adjustedSystemInstructionText = adjustedSystemInstructionText
+                    .replace(
+                        "You MUST ALWAYS generate an elite Deep Synthesis block wrapped in <deep_synthesis>...</deep_synthesis> tags. Do NOT summarize or repeat sections; synthesize the ultimate central pattern, hidden systemic forces, unconsciously ignored realities, and the single highest leverage point.",
+                        "You MUST ALWAYS generate relational dynamics maps wrapped in <human_intel>...</human_intel> and <decision_impact>...</decision_impact> tags. Detail interpersonal circular friction loops, attachment security boundaries, and unspoken covert contracts."
+                    )
+                    .replace("<deep_synthesis>", "<human_intel>")
+                    .replace("</deep_synthesis>", "</human_intel>")
+            }
+            "Spiritual" -> {
+                adjustedSystemInstructionText = adjustedSystemInstructionText
+                    .replace(
+                        "You MUST ALWAYS generate an elite Deep Synthesis block wrapped in <deep_synthesis>...</deep_synthesis> tags. Do NOT summarize or repeat sections; synthesize the ultimate central pattern, hidden systemic forces, unconsciously ignored realities, and the single highest leverage point.",
+                        "You MUST ALWAYS generate transcendent lesson insights wrapped in <deep_synthesis>...</deep_synthesis> or <depth>...</depth> tags. Map the mundane conflict to core growth, ego defenses, presence practices, value integration, and conscious awareness metrics."
+                    )
+            }
         }
 
         val prefs = context.getSharedPreferences("depthlens_prefs", Context.MODE_PRIVATE)
@@ -979,6 +1198,9 @@ $adjustedSystemInstructionText
 
 ### SPECIALIZED LENS FOCUS: $sessionCategory
 $categoryFocusInstruction
+
+### DEDICATED DEPTH REASONING FRAMEWORK: $sessionDepth
+$depthReasoningFramework
 
 ### INTENDED ANALYSIS DEPTH
 Selected depth rating: ${if (isDeepThought) "Full Investigation (Deep Thought Active)" else sessionDepth}. You MUST adjust your detail levels, formatting, and structures accordingly:
@@ -1031,147 +1253,8 @@ You are operating in DEEP THOUGHT Mode (which increases the default reasoning la
         var modelText: String? = null
         var lastException: Exception? = null
 
-        if (chosenLevel == IntentLevel.LEVEL_3_DEEP || chosenLevel == IntentLevel.LEVEL_4_STRATEGIC) {
-            try {
-                var module1Text = ""
-                var module2Text = ""
-                var module3Text = ""
-                var module4Text = ""
-                var module5Text = ""
-                var module6Text = ""
-
-                var attempts = 0
-                val maxAttempts = 3
-                var isValidated = false
-
-                while (attempts < maxAttempts && !isValidated) {
-                    attempts++
-
-                    val m1Job = async { generateModule1(apiKey, contentsPayload, latestUserMsgText, memoryBlock) }
-                    val m2Job = async { generateModule2(apiKey, contentsPayload, latestUserMsgText, memoryBlock) }
-                    val m3Job = async { generateModule3(apiKey, contentsPayload, latestUserMsgText, memoryBlock) }
-                    val m4Job = async { generateModule4(apiKey, contentsPayload, latestUserMsgText, memoryBlock) }
-                    val m5Job = async { generateModule5(apiKey, contentsPayload, latestUserMsgText, memoryBlock) }
-                    val m6Job = async { generateModule6(apiKey, contentsPayload, latestUserMsgText, memoryBlock) }
-
-                    module1Text = m1Job.await()
-                    module2Text = m2Job.await()
-                    module3Text = m3Job.await()
-                    module4Text = m4Job.await()
-                    module5Text = m5Job.await()
-                    module6Text = m6Job.await()
-
-                    val s12 = calculateSemanticSimilarity(module1Text, module2Text)
-                    val s26 = calculateSemanticSimilarity(module2Text, module6Text)
-                    val s63 = calculateSemanticSimilarity(module6Text, module3Text)
-
-                    val s13 = calculateSemanticSimilarity(module1Text, module3Text)
-                    val s14 = calculateSemanticSimilarity(module1Text, module4Text)
-                    val s15 = calculateSemanticSimilarity(module1Text, module5Text)
-                    val s16 = calculateSemanticSimilarity(module1Text, module6Text)
-                    val s23 = calculateSemanticSimilarity(module2Text, module3Text)
-                    val s24 = calculateSemanticSimilarity(module2Text, module4Text)
-                    val s25 = calculateSemanticSimilarity(module2Text, module5Text)
-                    val s34 = calculateSemanticSimilarity(module3Text, module4Text)
-                    val s35 = calculateSemanticSimilarity(module3Text, module5Text)
-                    val s36 = calculateSemanticSimilarity(module3Text, module6Text)
-                    val s45 = calculateSemanticSimilarity(module4Text, module5Text)
-                    val s46 = calculateSemanticSimilarity(module4Text, module6Text)
-                    val s56 = calculateSemanticSimilarity(module5Text, module6Text)
-
-                    val hasOverlap = listOf(
-                        s12, s26, s63, s13, s14, s15, s16, s23, s24, s25, s34, s35, s36, s45, s46, s56
-                    ).any { it >= 0.40f }
-
-                    if (!hasOverlap) {
-                        isValidated = true
-                    }
-                }
-
-                // Compile them together
-                val m4Content = if (module4Text.contains("<probability_metrics>")) module4Text else """
-                    <probability_metrics>
-                    Confidence: 85% | Likelihood: 70% | Risk: 35% | Opportunity: 65%
-                    </probability_metrics>
-                    
-                    <probability_assessment>
-                    Likelihood: 70% | Confidence: High
-                    Reasoning Factors:
-                    • $module4Text
-                    </probability_assessment>
-                """.trimIndent()
-
-                val m5Content = if (module5Text.contains("<future_prob>")) module5Text else """
-                    <future_prob>
-                    Scenario A - Most Likely Path | 60% | $module5Text
-                    Scenario B - Positive Alignment | 25% | Multi-perspective alignments can significantly reduce systemic inertia.
-                    Scenario C - Risk Escalation | 10% | Passive avoidance triggers defensive status quo reinforcements.
-                    Scenario D - Outlier Factor | 5% | External macro triggers or system perturbations alter the primary loop.
-                    Early Warning Signals: Behavioral withdrawal, communication delay
-                    </future_prob>
-                """.trimIndent()
-
-                modelText = """
-                    $module1Text
-
-                    <summary>
-                    $module1Text
-                    </summary>
-
-                    <confidence>
-                    High
-                    </confidence>
-
-                    <root_cause>
-                    $module2Text
-                    </root_cause>
-
-                    <human_intel>
-                    $module3Text
-                    </human_intel>
-
-                    $m4Content
-
-                    $m5Content
-
-                    <deep_synthesis>
-                    $module6Text
-                    </deep_synthesis>
-
-                    <depth>
-                    Layer 1 - Observable Reality: Surface dynamic is established with direct system triggers. Inside the observed flow, tension vectors are clearly active.
-                    Layer 2 - Behavioral Reality: Repeating defensive responses escalate internal friction. Conditioned reflexes default to immediate self-protection.
-                    Layer 3 - Psychological Reality: Unconscious ego preservation operates via projection and rationalization. This shields the core self from cognitive dissonance.
-                    Layer 4 - Emotional Reality: Undercurrents of unexamined anxiety dictate key decision boundaries. Unspoken fears create a rigid operational space.
-                    Layer 5 - Strategic Reality: Hidden incentive loops reward status maintenance over collaborative pivots. Short term payoff outweighs systemic optimization.
-                    Layer 6 - Systemic Reality: Unchecked feedback structures reinforce the initial division. The feedback loops lock down progress automatically.
-                    Layer 7 - Pattern Reality: The active dynamic duplicates historic relational scripts perfectly. Historical blueprints continue to run unmitigated.
-                    Layer 8 - Root Cause Reality: A foundational sense of instability drives the reactive patterns. These deep structural wounds shape all current parameters.
-                    Layer 9 - Probability Reality: Status quo has an 80% chance of escalating conflict if unchanged. Proactive alignment releases 75% of the systemic load.
-                    Layer 10 - Hidden Risks & Opportunities: The critical vulnerability is silent operational withdrawal. The biggest strategic opportunity is radical transparency.
-                    </depth>
-
-                    <questions>
-                    ? What hidden incentive or reward is currently maintaining this pattern?
-                    ? If this dynamic remains unchanged, what is the cost 12 months from now?
-                    ? What is the single highest leverage point that can release this deadlock?
-                    ? How is the current communication style reinforcing the underlying defenses?
-                    ? What core fear needs to be acknowledged to shift the systemic trigger?
-                    </questions>
-
-                    <exploration>
-                    ✓ Psychological Adaptations
-                    ✓ Reveal Root Cause
-                    ✓ Systems Feedback Analysis
-                    </exploration>
-                """.trimIndent()
-
-            } catch (ex: Exception) {
-                ex.printStackTrace()
-                lastException = ex
-                modelText = null
-            }
-        }
+        // Use high-intelligence single content generation to load dedicated reasoning frameworks dynamically,
+        // avoiding duplicate parallel requests and static placeholder outputs.
 
         if (modelText == null) {
             val modelsToTry = buildModelFallbackChain(getPreferredModel())

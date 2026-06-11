@@ -34,6 +34,7 @@ import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material.icons.rounded.Stop
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -1018,7 +1019,7 @@ fun HomeScreen(
                                                  }
                                              }
 
-                                              var digDeeperExpanded by remember { mutableStateOf(false) }
+                                              var digDeeperExpanded by rememberSaveable { mutableStateOf(false) }
                                               Row(
                                                   modifier = Modifier
                                                       .fillMaxWidth()
@@ -1127,7 +1128,7 @@ fun HomeScreen(
 
                                               // ── Exploration paths ──────────────────────────
                                              if (parsedResponse.explorationPaths.isNotEmpty()) {
-                                                 var exploreFurtherExpanded by remember { mutableStateOf(false) }
+                                                 var exploreFurtherExpanded by rememberSaveable { mutableStateOf(false) }
                                                  Spacer(modifier = Modifier.height(10.dp))
                                                  Row(
                                                      modifier = Modifier
@@ -1477,7 +1478,7 @@ fun HomeScreen(
         }
     } // End of inner Column
 
-    // Floating scroll arrow premium glass buttons (v5.8.9.x)
+    // Floating scroll arrow premium glass buttons (v5.8.9.x1)
     AnimatedVisibility(
         visible = showScrollButtonState != "none",
         enter = scaleIn(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) + fadeIn(),

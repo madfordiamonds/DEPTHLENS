@@ -109,55 +109,54 @@ fun LoginScreen(
                 .padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Stylized Logo / Icon
-            Box(
+            // Official DepthLens Logo
+            Image(
+                painter = painterResource(id = R.drawable.ic_depthlens_logo),
+                contentDescription = "DepthLens Logo",
                 modifier = Modifier
-                    .size(56.dp)
-                    .background(Surface2, shape = RoundedCornerShape(14.dp))
-                    .border(1.dp, BorderSubtle, shape = RoundedCornerShape(14.dp)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Lock,
-                    contentDescription = "Auth lock",
-                    tint = ElectricViolet,
-                    modifier = Modifier.size(28.dp)
-                )
-            }
+                    .height(64.dp)
+                    .width(64.dp),
+                contentScale = androidx.compose.ui.layout.ContentScale.Fit
+            )
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Brand Title / Header
+            // Brand Title
             Text(
-                text = "DepthLens Intelligence",
-                fontFamily = DMSerifDisplayFontFamily,
-                fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
-                fontSize = 24.sp,
-                color = TextPrimaryColor,
+                text = "DEPTHLENS",
+                fontFamily = InstrumentSansFontFamily,
+                fontWeight = FontWeight.Bold,
+                fontSize = 26.sp,
+                color = Color.White,
+                letterSpacing = 6.sp,
                 textAlign = TextAlign.Center
             )
 
             Spacer(modifier = Modifier.height(4.dp))
 
+            // Brand Tagline
             Text(
-                text = "SECURITY INTEGRATION & VECTOR GATEWAY",
-                fontFamily = DMMonoFontFamily,
-                fontSize = 8.sp,
-                color = TextMutedColor,
-                letterSpacing = 1.2.sp,
+                text = "See Beyond Surface",
+                fontFamily = InstrumentSansFontFamily,
+                fontWeight = FontWeight.Medium,
+                fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+                fontSize = 11.sp,
+                color = PremiumCyan,
+                letterSpacing = 1.sp,
                 textAlign = TextAlign.Center
             )
 
             Spacer(modifier = Modifier.height(28.dp))
 
-            // Subtitle action status
+            // Subtitle action status - aligned Center
             Text(
                 text = if (isRegisterMode) "Register New Agent Account" else "Authenticate Existing Session",
                 fontFamily = InstrumentSansFontFamily,
                 fontWeight = FontWeight.SemiBold,
                 fontSize = 13.sp,
                 color = TextPrimaryColor,
-                modifier = Modifier.align(Alignment.Start)
+                modifier = Modifier.align(Alignment.CenterHorizontally),
+                textAlign = TextAlign.Center
             )
 
             Spacer(modifier = Modifier.height(14.dp))
