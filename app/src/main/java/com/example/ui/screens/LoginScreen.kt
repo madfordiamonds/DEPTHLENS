@@ -16,6 +16,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
@@ -51,6 +52,11 @@ fun LoginScreen(
     var fullName by remember { mutableStateOf("") }
     var isPasswordVisible by remember { mutableStateOf(false) }
     var isLoading by remember { mutableStateOf(false) }
+
+    // Forgot Password States
+    var showForgotPasswordDialog by remember { mutableStateOf(false) }
+    var forgotPasswordEmail by remember { mutableStateOf("") }
+    var isSendingResetEmail by remember { mutableStateOf(false) }
 
     // Real Google Sign-In Activity Result Launcher
     val googleSignInLauncher = rememberLauncherForActivityResult(
@@ -346,6 +352,23 @@ fun LoginScreen(
                 )
             }
 
+            if (!isRegisterMode) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "Forgot Password?",
+                    fontFamily = InstrumentSansFontFamily,
+                    fontSize = 10.5.sp,
+                    color = PremiumCyan.copy(alpha = 0.9f),
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier
+                        .clickable {
+                            forgotPasswordEmail = email.trim()
+                            showForgotPasswordDialog = true
+                        }
+                        .padding(4.dp)
+                )
+            }
+
             Divider(
                 color = BorderSubtle,
                 thickness = 1.dp,
@@ -394,6 +417,96 @@ fun LoginScreen(
                     )
                 }
             }
+        }
+
+        if (showForgotPasswordDialog) {
+            AlertDialog(
+                onDismissRequest = {
+                    showForgotPasswordDialog = false
+                    forgotPasswordEmail = ""
+                },
+                title = {
+                    Text(
+                        text = "RECOVER ACCESS PIN",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = PremiumCyan,
+                        letterSpacing = 1.sp,
+                        fontFamily = FontFamily.Monospace
+                    )
+                },
+                text = {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Text(
+                            text = "Enter your registered email address to receive secure credentials reset instructions.",
+                            fontSize = 12.sp,
+                            color = TextPrimaryColor,
+                            lineHeight = 16.sp
+                        )
+                        OutlinedTextField(
+                            value = forgotPasswordEmail,
+                            onValueChange = { forgotPasswordEmail = it },
+                            label = { Text("Email Address", fontSize = 11.sp, color = TextMutedColor) },
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = ElectricViolet,
+                                unfocusedBorderColor = BorderSubtle,
+                                focusedTextColor = TextPrimaryColor,
+                                unfocusedTextColor = TextPrimaryColor,
+                                focusedContainerColor = Surface2,
+                                unfocusedContainerColor = Surface2
+                            ),
+                            shape = RoundedCornerShape(10.dp),
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            val targetEmail = forgotPasswordEmail.trim()
+                            if (targetEmail.isEmpty() || !android.util.Patterns.EMAIL_ADDRESS.matcher(targetEmail).matches()) {
+                                Toast.makeText(context, "Please enter a valid email address.", Toast.LENGTH_SHORT).show()
+                                return@Button
+                            }
+                            isSendingResetEmail = true
+                            viewModel.sendPasswordReset(targetEmail) { success, msg ->
+                                isSendingResetEmail = false
+                                if (success) {
+                                    Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+                                    showForgotPasswordDialog = false
+                                    forgotPasswordEmail = ""
+                                } else {
+                                    Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+                                }
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = ElectricViolet),
+                        shape = RoundedCornerShape(10.dp),
+                        enabled = !isSendingResetEmail
+                    ) {
+                        if (isSendingResetEmail) {
+                            CircularProgressIndicator(modifier = Modifier.size(20.dp), color = Color.White, strokeWidth = 2.dp)
+                        } else {
+                            Text("Send Reset Link", color = Color.White, fontSize = 12.sp)
+                        }
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = {
+                        showForgotPasswordDialog = false
+                        forgotPasswordEmail = ""
+                    }) {
+                        Text("Cancel", color = ErrorColor, fontSize = 12.sp)
+                    }
+                },
+                containerColor = DeepMidnight,
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier.border(1.2.dp, ElectricViolet, RoundedCornerShape(16.dp))
+            )
         }
     }
 }

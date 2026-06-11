@@ -92,6 +92,7 @@ fun DashboardScreen(
     val isGuest by viewModel.isGuest.collectAsState()
     val userName by viewModel.userName.collectAsState()
     val userEmail by viewModel.userEmail.collectAsState()
+    val userPhotoUrl by viewModel.userPhotoUrl.collectAsState()
     val githubToken by viewModel.githubToken.collectAsState()
     val repoOwnerAndName by viewModel.repoOwnerAndName.collectAsState()
     val onboardingCompleted by viewModel.onboardingCompleted.collectAsState()
@@ -150,6 +151,8 @@ fun DashboardScreen(
     var feedbackMessage by remember { mutableStateOf("") }
     var feedbackEmail by remember { mutableStateOf("") }
     var feedbackSubmitted by remember { mutableStateOf(false) }
+    var isSendingFeedback by remember { mutableStateOf(false) }
+    var feedbackSendResult by remember { mutableStateOf<Boolean?>(null) }
     var wasLoading by remember { mutableStateOf(false) }
 
     // Media permission states & helper functions
@@ -1101,6 +1104,8 @@ Text(
             onDismissRequest = {
                 showFeedbackDialog = false
                 feedbackSubmitted = false
+                feedbackSendResult = null
+                isSendingFeedback = false
                 feedbackMessage = ""
                 feedbackEmail = ""
             },
@@ -1115,7 +1120,24 @@ Text(
                 )
             },
             text = {
-                if (!feedbackSubmitted) {
+                if (isSendingFeedback) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 30.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        CircularProgressIndicator(color = ElectricViolet, modifier = Modifier.size(36.dp))
+                        Spacer(modifier = Modifier.height(14.dp))
+                        Text(
+                            "Routing payload to secure cloud server...",
+                            fontSize = 11.sp,
+                            color = TextSecondaryColor,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                } else if (feedbackSendResult == null) {
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -1197,7 +1219,7 @@ Text(
                             )
                         )
                     }
-                } else {
+                } else if (feedbackSendResult == true) {
                     Column(
                         modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
@@ -1211,33 +1233,67 @@ Text(
                         )
                         Spacer(modifier = Modifier.height(14.dp))
                         Text(
-                            text = "Thank You!",
-                            fontSize = 16.sp,
+                            text = "Thank you for your feedback.",
+                            fontSize = 15.sp,
                             fontWeight = FontWeight.Bold,
                             color = TextPrimaryColor,
                             textAlign = TextAlign.Center
                         )
                         Spacer(modifier = Modifier.height(6.dp))
                         Text(
-                            text = "Your feedback has been successfully securely registered. We review every submission manually.",
-                            fontSize = 12.sp,
+                            text = "Your insights have been securely registered to ensure they are never lost. We manually review every query.",
+                            fontSize = 11.sp,
                             color = TextSecondaryColor,
                             textAlign = TextAlign.Center,
-                            lineHeight = 16.sp
+                            lineHeight = 15.sp
+                        )
+                    }
+                } else {
+                    Column(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Warning,
+                            contentDescription = "Error",
+                            tint = ErrorColor,
+                            modifier = Modifier.size(48.dp)
+                        )
+                        Spacer(modifier = Modifier.height(14.dp))
+                        Text(
+                            text = "Unable to send feedback. Please try again.",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = TextPrimaryColor,
+                            textAlign = TextAlign.Center
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = "Server network communication was interrupted, but your submission has been saved to the secure database history.",
+                            fontSize = 11.sp,
+                            color = TextSecondaryColor,
+                            textAlign = TextAlign.Center,
+                            lineHeight = 15.sp
                         )
                     }
                 }
             },
             confirmButton = {
-                if (!feedbackSubmitted) {
+                if (isSendingFeedback) {
+                    // Hidden during loading
+                } else if (feedbackSendResult == null) {
                     Button(
                         onClick = {
                             if (feedbackMessage.trim().isNotBlank()) {
+                                isSendingFeedback = true
                                 viewModel.submitFeedback(
                                     category = feedbackCategory,
                                     message = feedbackMessage,
                                     email = feedbackEmail
-                                ) { _ ->
+                                ) { success ->
+                                    isSendingFeedback = false
+                                    feedbackSendResult = success
                                     feedbackSubmitted = true
                                 }
                             }
@@ -1253,20 +1309,46 @@ Text(
                 } else {
                     Button(
                         onClick = {
-                            showFeedbackDialog = false
-                            feedbackSubmitted = false
-                            feedbackMessage = ""
-                            feedbackEmail = ""
+                            if (feedbackSendResult == false) {
+                                // Allow retry
+                                feedbackSendResult = null
+                                feedbackSubmitted = false
+                                isSendingFeedback = false
+                            } else {
+                                showFeedbackDialog = false
+                                feedbackSubmitted = false
+                                feedbackSendResult = null
+                                feedbackMessage = ""
+                                feedbackEmail = ""
+                            }
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = ElectricViolet)
                     ) {
-                        Text("Done", color = Color.White, fontSize = 12.sp)
+                        Text(
+                            text = if (feedbackSendResult == false) "Retry" else "Done",
+                            color = Color.White,
+                            fontSize = 12.sp
+                        )
                     }
                 }
             },
             dismissButton = {
-                if (!feedbackSubmitted) {
+                if (isSendingFeedback) {
+                    // No cancel while sending
+                } else if (feedbackSendResult == null) {
                     TextButton(onClick = { showFeedbackDialog = false }) {
+                        Text("Cancel", color = ErrorColor, fontSize = 12.sp)
+                    }
+                } else if (feedbackSendResult == false) {
+                    TextButton(
+                        onClick = {
+                            showFeedbackDialog = false
+                            feedbackSubmitted = false
+                            feedbackSendResult = null
+                            feedbackMessage = ""
+                            feedbackEmail = ""
+                        }
+                    ) {
                         Text("Cancel", color = ErrorColor, fontSize = 12.sp)
                     }
                 }
@@ -1879,7 +1961,7 @@ Text(
             containerColor = DeepMidnight,
             contentWindowInsets = WindowInsets(0, 0, 0, 0),
             bottomBar = {
-                if (!WindowInsets.isImeVisible) {
+                if (!WindowInsets.isImeVisible && currentTab != "edit_profile") {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -1981,6 +2063,8 @@ Text(
                             isGuest = isGuest,
                             userName = userName,
                             userEmail = userEmail,
+                            userPhotoUrl = userPhotoUrl,
+                            onNavigateToEditProfile = { currentTab = "edit_profile" },
                             githubToken = githubToken,
                             repoOwnerAndName = repoOwnerAndName,
                             onSaveGithubSettings = { token, repo -> viewModel.saveGithubSettings(token, repo) },
@@ -1995,6 +2079,12 @@ Text(
                             lastSyncedTime = lastSyncedTime,
                             chatsSyncedCount = chatsSyncedCount,
                             pendingUploadsCount = pendingUploadsCount
+                        )
+                    }
+                    "edit_profile" -> {
+                        EditProfileScreen(
+                            viewModel = viewModel,
+                            onNavigateBack = { currentTab = "settings" }
                         )
                     }
                 }

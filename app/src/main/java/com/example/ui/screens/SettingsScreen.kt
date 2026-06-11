@@ -48,6 +48,8 @@ fun SettingsScreen(
     isGuest: Boolean = false,
     userName: String = "",
     userEmail: String = "",
+    userPhotoUrl: String = "",
+    onNavigateToEditProfile: () -> Unit = {},
     githubToken: String = "",
     repoOwnerAndName: String = "",
     onSaveGithubSettings: (String, String) -> Unit = { _, _ -> },
@@ -122,10 +124,50 @@ fun SettingsScreen(
                     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
+                            horizontalArrangement = Arrangement.spacedBy(16.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Column {
+                            // Circular Profile Photo Component
+                            Box(
+                                modifier = Modifier
+                                    .size(54.dp)
+                                    .clip(CircleShape)
+                                    .background(Surface2)
+                                    .border(1.dp, ElectricViolet.copy(alpha = 0.5f), CircleShape),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                if (userPhotoUrl.isNotEmpty()) {
+                                    val painter = coil.compose.rememberAsyncImagePainter(
+                                        model = coil.request.ImageRequest.Builder(LocalContext.current)
+                                            .data(userPhotoUrl)
+                                            .crossfade(true)
+                                            .build()
+                                    )
+                                    Image(
+                                        painter = painter,
+                                        contentDescription = "Profile Photo",
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                                    )
+                                } else {
+                                    // Default styled letter avatar inside
+                                    val initial = if (userName.isNotEmpty()) userName.first().uppercase() else "E"
+                                    Text(
+                                        text = initial,
+                                        fontFamily = DMSerifDisplayFontFamily,
+                                        fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+                                        fontSize = 20.sp,
+                                        color = PremiumCyan,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                            
+                            // Name, Email & Cloud Sync Status
+                            Column(
+                                modifier = Modifier.weight(1f),
+                                verticalArrangement = Arrangement.spacedBy(3.dp)
+                            ) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Box(
                                         modifier = Modifier
@@ -135,63 +177,42 @@ fun SettingsScreen(
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Text(
                                         text = userName,
-                                        fontSize = 13.sp,
+                                        fontSize = 15.sp,
                                         fontFamily = InstrumentSansFontFamily,
                                         fontWeight = FontWeight.Bold,
                                         color = TextPrimaryColor
                                     )
                                 }
+                                
                                 Text(
                                     text = userEmail,
-                                    fontSize = 10.sp,
+                                    fontSize = 11.sp,
                                     fontFamily = DMMonoFontFamily,
                                     color = TextMutedColor
                                 )
-                            }
-                            
-                            Button(
-                                onClick = onSignOut,
-                                colors = ButtonDefaults.buttonColors(containerColor = ErrorColor.copy(alpha = 0.15f)),
-                                border = BorderStroke(1.dp, ErrorColor.copy(alpha = 0.4f)),
-                                shape = RoundedCornerShape(8.dp),
-                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
-                            ) {
-                                Text("Sign Out", fontSize = 10.sp, color = ErrorColor, fontWeight = FontWeight.Bold, fontFamily = InstrumentSansFontFamily)
-                            }
-                        }
-
-                        Divider(color = BorderSubtle, thickness = 0.8.dp)
-
-                        Spacer(modifier = Modifier.height(10.dp))
-                        Column(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Text(
-                                    text = "Cloud Sync",
-                                    fontSize = 11.sp,
-                                    fontFamily = InstrumentSansFontFamily,
-                                    fontWeight = FontWeight.Bold,
-                                    color = TextPrimaryColor
-                                )
-                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                
+                                Row(
+                                    modifier = Modifier.padding(top = 2.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
                                     val (color, text) = when (syncStatus) {
                                         "Syncing..." -> PremiumCyan to "Syncing..."
                                         "Active" -> SuccessColor to "Active"
                                         "Offline" -> TextMutedColor to "Offline"
                                         else -> ErrorColor to syncStatus
                                     }
+                                    Text(
+                                        text = "Cloud Sync:",
+                                        fontSize = 10.sp,
+                                        fontFamily = InstrumentSansFontFamily,
+                                        color = TextMutedColor
+                                    )
                                     Box(
                                         modifier = Modifier
-                                            .size(6.dp)
+                                            .size(5.dp)
                                             .background(color, CircleShape)
                                     )
-                                    Spacer(modifier = Modifier.width(6.dp))
                                     Text(
                                         text = text,
                                         fontSize = 10.sp,
@@ -201,7 +222,42 @@ fun SettingsScreen(
                                     )
                                 }
                             }
+                        }
+
+                        // Buttons Row: [Edit Profile]   [Sign Out]
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Button(
+                                onClick = onNavigateToEditProfile,
+                                colors = ButtonDefaults.buttonColors(containerColor = ElectricViolet.copy(alpha = 0.2f)),
+                                border = BorderStroke(1.dp, ElectricViolet.copy(alpha = 0.6f)),
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.weight(1f),
+                                contentPadding = PaddingValues(vertical = 8.dp)
+                            ) {
+                                Text("Edit Profile", fontSize = 11.sp, color = PremiumCyan, fontWeight = FontWeight.Bold, fontFamily = InstrumentSansFontFamily)
+                            }
                             
+                            Button(
+                                onClick = onSignOut,
+                                colors = ButtonDefaults.buttonColors(containerColor = ErrorColor.copy(alpha = 0.15f)),
+                                border = BorderStroke(1.dp, ErrorColor.copy(alpha = 0.4f)),
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.weight(1f),
+                                contentPadding = PaddingValues(vertical = 8.dp)
+                            ) {
+                                Text("Sign Out", fontSize = 11.sp, color = ErrorColor, fontWeight = FontWeight.Bold, fontFamily = InstrumentSansFontFamily)
+                            }
+                        }
+
+                        Divider(color = BorderSubtle, thickness = 0.8.dp)
+
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
                             if (lastSyncedTime != null) {
                                 Text(
                                     text = "Last Synced: $lastSyncedTime",

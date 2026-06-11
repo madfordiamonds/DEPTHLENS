@@ -19,6 +19,7 @@ class IntelligenceViewModel(application: Application) : AndroidViewModel(applica
     val userId = MutableStateFlow(prefs.getString("user_id", "guest_local") ?: "guest_local")
     val userName = MutableStateFlow(prefs.getString("user_name", "Guest Explorer") ?: "Guest Explorer")
     val userEmail = MutableStateFlow(prefs.getString("user_email", "") ?: "")
+    val userPhotoUrl = MutableStateFlow(prefs.getString("user_photo_url", "") ?: "")
     val githubToken = MutableStateFlow(prefs.getString("github_token", "") ?: "")
     val repoOwnerAndName = MutableStateFlow(prefs.getString("github_repo", "") ?: "")
     val onboardingCompleted = MutableStateFlow(prefs.getBoolean("onboarding_completed", false))
@@ -550,10 +551,12 @@ class IntelligenceViewModel(application: Application) : AndroidViewModel(applica
         val uid = user.uid
         val email = user.email ?: ""
         val name = customName ?: user.displayName ?: email.substringBefore("@")
+        val photoUrl = user.photoUrl?.toString() ?: ""
 
         userId.value = uid
         userName.value = name
         userEmail.value = email
+        userPhotoUrl.value = photoUrl
         isLoggedIn.value = true
         isGuest.value = false
 
@@ -563,12 +566,29 @@ class IntelligenceViewModel(application: Application) : AndroidViewModel(applica
             putString("user_id", uid)
             putString("user_name", name)
             putString("user_email", email)
+            putString("user_photo_url", photoUrl)
             apply()
         }
 
         viewModelScope.launch {
             try {
                 com.example.data.network.CloudSyncService.createProfileIfNotExist(uid, email, name)
+                
+                // Fetch profile details from Firestore
+                try {
+                    val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                    val docSnap = com.google.android.gms.tasks.Tasks.await(db.collection("users").document(uid).get())
+                    if (docSnap.exists()) {
+                        val fsName = docSnap.getString("name") ?: name
+                        val fsPhoto = docSnap.getString("photoUrl") ?: ""
+                        userName.value = fsName
+                        userPhotoUrl.value = fsPhoto
+                        prefs.edit().putString("user_name", fsName).putString("user_photo_url", fsPhoto).apply()
+                    }
+                } catch (pe: Exception) {
+                    pe.printStackTrace()
+                }
+
                 val syncSuccess = repository.fetchAndSyncFromFirestore(uid)
                 // Update sync status AFTER fetch completes so counts are accurate
                 if (syncSuccess) {
@@ -618,6 +638,22 @@ class IntelligenceViewModel(application: Application) : AndroidViewModel(applica
                     }
                 }
                 com.example.data.network.CloudSyncService.createProfileIfNotExist(simulatedId, email, name)
+                
+                // Fetch profile details from Firestore
+                try {
+                    val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                    val docSnap = com.google.android.gms.tasks.Tasks.await(db.collection("users").document(simulatedId).get())
+                    if (docSnap.exists()) {
+                        val fsName = docSnap.getString("name") ?: name
+                        val fsPhoto = docSnap.getString("photoUrl") ?: ""
+                        userName.value = fsName
+                        userPhotoUrl.value = fsPhoto
+                        prefs.edit().putString("user_name", fsName).putString("user_photo_url", fsPhoto).apply()
+                    }
+                } catch (pe: Exception) {
+                    pe.printStackTrace()
+                }
+
                 val syncSuccess = repository.fetchAndSyncFromFirestore(simulatedId)
                 if (syncSuccess) {
                     _syncStatus.value = "Active"
@@ -667,6 +703,7 @@ class IntelligenceViewModel(application: Application) : AndroidViewModel(applica
         userId.value = "guest_local"
         userName.value = "Guest Explorer"
         userEmail.value = ""
+        userPhotoUrl.value = ""
         
         prefs.edit().apply {
             putBoolean("is_logged_in", false)
@@ -674,6 +711,7 @@ class IntelligenceViewModel(application: Application) : AndroidViewModel(applica
             putString("user_id", "guest_local")
             putString("user_name", "Guest Explorer")
             putString("user_email", "")
+            putString("user_photo_url", "")
             apply()
         }
 
@@ -1022,6 +1060,331 @@ class IntelligenceViewModel(application: Application) : AndroidViewModel(applica
                 endpointStatus = endpointStr,
                 lastRequestStatus = lastRequestStr
             ))
+        }
+    }
+
+    // --- PROFILE MANAGEMENT METHODS ---
+    private val _isProfileUploading = MutableStateFlow(false)
+    val isProfileUploading: StateFlow<Boolean> = _isProfileUploading.asStateFlow()
+
+    // Change Name
+    fun updateProfileName(newName: String, onComplete: (Boolean, String) -> Unit) {
+        if (newName.isBlank()) {
+            onComplete(false, "Name cannot be empty")
+            return
+        }
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            _isProfileUploading.value = true
+            try {
+                val uid = userId.value
+                val email = userEmail.value
+                val photo = userPhotoUrl.value
+                
+                // Update SharedPreferences
+                prefs.edit().putString("user_name", newName).apply()
+                // Update StateFlow
+                userName.value = newName
+
+                // Update Firestore
+                val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                val userRef = db.collection("users").document(uid)
+                val updates = mapOf(
+                    "uid" to uid,
+                    "name" to newName,
+                    "email" to email,
+                    "photoUrl" to photo,
+                    "updatedAt" to System.currentTimeMillis()
+                )
+                com.google.android.gms.tasks.Tasks.await(userRef.set(updates, com.google.firebase.firestore.SetOptions.merge()))
+                
+                // Trigger online profile sync
+                repository.fetchAndSyncFromFirestore(uid)
+
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                    onComplete(true, "Profile name updated successfully")
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                    onComplete(false, "Update failed: ${e.localizedMessage ?: "Unknown error"}")
+                }
+            } finally {
+                _isProfileUploading.value = false
+            }
+        }
+    }
+
+    // Change Email with Password Reauthentication
+    fun updateProfileEmail(newEmail: String, currentPassword: String, onComplete: (Boolean, String) -> Unit) {
+        if (newEmail.isBlank() || !android.util.Patterns.EMAIL_ADDRESS.matcher(newEmail).matches()) {
+            onComplete(false, "Invalid email address")
+            return
+        }
+        if (currentPassword.isBlank()) {
+            onComplete(false, "Current password is required")
+            return
+        }
+        
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            _isProfileUploading.value = true
+            try {
+                val user = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
+                if (user == null) {
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                        onComplete(false, "Session expired, please sign in again")
+                    }
+                    return@launch
+                }
+                
+                // 1. Re-authenticate
+                val credential = com.google.firebase.auth.EmailAuthProvider.getCredential(user.email!!, currentPassword)
+                com.google.android.gms.tasks.Tasks.await(user.reauthenticate(credential))
+
+                // 2. Change email on Auth
+                com.google.android.gms.tasks.Tasks.await(user.updateEmail(newEmail))
+                try {
+                    com.google.android.gms.tasks.Tasks.await(user.sendEmailVerification())
+                } catch (ex: Exception) {
+                    ex.printStackTrace()
+                }
+
+                val uid = userId.value
+                val name = userName.value
+                val photo = userPhotoUrl.value
+
+                // 3. Update SharedPreferences & StateFlow
+                prefs.edit().putString("user_email", newEmail).apply()
+                userEmail.value = newEmail
+
+                // 4. Update Firestore Profile
+                val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                val userRef = db.collection("users").document(uid)
+                val updates = mapOf(
+                    "uid" to uid,
+                    "name" to name,
+                    "email" to newEmail,
+                    "photoUrl" to photo,
+                    "updatedAt" to System.currentTimeMillis()
+                )
+                com.google.android.gms.tasks.Tasks.await(userRef.set(updates, com.google.firebase.firestore.SetOptions.merge()))
+
+                repository.fetchAndSyncFromFirestore(uid)
+
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                    onComplete(true, "Email verification link sent. Please verify your new address.")
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                    onComplete(false, "Email change failed: ${e.localizedMessage ?: "Authentication error"}")
+                }
+            } finally {
+                _isProfileUploading.value = false
+            }
+        }
+    }
+
+    // Reset Password
+    fun sendPasswordReset(email: String, onComplete: (Boolean, String) -> Unit) {
+        if (email.isBlank() || !android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches()) {
+            onComplete(false, "Invalid email address")
+            return
+        }
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            try {
+                com.google.android.gms.tasks.Tasks.await(
+                    com.google.firebase.auth.FirebaseAuth.getInstance().sendPasswordResetEmail(email)
+                )
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                    onComplete(true, "Password reset email sent to $email")
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                    onComplete(false, "Unable to send password reset email. Please try again later.")
+                }
+            }
+        }
+    }
+
+    // Change Photo
+    fun uploadProfilePhoto(bytes: ByteArray, onComplete: (Boolean, String) -> Unit) {
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            _isProfileUploading.value = true
+            try {
+                val uid = userId.value
+                val storage = com.google.firebase.storage.FirebaseStorage.getInstance()
+                val photoRef = storage.reference.child("profile_photos/$uid")
+                
+                // Upload photo bytes
+                val uploadTask = photoRef.putBytes(bytes)
+                com.google.android.gms.tasks.Tasks.await(uploadTask)
+                
+                // Get URL
+                val photoUrl = com.google.android.gms.tasks.Tasks.await(photoRef.downloadUrl).toString()
+
+                // Save locally
+                prefs.edit().putString("user_photo_url", photoUrl).apply()
+                userPhotoUrl.value = photoUrl
+
+                // Save in Firestore
+                val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                val userRef = db.collection("users").document(uid)
+                com.google.android.gms.tasks.Tasks.await(userRef.update("photoUrl", photoUrl, "updatedAt", System.currentTimeMillis()))
+
+                repository.fetchAndSyncFromFirestore(uid)
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                    onComplete(true, "Profile photo updated successfully")
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                    onComplete(false, "Upload failed: ${e.localizedMessage ?: "Unknown error"}")
+                }
+            } finally {
+                _isProfileUploading.value = false
+            }
+        }
+    }
+
+    // Remove Photo
+    fun removeProfilePhoto(onComplete: (Boolean, String) -> Unit) {
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            _isProfileUploading.value = true
+            try {
+                val uid = userId.value
+                
+                // Delete from Firebase Storage
+                try {
+                    val storage = com.google.firebase.storage.FirebaseStorage.getInstance()
+                    val photoRef = storage.reference.child("profile_photos/$uid")
+                    com.google.android.gms.tasks.Tasks.await(photoRef.delete())
+                } catch (e: Exception) {
+                    // Item might not exist, proceed
+                }
+
+                // Clear from SharedPreferences & StateFlow
+                prefs.edit().putString("user_photo_url", "").apply()
+                userPhotoUrl.value = ""
+
+                // Clear from Firestore
+                val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                val userRef = db.collection("users").document(uid)
+                com.google.android.gms.tasks.Tasks.await(userRef.update("photoUrl", "", "updatedAt", System.currentTimeMillis()))
+
+                repository.fetchAndSyncFromFirestore(uid)
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                    onComplete(true, "Profile photo removed")
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                    onComplete(false, "Failed to remove photo: ${e.localizedMessage}")
+                }
+            } finally {
+                _isProfileUploading.value = false
+            }
+        }
+    }
+
+    // Delete Account
+    fun deleteUserAccount(password: String, onComplete: (Boolean, String) -> Unit) {
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            _isProfileUploading.value = true
+            try {
+                val user = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
+                if (user == null) {
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                        onComplete(false, "User session not active / guest account cannot be deleted via Firestore")
+                    }
+                    return@launch
+                }
+                
+                val uid = user.uid
+
+                // 1. Reauthenticate first
+                val credential = com.google.firebase.auth.EmailAuthProvider.getCredential(user.email!!, password)
+                com.google.android.gms.tasks.Tasks.await(user.reauthenticate(credential))
+
+                // 2. Delete from Firebase Storage
+                val storage = com.google.firebase.storage.FirebaseStorage.getInstance()
+                val paths = listOf("profile_photos/$uid", "uploads/$uid", "attachments/$uid")
+                for (path in paths) {
+                    try {
+                        val ref = storage.reference.child(path)
+                        com.google.android.gms.tasks.Tasks.await(ref.delete())
+                    } catch (e: Exception) {
+                        // ignore if missing
+                    }
+                }
+
+                // 3. Delete subcollections and documents in Firestore
+                val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                try {
+                    val chatsSnap = com.google.android.gms.tasks.Tasks.await(
+                        db.collection("users").document(uid).collection("chats").get()
+                    )
+                    for (doc in chatsSnap.documents) {
+                        val messagesSnap = com.google.android.gms.tasks.Tasks.await(
+                            doc.reference.collection("messages").get()
+                        )
+                        for (msg in messagesSnap.documents) {
+                            com.google.android.gms.tasks.Tasks.await(msg.reference.delete())
+                        }
+                        com.google.android.gms.tasks.Tasks.await(doc.reference.delete())
+                    }
+                } catch (ce: Exception) {
+                    ce.printStackTrace()
+                }
+
+                try {
+                    val memoriesSnap = com.google.android.gms.tasks.Tasks.await(
+                        db.collection("users").document(uid).collection("memories").get()
+                    )
+                    for (doc in memoriesSnap.documents) {
+                        com.google.android.gms.tasks.Tasks.await(doc.reference.delete())
+                    }
+                } catch (me: Exception) {
+                    me.printStackTrace()
+                }
+
+                val collectionPaths = listOf("users", "profiles", "settings", "sessions", "analyses", "chatHistory")
+                for (cPath in collectionPaths) {
+                    try {
+                        com.google.android.gms.tasks.Tasks.await(db.collection(cPath).document(uid).delete())
+                    } catch (e: Exception) {
+                        // fine
+                    }
+                }
+
+                // 4. Delete Auth user
+                com.google.android.gms.tasks.Tasks.await(user.delete())
+
+                // 5. Delete room database & preferences & cache local
+                val localDb = com.example.data.database.DepthDatabase.getDatabase(getApplication())
+                localDb.clearAllTables()
+                
+                prefs.edit().clear().apply()
+                
+                // Clear StateFlows
+                userId.value = "guest_local"
+                userName.value = "Guest Explorer"
+                userEmail.value = ""
+                userPhotoUrl.value = ""
+                isLoggedIn.value = false
+                isGuest.value = false
+
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                    onComplete(true, "Account deleted successfully")
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                    onComplete(false, "Deletion failed: ${e.localizedMessage ?: "Authentication/Session error"}")
+                }
+            } finally {
+                _isProfileUploading.value = false
+            }
         }
     }
 }
